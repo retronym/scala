@@ -1,0 +1,14 @@
+init lz
+class: (1,1)
+init lz
+class, via trait: (1,1)
+init lz
+anonymous: 2
+init lz
+specialized generic class, Int: 3
+init lz
+specialized generic class, String: s
+init lz
+generic class, Int: 4
+init lz
+generic class, String: p

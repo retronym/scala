@@ -63,7 +63,7 @@ private[async] trait AnfTransform extends TransformUtils {
           transform(treeCopy.If(tree, fun, literalBool(true), arg))
         case Apply(fun, args)                                                                        =>
           val lastAwaitArgIndex: RunId = args.lastIndexWhere(containsAwait)
-          val simpleFun                = transform(fun)
+          val simpleFun                = if (lastAwaitArgIndex >= 0 && !isAwait(fun)) transformFunBeforeAwait(fun) else transform(fun)
           var i                        = 0
           val argExprss                = map2(args, fun.symbol.paramss.head) { (arg: Tree, param: Symbol) =>
             transform(arg) match {
@@ -98,6 +98,10 @@ private[async] trait AnfTransform extends TransformUtils {
           } else {
             simpleApply
           }
+
+        case Assign(lhs, rhs) if containsAwait(rhs) =>
+          val simpleLhs = transformFunBeforeAwait(lhs)
+          treeCopy.Assign(tree, simpleLhs, transform(rhs))
 
         case Block(stats, expr) =>
           // First, transform the block contents into a separate List[Tree]
@@ -194,6 +198,25 @@ private[async] trait AnfTransform extends TransformUtils {
         case _                              =>
           super.transform(tree)
       }
+    }
+
+    // Transform the function part of an application (or the left hand side of an assignment) that is followed by
+    // an argument (or right hand side) containing an `await`. That argument will be extracted into statements
+    // that precede the application, so the qualifier must be extracted ahead of them unless evaluating it later
+    // gives the same result.
+    private def transformFunBeforeAwait(fun: Tree): Tree = fun match {
+      case Select(qual, name) =>
+        val qual1 = transform(qual)
+        if (treeInfo.isExprSafeToInline(qual1) || qual1.isInstanceOf[New]) treeCopy.Select(fun, qual1, name)
+        else {
+          val valDef = defineVal(transformState.name.freshen(TermName("qual")), qual1, qual1.pos)
+          currentStats += valDef
+          treeCopy.Select(fun, gen.mkAttributedIdent(valDef.symbol), name)
+        }
+      case TypeApply(fn, targs) =>
+        treeCopy.TypeApply(fun, transformFunBeforeAwait(fn), targs)
+      case _ =>
+        transform(fun)
     }
 
     private def pushAssignmentIntoExpr(varSym: Symbol, t: Tree): Tree = {

@@ -220,8 +220,9 @@ trait Scanners extends ScannersCommon {
     final protected def putCommentChar(): Unit = { processCommentChar(); nextChar() }
 
     @tailrec private def skipLineComment(): Unit = ch match {
-      case SU | CR | LF =>
-      case _            => nextChar() ; skipLineComment()
+      case CR | LF       =>
+      case SU if isAtEnd =>
+      case _             => nextChar() ; skipLineComment()
     }
     private def maybeOpen(): Unit = {
       putCommentChar()
@@ -241,7 +242,7 @@ trait Scanners extends ScannersCommon {
     @tailrec final def skipNestedComments(): Unit = ch match {
       case '/' => maybeOpen() ; skipNestedComments()
       case '*' => if (!maybeClose()) skipNestedComments()
-      case SU  => incompleteInputError("unclosed comment")
+      case SU if isAtEnd => incompleteInputError("unclosed comment")
       case _   => putCommentChar() ; skipNestedComments()
     }
 
@@ -273,12 +274,21 @@ trait Scanners extends ScannersCommon {
     }
 
 
+    /** The input is exhausted. The reader then delivers SU, so `ch == SU && isAtEnd` tells the end of the input
+     *  from a U+001A character in the source, which is an error between tokens but is an ordinary character
+     *  in a comment or a literal.
+     */
     def isAtEnd = charOffset >= buf.length
 
     def resume(lastCode: Token) = {
       token = lastCode
-      if (next.token != EMPTY && !reporter.hasErrors)
-        syntaxError("unexpected end of input: possible missing '}' in XML block")
+      if (next.token != EMPTY) {
+        if (!reporter.hasErrors)
+          syntaxError("unexpected end of input: possible missing '}' in XML block")
+        // The token was scanned ahead before the XML parser took over the input, which has since
+        // moved past it. Drop it, or `nextToken` would deliver it at the wrong place.
+        next.token = EMPTY
+      }
 
       nextToken()
     }
@@ -759,7 +769,7 @@ trait Scanners extends ScannersCommon {
               nextChar()
               charLitOrSymbolAfter(() => getOperatorRest())
             }
-            else if (!isAtEnd && (ch != SU && ch != CR && ch != LF)) {
+            else if (!isAtEnd && (ch != CR && ch != LF)) {
               val isEmptyCharLit = (ch == '\'')
               getLitChar()
               if (ch == '\'') {
@@ -997,7 +1007,7 @@ trait Scanners extends ScannersCommon {
           token = STRINGLIT
         } else
           getRawStringLit()
-      } else if (ch == SU) {
+      } else if (ch == SU && isAtEnd) {
         incompleteInputError("unclosed multi-line string literal")
       } else {
         putChar(ch)
@@ -1084,7 +1094,7 @@ trait Scanners extends ScannersCommon {
           getStringPart(multiLine, seenEscapedQuote)  // consume rest of interpolation, taking $ as literal
         }
       } else {
-        val isUnclosedLiteral = (ch == SU || (!multiLine && (ch == CR || ch == LF)))
+        val isUnclosedLiteral = ((ch == SU && isAtEnd) || (!multiLine && (ch == CR || ch == LF)))
         if (isUnclosedLiteral)
           if (multiLine)
             incompleteInputError("unclosed multi-line string literal")
@@ -1207,7 +1217,7 @@ trait Scanners extends ScannersCommon {
     }
 
     private def getLitChars(delimiter: Char) = {
-      while (ch != delimiter && !isAtEnd && (ch != SU && ch != CR && ch != LF))
+      while (ch != delimiter && !isAtEnd && (ch != CR && ch != LF))
         getLitChar()
     }
 
@@ -1389,10 +1399,12 @@ trait Scanners extends ScannersCommon {
           runReporting.codeAction("use uppercase L", unit.position(o).withEnd(o + 1), "L", msg, expected = Some(("l", unit))))
       }
       // after int: 5e7f, 42L, 42.toDouble but not 42b.
+      // Only a decimal literal takes an exponent or a float suffix: 0b101f is not 101f.
+      // (In a hex literal these letters are digits.)
       def restOfNumber(): Unit = {
         ch match {
           case 'e' | 'E' | 'f' | 'F' |
-               'd' | 'D' => getFraction()
+               'd' | 'D' if base == 10 => getFraction()
           case 'l' | 'L' => lintel() ; token = LONGLIT ; setStrVal() ; nextChar()
           case _         => token = INTLIT  ; setStrVal() ; checkNoLetter()
         }
@@ -1686,54 +1698,71 @@ trait Scanners extends ScannersCommon {
       def markBalance() = for ((k, v) <- balance) oldBalance(k) = v
       markBalance()
 
-      def scan(bpbuf: ListBuffer[BracePair]): (Int, Int) = {
-        if (token != NEWLINE && token != NEWLINES) {
-          while (lastOffset < offset) {
-            if (buf(lastOffset) == LF) lineCount += 1
-            lastOffset += 1
-          }
-          while (lineCount > lineStart.length) {
-            lineStart += offset
-            // reset indentation unless there are new opening brackets or
-            // braces since last ident line and at the same time there
-            // are no new braces.
-            if (balance(RPAREN) >= oldBalance(RPAREN) &&
-                balance(RBRACKET) >= oldBalance(RBRACKET) ||
-                balance(RBRACE) != oldBalance(RBRACE)) {
-              indent = column(offset)
-              markBalance()
+      // An open brace whose matching brace has not been seen yet: where it is, and the buffer for its siblings.
+      final class Open(val lc: Int, val loff: Int, val lindent: Int, val bpbuf: ListBuffer[BracePair])
+
+      // Scans to the right brace (or EOF) that closes the level at which the scan starts and returns its offset
+      // and indentation, collecting the multi-line brace pairs found at that level in `bpbuf0`. Nested levels
+      // are kept in `open` rather than on the stack, so that the stack does not limit the nesting depth.
+      def scan(bpbuf0: ListBuffer[BracePair]): (Int, Int) = {
+        var bpbuf = bpbuf0
+        var open: List[Open] = Nil
+        // the brace that was opened last is closed at `roff`, by a right brace or by the end of the input
+        def close(roff: Int, rindent: Int): Unit = {
+          val o = open.head
+          if (o.lc != lineCount)
+            o.bpbuf += BracePair(o.loff, o.lindent, roff, rindent, bpbuf.toList)
+          bpbuf = o.bpbuf
+          open = open.tail
+        }
+        var result: (Int, Int) = null
+        while (result eq null) {
+          if (token != NEWLINE && token != NEWLINES) {
+            while (lastOffset < offset) {
+              if (buf(lastOffset) == LF) lineCount += 1
+              lastOffset += 1
+            }
+            while (lineCount > lineStart.length) {
+              lineStart += offset
+              // reset indentation unless there are new opening brackets or
+              // braces since last ident line and at the same time there
+              // are no new braces.
+              if (balance(RPAREN) >= oldBalance(RPAREN) &&
+                  balance(RBRACKET) >= oldBalance(RBRACKET) ||
+                  balance(RBRACE) != oldBalance(RBRACE)) {
+                indent = column(offset)
+                markBalance()
+              }
             }
           }
-        }
 
-        token match {
-          case LPAREN =>
-            balance(RPAREN) -= 1; nextToken(); scan(bpbuf)
-          case LBRACKET =>
-            balance(RBRACKET) -= 1; nextToken(); scan(bpbuf)
-          case RPAREN =>
-            balance(RPAREN) += 1; nextToken(); scan(bpbuf)
-          case RBRACKET =>
-            balance(RBRACKET) += 1; nextToken(); scan(bpbuf)
-          case LBRACE =>
-            balance(RBRACE) -= 1
-            val lc = lineCount
-            val loff = offset
-            val lindent = indent
-            val bpbuf1 = new ListBuffer[BracePair]
-            nextToken()
-            val (roff, rindent) = scan(bpbuf1)
-            if (lc != lineCount)
-              bpbuf += BracePair(loff, lindent, roff, rindent, bpbuf1.toList)
-            scan(bpbuf)
-          case RBRACE =>
-            balance(RBRACE) += 1
-            val off = offset; nextToken(); (off, indent)
-          case EOF =>
-            (-1, -1)
-          case _ =>
-            nextToken(); scan(bpbuf)
+          token match {
+            case LPAREN =>
+              balance(RPAREN) -= 1; nextToken()
+            case LBRACKET =>
+              balance(RBRACKET) -= 1; nextToken()
+            case RPAREN =>
+              balance(RPAREN) += 1; nextToken()
+            case RBRACKET =>
+              balance(RBRACKET) += 1; nextToken()
+            case LBRACE =>
+              balance(RBRACE) -= 1
+              open ::= new Open(lineCount, offset, indent, bpbuf)
+              bpbuf = new ListBuffer[BracePair]
+              nextToken()
+            case RBRACE =>
+              balance(RBRACE) += 1
+              val off = offset; nextToken()
+              if (open.isEmpty) result = (off, indent)
+              else close(off, indent)
+            case EOF =>
+              while (open.nonEmpty) close(-1, -1)
+              result = (-1, -1)
+            case _ =>
+              nextToken()
+          }
         }
+        result
       }
 
       val bpbuf = new ListBuffer[BracePair]

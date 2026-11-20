@@ -1,0 +1,33 @@
+pure:
+x
+y
+= String[](a, b)
+impure:
+x
+y
+tag
+= String[](a, b)
+impure, primitive:
+x
+y
+tag
+= int[](1, 2)
+pure elements:
+tag
+= String[](a, b)
+nested:
+x
+inner elem
+tag
+outer tag
+= String[](a)
+structural:
+x
+tag
+= String[](a)
+failing:
+x
+= java.lang.IllegalStateException: tag
+failing element:
+x
+= java.lang.IllegalStateException: elem

@@ -211,10 +211,11 @@ trait Unapplies extends ast.TreeDSL {
       // class has an illegal private[this] parameter. We can detect this by checking
       // the modifiers on the param accessors.
       // We just generate a call to that param accessor here, which gives us an inaccessible
-      // symbol error, as before.
+      // symbol error, as before. Only the param accessor itself counts: a `private[this]`
+      // method overloading the parameter name must not be selected.
       val accSel =
         cdef.impl.body collectFirst {
-          case localAccessor@ValOrDefDef(mods, constrParam.name, _, _) if mods.isPrivateLocal => Select(unapplyParam, localAccessor.symbol)
+          case localAccessor@ValDef(mods, constrParam.name, _, _) if mods.isPrivateLocal && mods.isParamAccessor => Select(unapplyParam, localAccessor.symbol)
         } getOrElse Select(unapplyParam, caseAccessorName(cdef.symbol, constrParam.name))
 
       constrParam.tpt match {

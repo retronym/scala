@@ -1,6 +1,6 @@
 package scala
 
-import org.junit.Assert.{ assertArrayEquals, assertFalse, assertTrue }
+import org.junit.Assert.{ assertArrayEquals, assertEquals, assertFalse, assertTrue }
 import org.junit.Test
 
 import scala.runtime.BoxedUnit
@@ -53,5 +53,20 @@ class ArrayTest {
 
   @Test def `i24877 range throws on naive step`: Unit = {
     assertSameElements(Array[Int](27), Array.range(27, 42, Int.MaxValue))
+  }
+
+  @Test def copyAsAcrossElementTypes(): Unit = {
+    // truncating
+    assertArrayEquals(Array[AnyRef](Int.box(1), Int.box(2)), Array.copyAs[Any](Array(1, 2, 3), 2).asInstanceOf[Array[AnyRef]])
+    assertArrayEquals(Array(1, 2), Array.copyAs[Int](Array[Any](1, 2, 3), 2))
+    assertArrayEquals(Array[AnyRef]("a"), Array.copyAs[String](Array[AnyRef]("a", "b"), 1).asInstanceOf[Array[AnyRef]])
+    assertArrayEquals(Array[AnyRef](), Array.copyAs[Any](Array(1, 2, 3), 0).asInstanceOf[Array[AnyRef]])
+    // same length
+    assertArrayEquals(Array[AnyRef](Int.box(1), Int.box(2), Int.box(3)), Array.copyAs[Any](Array(1, 2, 3), 3).asInstanceOf[Array[AnyRef]])
+    // padding
+    assertArrayEquals(Array[AnyRef](Int.box(1), Int.box(2), null), Array.copyAs[Any](Array(1, 2), 3).asInstanceOf[Array[AnyRef]])
+    assertArrayEquals(Array(1, 2, 0), Array.copyAs[Int](Array[Any](1, 2), 3))
+    assertArrayEquals(Array[AnyRef]("a", "b", null), Array.copyAs[String](Array[AnyRef]("a", "b"), 3).asInstanceOf[Array[AnyRef]])
+    assertEquals(classOf[String], Array.copyAs[String](Array[AnyRef]("a", "b"), 1).getClass.getComponentType)
   }
 }

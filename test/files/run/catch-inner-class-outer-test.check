@@ -1,0 +1,7 @@
+multi:    mine other
+bound:    mine other
+single:   mine rethrown
+match:    mine other
+nested:   mine other
+static:   mine other
+path:     mine other

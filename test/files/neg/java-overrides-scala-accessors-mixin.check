@@ -1,0 +1,6 @@
+C.scala:3: error: mutable variable cannot be overridden:
+def x: Int (defined in class S)
+  with <defaultmethod> def x(): Int (defined in trait JI)
+class C extends S with JI
+      ^
+1 error

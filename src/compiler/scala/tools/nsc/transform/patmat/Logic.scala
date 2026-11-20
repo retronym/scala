@@ -789,12 +789,12 @@ trait ScalaLogic extends Interface with Logic with TreeAndTypeAnalysis {
       private val trees = mutable.HashSet.empty[Tree]
 
       // hashconsing trees (modulo value-equality)
-      private[TreesAndTypesDomain] def uniqueTpForTree(t: Tree): Type = {
-        def freshExistentialSubtype(tp: Type): Type = {
-          // scala/bug#8611 tp.narrow is tempting, but unsuitable. See `testRefinedTypeSI8611` for an explanation.
-          NoSymbol.freshExistential("", 0).setInfo(TypeBounds.upper(tp)).tpe
-        }
+      def freshExistentialSubtype(tp: Type): Type = {
+        // scala/bug#8611 tp.narrow is tempting, but unsuitable. See `testRefinedTypeSI8611` for an explanation.
+        NoSymbol.freshExistential("", 0).setInfo(TypeBounds.upper(tp)).tpe
+      }
 
+      private[TreesAndTypesDomain] def uniqueTpForTree(t: Tree): Type = {
         if (!t.symbol.isStable) {
           // Create a fresh type for each unstable value, since we can never correlate it to another value.
           // For example `case X => case X =>` should not complain about the second case being unreachable,

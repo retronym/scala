@@ -1,0 +1,3 @@
+List(class java.lang.Integer, class java.lang.String, class java.lang.Integer, class java.lang.Long, class java.lang.String)
+List(Integer, Boolean, BoxedUnit, String)
+List(class java.lang.Integer, java.lang.Double, class java.lang.String, class java.lang.String)

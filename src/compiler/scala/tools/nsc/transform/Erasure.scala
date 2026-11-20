@@ -108,79 +108,29 @@ abstract class Erasure extends InfoTransform
   // * higher-order type parameters
   // * type parameters appearing in method parameters
   // * type members not visible in an enclosing template
+  // * type parameters of a class that javac cannot see (see `hiddenByModuleClass`)
   private def isTypeParameterInSig(sym: Symbol, initialSymbol: Symbol) = (
     !sym.isHigherOrderTypeParameter &&
     sym.isTypeParameterOrSkolem && (
       (initialSymbol.isMethod && initialSymbol.typeParams.contains(sym)) ||
-      (initialSymbol.ownersIterator.exists(encl => encl.isClass && !encl.hasPackageFlag && sym.isNestedIn(encl)))
+      (initialSymbol.ownersIterator.exists(encl => encl.isClass && !encl.hasPackageFlag && sym.isNestedIn(encl)) &&
+        !hiddenByModuleClass(sym, initialSymbol))
     )
   )
 
-  /** This object is only used for confidence checking when -check:genjvm is set.
-   *  In that case we make sure that the erasure of the `normalized` type
-   *  is the same as the erased type that's generated. Normalization means
-   *  unboxing some primitive types and further simplifications as they are done in jsig.
-   */
-  val prepareSigMap: TypeMap = new TypeMap {
-    def squashBoxed(tp: Type): Type = tp.dealiasWiden match {
-      case RefinedType(parents, decls) =>
-        val parents1 = parents mapConserve squashBoxed
-        if (parents1 eq parents) tp
-        else RefinedType(parents1, decls)
-      case t @ ExistentialType(tparams, tpe) =>
-        val tpe1 = squashBoxed(tpe)
-        if (tpe1 eq tpe) t
-        else ExistentialType(tparams, tpe1)
-      case t =>
-        if (boxedClass contains t.typeSymbol) ObjectTpe
-        else tp
-    }
-    def apply(tp: Type): Type = tp.dealiasWiden match {
-      case tp1 @ TypeBounds(lo, hi) =>
-        val lo1 = squashBoxed(apply(lo))
-        val hi1 = squashBoxed(apply(hi))
-        if ((lo1 eq lo) && (hi1 eq hi)) tp1
-        else TypeBounds(lo1, hi1)
-      case tp1 @ TypeRef(pre, sym, args) =>
-        def argApply(tp: Type) = {
-          val tp1 = apply(tp)
-          if (tp1.typeSymbol == UnitClass) ObjectTpe
-          else squashBoxed(tp1)
-        }
-        if (sym == ArrayClass && args.nonEmpty)
-          if (unboundedGenericArrayLevel(tp1) == 1) ObjectTpe
-          else mapOver(tp1)
-        else if (sym == AnyClass || sym == AnyValClass || sym == SingletonClass)
-          ObjectTpe
-        else if (sym == UnitClass)
-          BoxedUnitTpe
-        else if (sym == NothingClass)
-          RuntimeNothingClass.tpe
-        else if (sym == NullClass)
-          RuntimeNullClass.tpe
-        else {
-          val pre1 = apply(pre)
-          val args1 = args mapConserve argApply
-          if ((pre1 eq pre) && (args1 eq args)) tp1
-          else TypeRef(pre1, sym, args1)
-        }
-      case tp1 @ MethodType(params, restpe) =>
-        val params1 = mapOver(params)
-        val restpe1 = if (restpe.typeSymbol == UnitClass) UnitTpe else apply(restpe)
-        if ((params1 eq params) && (restpe1 eq restpe)) tp1
-        else MethodType(params1, restpe1)
-      case tp1 @ RefinedType(parents, decls) =>
-        val parents1 = parents mapConserve apply
-        if (parents1 eq parents) tp1
-        else RefinedType(parents1, decls)
-      case t @ ExistentialType(tparams, tpe) =>
-        val tpe1 = apply(tpe)
-        if (tpe1 eq tpe) t
-        else ExistentialType(tparams, tpe1)
-      case tp1: ClassInfoType =>
-        tp1
-      case tp1 =>
-        mapOver(tp1)
+  // javac rejects a class file that refers to a type parameter of an outer class through a module
+  // class, as in `class C[T] { object O { class D { def t: T } } }` ("undeclared type variable: T"
+  // when reading `C$O$D`). A member of the module class itself is fine. So walk outward from the
+  // class enclosing `initialSymbol` to the owner of `tparam`: if a module class is passed on the
+  // way, the type parameter is erased in the signature.
+  private def hiddenByModuleClass(tparam: Symbol, initialSymbol: Symbol): Boolean = {
+    val tparamOwner = tparam.owner
+    @tailrec def loop(cls: Symbol): Boolean =
+      if (cls == tparamOwner || cls == NoSymbol || cls.hasPackageFlag) false
+      else cls.isModuleClass || loop(cls.owner.enclClass)
+    tparamOwner.isClass && {
+      val start = initialSymbol.enclClass
+      start != tparamOwner && loop(start.owner.enclClass)
     }
   }
 
@@ -339,7 +289,14 @@ abstract class Erasure extends InfoTransform
             if (unboundedGenericArrayLevel(tp) == 1) jsig1(ObjectTpe)
             else {
               builder.append(ARRAY_TAG)
-              args.foreach(jsig1(_))
+              // The element type erases as in `eraseArray`: arrays of bottom types are `Object[]`,
+              // arrays of value classes keep the class (`applyInArray`), primitives stay unboxed.
+              args.foreach { elem =>
+                val elemSym = elem.typeSymbol
+                if (elemSym.isBottomClass || isPrimitiveValueClassWithObject(elem)) jsig1(ObjectTpe)
+                else if (elemSym.isDerivedValueClass) jsig(elem, existentiallyBound = Nil, toplevel = false, unboxedVCs = false)
+                else jsig1(elem)
+              }
             }
           }
           else if (isTypeParameterInSig(sym, sym0)) {
@@ -509,35 +466,37 @@ abstract class Erasure extends InfoTransform
      *  That is, check that the signature of the bridge method does not accidentally override some
      *  other method, possibly written by the user or inherited.
      *
-     *  As an optimization, only perform this check for susceptible bridges.
-     *
      *  This test is necessary for members that have a value class in their type.
      *  Such members are special because their types after erasure and after post-erasure differ.
      *  This means we generate them after erasure, but the post-erasure transform might introduce
      *  a name clash. The present method guards against these name clashes.
      *
      *  A bridge might also introduce a signature that accidentally matches an existing method.
-     *  In that case, it will have a parameter erased to the upper bound of a type parameter
-     *  in the signature of the member overridden by the original member. (That upper bound might
-     *  be `Object`.) By contrast, erasure of a parameter `List[A]` would already have induced an error
-     *  if there were a matching member.
+     *  A parameter type of the bridge can differ from that of the original member after erasure:
+     *  a type parameter erased to its upper bound (which might be `Object`), but also `Array[A]`,
+     *  an abstract type member or `A with B`. Even when the parameter types agree, the JVM also
+     *  matches the result type: for `def f(a: List[String]): String` overriding
+     *  `def f(a: List[A]): Object`, the bridge `f(List): Object` overrides an inherited
+     *  `def f(a: List[Int]): Object` that the member does not. Since every bridge differs from its
+     *  member after erasure, the check runs for every bridge.
      *
      *  @param  member   The original member
      *  @param  other    The overridden symbol for which the bridge was generated
      *  @param  bridge   The bridge
+     *  @return the clashes, each with the position and message of its error and the definition the bridge clashes with
      */
-    def checkBridgeOverrides(member: Symbol, other: Symbol, bridge: Symbol): scala.collection.Seq[(Position, String)] = {
+    def checkBridgeOverrides(member: Symbol, other: Symbol, bridge: Symbol): scala.collection.Seq[(Position, String, Symbol)] = {
       def fulldef(sym: Symbol) =
         if (sym == NoSymbol) sym.toString
         else s"$sym: ${sym.tpe} in ${sym.owner}"
-      val clashErrors = mutable.Buffer[(Position, String)]()
-      def clashError(what: String) = {
+      val clashErrors = mutable.Buffer[(Position, String, Symbol)]()
+      def clashError(clashee: Symbol, what: String) = {
         val pos = if (member.owner == root) member.pos else root.pos
         val msg = sm"""bridge generated for member ${fulldef(member)}
                       |which overrides ${fulldef(other)}
                       |clashes with definition of $what;
                       |both have erased type ${exitingPostErasure(bridge.tpe)}"""
-        clashErrors += Tuple2(pos, msg)
+        clashErrors += Tuple3(pos, msg, clashee)
       }
       for (bc <- root.baseClasses) {
         if (settings.isDebug)
@@ -552,12 +511,12 @@ abstract class Erasure extends InfoTransform
           sym.matchingSymbol(bc, site).alternatives filter (sym => !sym.isBridge)
         for (overBridge <- exitingPostErasure(overriddenBy(bridge))) {
           if (overBridge == member) {
-            clashError("the member itself")
+            clashError(member, "the member itself")
           } else {
             val overMembers = overriddenBy(member)
             if (!overMembers.exists(overMember =>
               exitingPostErasure(overMember.tpe =:= overBridge.tpe))) {
-              clashError(fulldef(overBridge))
+              clashError(overBridge, fulldef(overBridge))
             }
           }
         }
@@ -576,7 +535,8 @@ abstract class Erasure extends InfoTransform
 
       val bridgeNeeded = exitingErasure {
         def hasBridge = {
-          var e = bridgesScope.lookupEntry(member.name)
+          // Look up by `other.name`: `resolveAnonymousBridgeClash` may have renamed `member`, but not its bridges.
+          var e = bridgesScope.lookupEntry(other.name)
           while ((e ne null) && !(e.sym.tpe =:= otpe && bridgeTarget(e.sym) == member))
             e = bridgesScope.lookupNextEntry(e)
           e ne null
@@ -600,15 +560,13 @@ abstract class Erasure extends InfoTransform
         bridge setInfo (otpe cloneInfo bridge)
         bridgeTarget(bridge) = member
 
-        val shouldAdd = {
-          val sigContainsValueClass = member.tpe.exists(_.typeSymbol.isDerivedValueClass)
-          def bridgeMayClash = other.paramss.exists(_.exists(_.tpe match { case TypeRef(_, r, _) => r.isTypeParameter case _ => false }))
-          def bridgeIsAOK = checkBridgeOverrides(member, other, bridge) match {
-            case Nil => true
-            case _ if member.owner.isAnonymousClass => resolveAnonymousBridgeClash(member, bridge); true
-            case es => for ((pos, msg) <- es) reporter.error(pos, msg); false
-          }
-          !sigContainsValueClass && !bridgeMayClash || bridgeIsAOK
+        val shouldAdd = checkBridgeOverrides(member, other, bridge) match {
+          case Nil => true
+          // Renaming the member resolves a clash with the member itself. A clash with `other` (which the bridge
+          // is meant to override; seen in SAM classes for refined types, pos/sammy_refined) is spurious.
+          // A clash with any other definition is an error, as in a named class.
+          case es if member.owner.isAnonymousClass && es.forall(e => e._3 == member || e._3 == other) => resolveAnonymousBridgeClash(member, bridge); true
+          case es => for ((pos, msg, _) <- es) reporter.error(pos, msg); false
         }
         if (shouldAdd) {
           exitingErasure(root.info.decls enter bridge)
@@ -1030,7 +988,13 @@ abstract class Erasure extends InfoTransform
               case _ => false
             }
           if(containsSingleton(pt)) {
-            val cmpOp  = if (pt.typeSymbol.isSubClass(AnyValClass)) Any_equals else Object_eq
+            // As in the pattern matcher: `==` for literal types (SLS 3.2.1) and for singletons of value types,
+            // `eq` for other singletons.
+            val cmpOp  = pt.dealias match {
+              case ConstantType(_)                             => Any_==
+              case _ if pt.typeSymbol.isSubClass(AnyValClass)  => Any_==
+              case _                                           => Object_eq
+            }
             val cmpArg = gen.mkAttributedQualifier(pt)
             Some((cmpOp, cmpArg))
           } else None
@@ -1123,7 +1087,10 @@ abstract class Erasure extends InfoTransform
           log(s"${fn.symbol.fullLocationString} originates in refinement class - call will be implemented via reflection.")
           ApplyDynamic(qualifier, args) setSymbol fn.symbol setPos tree.pos
         } else if (fn.symbol.isMethodWithExtension && !fn.symbol.tpe.isErroneous) {
-          Apply(gen.mkAttributedRef(extensionMethods.extensionMethod(fn.symbol)), qualifier :: args)
+          extensionMethods.extensionMethod(fn.symbol) match {
+            case NoSymbol   => tree // an error was reported
+            case extension  => Apply(gen.mkAttributedRef(extension), qualifier :: args)
+          }
         } else {
           tree
         }
@@ -1364,8 +1331,9 @@ abstract class Erasure extends InfoTransform
             case EmptyTree | TypeTree() =>
               tree1 setType specialScalaErasure(tree1.tpe)
             case ArrayValue(elemtpt, trees) =>
-              treeCopy.ArrayValue(
-                tree1, elemtpt setType specialScalaErasure.applyInArray(elemtpt.tpe), trees map transform).clearType()
+              // like the erasure of `Array[Int with Object]`, see `isPrimitiveValueClassWithObject`
+              val elemErased = if (isPrimitiveValueClassWithObject(elemtpt.tpe)) ObjectTpe else specialScalaErasure.applyInArray(elemtpt.tpe)
+              treeCopy.ArrayValue(tree1, elemtpt setType elemErased, trees map transform).clearType()
             case ValDef(_, _, tpt, rhs) =>
               val vd1 = super.transform(tree1).clearType().asInstanceOf[ValDef]
               vd1.tpt.tpe match {
@@ -1461,11 +1429,11 @@ abstract class Erasure extends InfoTransform
    * Otherwise, the lambda is expanded to an anonymous class.
    */
   private def lmfOverridesOk(samSym: Symbol): Boolean = {
-    val samParamTypes = exitingErasure(samSym.info.paramTypes)
-    val samResult = exitingErasure(samSym.info.resultType)
+    val samParamTypes = atPostErasure(samSym.info.paramTypes)
+    val samResult = atPostErasure(samSym.info.resultType)
     samSym.allOverriddenSymbols.forall { overridden =>
-      val overriddenParamTypes = exitingErasure(overridden.info.paramTypes)
-      val overriddenResult = exitingErasure(overridden.info.resultType)
+      val overriddenParamTypes = atPostErasure(overridden.info.paramTypes)
+      val overriddenResult = atPostErasure(overridden.info.resultType)
       val (paramsOk, resultOk) = lmfAdaptationOk(samParamTypes, samResult, overriddenParamTypes, overriddenResult)
       paramsOk && resultOk
     }

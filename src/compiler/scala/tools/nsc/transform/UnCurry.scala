@@ -234,6 +234,11 @@ abstract class UnCurry extends InfoTransform
       } else {
         val mustExpand = mustExpandFunction(fun)
         // method definition with the same arguments, return type, and body as the original lambda
+        // TODO scala/scala review P2: lifting the body substitutes the parameters, changes the owner and (in a
+        // static object) rewrites `this`, each a full traversal including nested lambdas, and the outermost lambda
+        // is lifted first. A lambda nested k deep is thus traversed by each of its enclosing lambdas: quadratic in
+        // nesting depth (19% of the visits are repeats compiling the typechecker sources). Fusing the passes, or
+        // lifting innermost first, would help.
         val liftedMethod = gen.mkLiftedFunctionBodyMethod(localTyper)(fun.symbol.owner, fun)
 
         // new function whose body is just a call to the lifted method
@@ -261,6 +266,17 @@ abstract class UnCurry extends InfoTransform
       def transformVarargs(varargsElemType: Type): List[Tree] = {
         def mkArrayValue(ts: List[Tree], elemtp: Type) =
           ArrayValue(TypeTree(elemtp), ts) setType arrayType(elemtp)
+
+        /* The element type of the array passed to a Java varargs method. Erasure casts the array to the
+         * erased formal parameter type, so an array of a bottom type (`Nothing$[]`, `Null$[]`, or the
+         * `Object[]` built for a `ClassTag[Nothing]`) only works if that formal erases to `Object[]`.
+         * For `<B extends CharSequence> int f(B... bs)`, `f()` infers `B = Nothing`; use the erasure
+         * of the declared element type instead, as javac does.
+         */
+        def javaVarargsElemType(elemtp: Type): Type =
+          if (erasure.scalaErasure(elemtp).typeSymbol.isBottomClass)
+            erasure.erasure(fun)(fun.info.params.last.info.typeArgs.head)
+          else elemtp
 
         // when calling into scala varargs, make sure it's a sequence.
         def arrayToSequence(tree: Tree, elemtp: Type, copy: Boolean): Tree = {
@@ -296,7 +312,16 @@ abstract class UnCurry extends InfoTransform
           }
           def iterableClassTag(tpe: Type): Tree = {
             (tpe baseType IterableClass).typeArgs match {
-              case targ :: _  => getClassTag(targ)
+              case targ :: _  =>
+                val elemtp = javaVarargsElemType(targ)
+                // The erasure of a generic class is a raw type, which has no ClassTag: use its existential, e.g. `List[_]`.
+                val tagtp = elemtp match {
+                  case TypeRef(pre, sym, Nil) if (elemtp ne targ) && sym.typeParams.nonEmpty =>
+                    val eparams = typeParamsToExistentials(sym)
+                    existentialAbstraction(eparams, typeRef(pre, sym, eparams.map(_.tpe)))
+                  case _ => elemtp
+                }
+                getClassTag(tagtp)
               case _          => EmptyTree
             }
           }
@@ -318,6 +343,8 @@ abstract class UnCurry extends InfoTransform
             val Typed(tree, _) = args.last: @unchecked
             if (javaStyleVarArgs)
               if (tree.tpe.typeSymbol == ArrayClass) tree
+              // `null: _*` has no `toArray`: pass the null as the array, as Java does for `m((T[]) null)`
+              else if (tree.tpe <:< NullTpe) tree
               else sequenceToArray(tree)
             else
               if (tree.tpe.typeSymbol isSubClass SeqClass) tree
@@ -327,13 +354,13 @@ abstract class UnCurry extends InfoTransform
             def mkArray = mkArrayValue(args drop (params.length - 1), varargsElemType)
             // if args.length < params.length the repeated argument is empty
             def emptyVarargs = compareLengths(args, params) < 0
-            if (javaStyleVarArgs) mkArray
+            if (javaStyleVarArgs) mkArrayValue(args drop (params.length - 1), javaVarargsElemType(varargsElemType))
             else if (emptyVarargs) gen.mkNil  // avoid needlessly double-wrapping an empty argument list
             else arrayToSequence(mkArray, varargsElemType, copy = false) // fresh array, no need to copy
           }
 
         exitingUncurry {
-          if (isJava && !isReferenceArray(suffix.tpe) && isArrayOfSymbol(fun.tpe.params.last.tpe, ObjectClass)) {
+          if (isJava && !isReferenceArray(suffix.tpe) && !(suffix.tpe <:< NullTpe) && isArrayOfSymbol(fun.tpe.params.last.tpe, ObjectClass)) {
             // The array isn't statically known to be a reference array, so call ScalaRuntime.toObjectArray.
             suffix = localTyper.typedPos(pos) {
               gen.mkRuntimeCall(nme.toObjectArray, List(suffix))
@@ -356,7 +383,14 @@ abstract class UnCurry extends InfoTransform
           arg setType functionType(Nil, arg.tpe)
         } else {
           log(s"Argument '$arg' at line ${arg.pos.line} is ${param.info} from ${fun.fullName}")
-          def canUseDirectly(qual: Tree) = qual.tpe.typeSymbol.isSubClass(FunctionClass(0)) && treeInfo.isExprSafeToInline(qual)
+          // The qualifier is evaluated at the call site, whether or not the argument is ever evaluated. `isExprSafeToInline`
+          // accepts references to lazy vals and modules, as they always give the same result, but forcing them can be observed.
+          def forcesInitializer(qual: Tree) = qual.exists {
+            case t: RefTree => t.symbol != null && (t.symbol.isLazy || t.symbol.isModule)
+            case _          => false
+          }
+          def canUseDirectly(qual: Tree) =
+            qual.tpe.typeSymbol.isSubClass(FunctionClass(0)) && treeInfo.isExprSafeToInline(qual) && !forcesInitializer(qual)
           arg match {
             // don't add a thunk for by-name argument if argument already is an application of
             // a Function0. We can then remove the application and use the existing Function0.
@@ -378,6 +412,13 @@ abstract class UnCurry extends InfoTransform
     private def replaceElidableTree(tree: Tree): Tree = {
       def elisionOf(t: Type): Tree = t.typeSymbol match {
         case StringClass => Literal(Constant("")) setType t
+        case clazz if clazz.isDerivedValueClass =>
+          // `null` is not a value of a value class: selecting a member from it throws a NullPointerException.
+          // Wrap the zero of the underlying type instead, erasure removes the box where it is not needed.
+          val tp   = t.dealiasWiden
+          val ctor = clazz.primaryConstructor
+          val fun  = Select(New(TypeTree(tp)) setType tp, nme.CONSTRUCTOR) setSymbol ctor setType tp.memberType(ctor)
+          Apply(fun, elisionOf(tp.memberType(clazz.derivedValueClassUnbox).finalResultType) :: Nil) setType tp
         case _ => gen.mkZero(t)
       }
       tree match {
@@ -411,7 +452,25 @@ abstract class UnCurry extends InfoTransform
         deriveDefDef(dd)(_ => body)
       case _ => tree
     }
-    def isNonLocalReturn(ret: Return) = ret.symbol != currentOwner.enclMethod || currentOwner.isLazy || currentOwner.isAnonymousFunction
+    /** A return is non-local if it is not in the body of the method it returns from, or if a lazy val (or
+     *  a function) intervenes: the initializer of a local lazy val is later moved to a `lzycompute` method
+     *  by the fields phase. The lazy val need not be the direct owner, as in `lazy val x = { val y = { return 1 }; y }`.
+     */
+    def isNonLocalReturn(ret: Return) = ret.symbol != currentOwner.enclMethod || {
+      @tailrec def inLazyOrFunction(owner: Symbol): Boolean =
+        owner.isLazy || owner.isAnonymousFunction || (owner != ret.symbol && owner != NoSymbol && inLazyOrFunction(owner.owner))
+      inLazyOrFunction(currentOwner)
+    }
+
+    /** `String.+`, or a `+` of a primitive value class that takes a String: the methods the backend emits as a
+     *  String concatenation (see `ScalaPrimitives.CONCAT`).
+     */
+    private def isStringConcat(sym: Symbol) =
+      currentRun.runDefinitions.isStringAddition(sym) ||
+        sym.name == nme.PLUS && isPrimitiveValueClass(sym.owner) && (sym.paramss match {
+          case (p :: Nil) :: Nil => p.tpe.typeSymbol == StringClass
+          case _                 => false
+        })
 
 // ------ The tree transformers --------------------------------------------------------
 
@@ -506,19 +565,25 @@ abstract class UnCurry extends InfoTransform
             // Read the param symbols before `transform(fn)`, because UnCurry replaces T* by Seq[T] (see DesugaredParameterType).
             // The call to `transformArgs` below needs `formals` that still have varargs.
             val fnParams = fn.tpe.params
-            val transformedFn = transform(fn)
+            // The backend flattens a chain of String concatenations and, for a StringBuilder concatenation (target 8),
+            // creates the builder before it evaluates the leftmost operand. So the receiver of a concatenation is
+            // evaluated with a value on the stack, unlike the receiver of other calls.
+            val transformedFn = if (isStringConcat(fn.symbol)) withNeedLift(needLift = true)(transform(fn)) else transform(fn)
             // scala/bug#6479: no need to lift in args to label jumps
             // scala/bug#11127: boolean && / || are emitted using jumps, the lhs stack value is consumed by the conditional jump
-            val noReceiverOnStack = fn.symbol.isLabel || fn.symbol == currentRun.runDefinitions.Boolean_and || fn.symbol == currentRun.runDefinitions.Boolean_or
+            // `synchronized` is emitted as monitorenter / body / monitorexit: the backend stores the monitor in a local
+            // before it evaluates the body, so the body starts with the stack that the `synchronized` expression started with.
+            val noReceiverOnStack = fn.symbol.isLabel || fn.symbol == currentRun.runDefinitions.Boolean_and || fn.symbol == currentRun.runDefinitions.Boolean_or ||
+              fn.symbol == Object_synchronized
             val needLift = needTryLift || !noReceiverOnStack
             withNeedLift(needLift) {
               treeCopy.Apply(tree, transformedFn, transformTrees(transformArgs(tree.pos, fn.symbol, args, fnParams)))
             }
 
-          case Assign(_: RefTree, _) =>
-            withNeedLift(needLift = true) { super.transform(tree) }
-
-          case Assign(lhs, _) if lhs.symbol.owner != currentMethod || lhs.symbol.hasFlag(LAZY | ACCESSOR) =>
+          case Assign(_, _) =>
+            // An assignment to a field has the receiver on the stack while the rhs is evaluated. So does an assignment to
+            // a local variable that is captured, which becomes `v.elem = rhs` in lambdalift (scala/bug#6154). Whether a
+            // local will be captured is not known here, so a `try` is lifted in the rhs of every assignment.
             withNeedLift(needLift = true) { super.transform(tree) }
 
           case ret @ Return(_) if isNonLocalReturn(ret) =>
@@ -849,7 +914,15 @@ abstract class UnCurry extends InfoTransform
           if (!isRep) Ident(param)
           else {
             val parTp = elementType(ArrayClass, param.tpe)
-            val wrap = gen.mkWrapVarargsArray(Ident(param), parTp)
+            val wrap = param.tpe match {
+              case _: ExistentialType =>
+                // A repeated parameter whose type depends on an earlier parameter, `(a: A)(xs: a.T*)`, has the type
+                // `Array[a.T] forSome { val a: A }` after uncurry. `parTp` then refers to the quantified `a`, which is
+                // not the skolem that the typer introduces for the reference to `param`. Let the element type be inferred.
+                gen.mkMethodCall(wrapVarargsArrayMethod(parTp), Nil, List(Ident(param)))
+              case _ =>
+                gen.mkWrapVarargsArray(Ident(param), parTp)
+            }
             param.attachments.get[TypeParamVarargsAttachment] match {
               case Some(TypeParamVarargsAttachment(tp)) => gen.mkCast(wrap, seqType(tp))
               case _ => wrap

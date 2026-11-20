@@ -1,0 +1,10 @@
+value-class-extension-name-clash.scala:2: error: value f$extension clashes with the extension method generated for method f in class V1
+object V1 { val f$extension = 42 }
+                ^
+value-class-extension-name-clash.scala:5: error: method f$extension clashes with the extension method generated for method f in class V2
+object V2 { def f$extension(a: Int) = 42 }
+                ^
+value-class-extension-name-clash.scala:8: error: method f$extension clashes with the extension method generated for method f in class V3
+object V3 { def f$extension[T](a: List[T]) = 42 }
+                ^
+3 errors

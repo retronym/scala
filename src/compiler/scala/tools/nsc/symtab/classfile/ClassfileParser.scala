@@ -125,8 +125,15 @@ abstract class ClassfileParser(reader: ReusableInstance[ReusableDataReader]) {
 
   private def parseErrorHandler[T]: PartialFunction[Throwable, T] = {
     case e: MissingRequirementError => handleMissing(e)
+    case e: BrokenClassfileError    => throw new IOException(s"class file '$file' is broken\n(${e.msg})")
     case e: RuntimeException        => handleError(e)
   }
+
+  /** Signals that the class file is malformed. It is reported as an error of loading the class
+   *  when it is thrown while the file is parsed. When it is thrown later, by a lazy lookup in the
+   *  constant pool, it is fatal.
+   */
+  private final class BrokenClassfileError(msg: String) extends FatalError(msg)
   @inline private def pushBusy[T](sym: Symbol)(body: => T): T = {
     if (busy eq sym)
       throw new IOException(s"unsatisfiable cyclic dependency in '$sym'")
@@ -188,11 +195,11 @@ abstract class ClassfileParser(reader: ReusableInstance[ReusableDataReader]) {
   private def parseHeader(): Unit = {
     val magic = u4()
     if (magic != JAVA_MAGIC)
-      abort(s"class file ${file} has wrong magic number 0x${toHexString(magic)}")
+      throw new BrokenClassfileError(s"wrong magic number 0x${toHexString(magic)}")
 
     val minor, major = u2()
     if (major < JAVA_MAJOR_VERSION || major == JAVA_MAJOR_VERSION && minor < JAVA_MINOR_VERSION)
-      abort(s"class file ${file} has unknown version $major.$minor, should be at least $JAVA_MAJOR_VERSION.$JAVA_MINOR_VERSION")
+      throw new BrokenClassfileError(s"unknown version $major.$minor, should be at least $JAVA_MAJOR_VERSION.$JAVA_MINOR_VERSION")
   }
 
   protected class NameOrString(val value: String) {
@@ -410,11 +417,11 @@ abstract class ClassfileParser(reader: ReusableInstance[ReusableDataReader]) {
 
     /** Throws an exception signaling a bad constant index. */
     protected def errorBadIndex(index: Int) =
-      abort(s"bad constant pool index: $index at pos: ${in.bp}")
+      throw new BrokenClassfileError(s"bad constant pool index: $index at pos: ${in.bp}")
 
     /** Throws an exception signaling a bad tag at given address. */
     protected def errorBadTag(start: Int) =
-      abort(s"bad constant pool tag ${in.getByte(start)} at byte $start")
+      throw new BrokenClassfileError(s"bad constant pool tag ${in.getByte(start)} at byte $start")
   }
 
   def stubClassSymbol(name: Name): Symbol = {
@@ -431,6 +438,9 @@ abstract class ClassfileParser(reader: ReusableInstance[ReusableDataReader]) {
     NoSymbol.newStubSymbol(name.toTypeName, msg)
   }
 
+  // TODO scala/scala review P11: each call resolves `name` from the root package, segment by segment, with
+  // no memo. Compiling the typechecker sources that is 2,139 lookups (7,450 segments) for 681 distinct
+  // names, which is negligible; a per-run memo only pays if a workload with many more shows up.
   private def lookupClass(name: String) = try {
     def lookupTopLevel = {
       if (name contains '.')
@@ -952,8 +962,16 @@ abstract class ClassfileParser(reader: ReusableInstance[ReusableDataReader]) {
     tag match {
       case STRING_TAG =>
         Some(LiteralAnnotArg(Constant(pool.getName(index).value)))
-      case BOOL_TAG | BYTE_TAG | CHAR_TAG | SHORT_TAG | INT_TAG |
-           LONG_TAG | FLOAT_TAG | DOUBLE_TAG =>
+      // these are stored as CONSTANT_Integer
+      case BOOL_TAG =>
+        Some(LiteralAnnotArg(Constant(pool.getConstant(index).intValue != 0)))
+      case BYTE_TAG =>
+        Some(LiteralAnnotArg(Constant(pool.getConstant(index).byteValue)))
+      case CHAR_TAG =>
+        Some(LiteralAnnotArg(Constant(pool.getConstant(index).charValue)))
+      case SHORT_TAG =>
+        Some(LiteralAnnotArg(Constant(pool.getConstant(index).shortValue)))
+      case INT_TAG | LONG_TAG | FLOAT_TAG | DOUBLE_TAG =>
         Some(LiteralAnnotArg(pool.getConstant(index)))
       case CLASS_TAG  =>
         Some(LiteralAnnotArg(Constant(pool.getType(index))))

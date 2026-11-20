@@ -77,29 +77,33 @@ object Osgi {
                  resourceDirectories: Seq[File], streams: TaskStreams): File = {
     val log = streams.log
     val builder = new Builder
-    builder.setClasspath(fullClasspath.toArray)
-    headers foreach { case (k, v) => builder.setProperty(k, v) }
+    try {
+      builder.setClasspath(fullClasspath.toArray)
+      headers foreach { case (k, v) => builder.setProperty(k, v) }
 
-    // https://github.com/scala/scala-dev/issues/254
-    // Must be careful not to include scala-asm.jar within scala-compiler.jar!
-    def resourceDirectoryRef(f: File) = (if (f.getName endsWith ".jar") "@" else "") + f.getAbsolutePath
+      // https://github.com/scala/scala-dev/issues/254
+      // Must be careful not to include scala-asm.jar within scala-compiler.jar!
+      def resourceDirectoryRef(f: File) = (if (f.getName endsWith ".jar") "@" else "") + f.getAbsolutePath
 
-    val includeRes = resourceDirectories.filter(_.exists).map(resourceDirectoryRef).mkString(",")
-    if (includeRes.nonEmpty) builder.setProperty(INCLUDERESOURCE, includeRes)
-    builder.getProperties.asScala.foreach { case (k, v) => log.debug(s"bnd: $k: $v") }
-    // builder.build is not thread-safe because it uses a static SimpleDateFormat.  This ensures
-    // that all calls to builder.build are serialized.
-    val jar = synchronized { builder.build }
-    builder.getWarnings.asScala.foreach(s => log.warn(s"bnd: $s"))
-    builder.getErrors.asScala.foreach(s => log.error(s"bnd: $s"))
-    IO.createDirectory(artifactPath.getParentFile)
-    if (jarlist) {
-      val entries = jar.getManifest.getEntries
-      for ((name, resource) <- jar.getResources.asScala if name.endsWith(".class")) {
-        entries.put(name, new Attributes)
+      val includeRes = resourceDirectories.filter(_.exists).map(resourceDirectoryRef).mkString(",")
+      if (includeRes.nonEmpty) builder.setProperty(INCLUDERESOURCE, includeRes)
+      builder.getProperties.asScala.foreach { case (k, v) => log.debug(s"bnd: $k: $v") }
+      // builder.build is not thread-safe because it uses a static SimpleDateFormat.  This ensures
+      // that all calls to builder.build are serialized.
+      val jar = synchronized { builder.build }
+      builder.getWarnings.asScala.foreach(s => log.warn(s"bnd: $s"))
+      val errors = builder.getErrors.asScala.toList
+      errors.foreach(s => log.error(s"bnd: $s"))
+      if (errors.nonEmpty) throw new MessageOnlyException(s"bnd reported ${errors.size} errors for $artifactPath")
+      IO.createDirectory(artifactPath.getParentFile)
+      if (jarlist) {
+        val entries = jar.getManifest.getEntries
+        for ((name, resource) <- jar.getResources.asScala if name.endsWith(".class")) {
+          entries.put(name, new Attributes)
+        }
       }
-    }
-    jar.write(artifactPath)
-    artifactPath
+      jar.write(artifactPath)
+      artifactPath
+    } finally builder.close()
   }
 }

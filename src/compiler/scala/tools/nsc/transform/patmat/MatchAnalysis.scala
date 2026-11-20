@@ -258,6 +258,27 @@ trait MatchApproximation extends TreeAndTypeAnalysis with ScalaLogic with MatchT
         case _                                   => tp
       }
 
+      // The type that models the reference equality test `x eq pat`.
+      //
+      // That is the singleton type of the path, unless it is the same type as a literal type (`val s: "x" = "x"`,
+      // where `s.type =:= "x"`). The literal type already stands for the test `"x" == x` of a literal pattern or
+      // of the type pattern `_: "x"`, which a value other than the one `s` refers to also passes. Sharing the `Const`
+      // would let a failed `eq` test rule out, and be reused for, the `==` test of a later case.
+      def refEqTp(pat: Tree): Type = {
+        @tailrec def isLiteral(tp: Type): Boolean = tp match {
+          case SingleType(_, _) => isLiteral(tp.underlying)
+          case _                => tp.isInstanceOf[ConstantType]
+        }
+        if (isLiteral(pat.tpe))
+          refEqTps.collectFirst { case (t, tp) if equivalentTree(t, pat) => tp }.getOrElse {
+            val tp = Const.freshExistentialSubtype(pat.tpe)
+            refEqTps += ((pat, tp))
+            tp
+          }
+        else pat.tpe
+      }
+      private[this] val refEqTps = mutable.ListBuffer.empty[(Tree, Type)]
+
       // produce the unique tree used to refer to this binder
       // the type of the binder passed to the first invocation
       // determines the type of the tree that'll be returned for that binder as of then
@@ -347,14 +368,13 @@ trait MatchApproximation extends TreeAndTypeAnalysis with ScalaLogic with MatchT
       object condStrategy extends TypeTestTreeMaker.TypeTestCondStrategy {
         type Result                                           = Prop
         def and(a: Result, b: Result)                         = And(a, b)
-        def withOuterTest(testedBinder: Symbol, expectedTp: Type) = True // TODO OuterEqProp(testedBinder, expectedType)
         def typeTest(b: Symbol, pt: Type) = { // a type test implies the tested path is non-null (null.isInstanceOf[T] is false for all T)
           val p = binderToUniqueTree(b);                        And(uniqueNonNullProp(p), uniqueTypeProp(p, uniqueTp(pt)))
         }
         def nonNullTest(testedBinder: Symbol)                 = uniqueNonNullProp(binderToUniqueTree(testedBinder))
         def equalsTest(pat: Tree, testedBinder: Symbol)       = uniqueEqualityProp(binderToUniqueTree(testedBinder), unique(pat))
         // rewrite eq test to type test against the singleton type `pat.tpe`; unrelated to == (uniqueEqualityProp), could be null
-        def eqTest(pat: Tree, testedBinder: Symbol)           = uniqueTypeProp(binderToUniqueTree(testedBinder), uniqueTp(pat.tpe))
+        def eqTest(pat: Tree, testedBinder: Symbol)           = uniqueTypeProp(binderToUniqueTree(testedBinder), uniqueTp(refEqTp(pat)))
         def tru                                               = True
       }
 

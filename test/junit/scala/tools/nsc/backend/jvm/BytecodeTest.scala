@@ -319,6 +319,26 @@ class BytecodeTest extends BytecodeTesting {
   }
 
   @Test
+  def localSubclassReusesOuterField(): Unit = {
+    // A local or anonymous subclass of an inner class has the same outer instance as its parent,
+    // so it uses the parent's `$outer` field rather than declaring its own.
+    val code =
+      """class O {
+        |  class B
+        |  def f = new B { def g = O.this }
+        |  def h = { class L extends B { def g = O.this }; new L }
+        |  def k(o: O) = new o.B { def g = O.this } // a different outer instance
+        |}
+        |""".stripMargin
+    val cs = compileClasses(code)
+    def fields(name: String) = cs.find(_.name == name).get.fields.asScala.toList.map(_.name)
+    assertEquals(List("$outer"), fields("O$B"))
+    assertEquals(Nil, fields("O$$anon$1"))
+    assertEquals(Nil, fields("O$L$1"))
+    assertEquals(List("$outer"), fields("O$$anon$2"))
+  }
+
+  @Test
   def t11641(): Unit = {
     val code =
       """class B { val b = 0 }
@@ -483,6 +503,7 @@ class BytecodeTest extends BytecodeTesting {
          |    if (t == null) acc + head
          |    else t.sum(acc + head)
          |  }
+         |  final def sumTail(acc: Int): Int = tail.sumTail(acc + head)
          |}
          """.stripMargin
 
@@ -506,6 +527,29 @@ class BytecodeTest extends BytecodeTesting {
       VarOp(ALOAD, 0),
       Field(GETFIELD, "IntList", "head", "I"),
       Op(IADD),
+      VarOp(ISTORE, 1),
+      VarOp(ASTORE, 0),
+      Jump(GOTO, Label(0)),
+    ))
+
+    // `t` in `sum` was tested by the enclosing `if`. The receiver of `sumTail` was not: the argument is
+    // evaluated first, then the receiver is tested, as the call would have done.
+    assertSameCode(getMethod(intListClass, "sumTail"), List(
+      Label(0),
+      VarOp(ILOAD, 1),
+      VarOp(ALOAD, 0),
+      Field(GETFIELD, "IntList", "head", "I"),
+      Op(IADD),
+      VarOp(ISTORE, 3),
+      VarOp(ALOAD, 0),
+      Field(GETFIELD, "IntList", "tail", "LIntList;"),
+      Jump(IFNONNULL, Label(13)),
+      Op(ACONST_NULL),
+      Op(ATHROW),
+      Label(13),
+      VarOp(ALOAD, 0),
+      Field(GETFIELD, "IntList", "tail", "LIntList;"),
+      VarOp(ILOAD, 3),
       VarOp(ISTORE, 1),
       VarOp(ASTORE, 0),
       Jump(GOTO, Label(0)),
@@ -1110,5 +1154,30 @@ class BytecodeTest extends BytecodeTesting {
     check("moduleIndirect", n = true)
     check("nilModuleViaScalaPackageAlias", n = false)
     check("moduleViaScalaPackageAlias", n = true)
+  }
+
+  @Test
+  def cooperativeEqualityNumberAndTrait(): Unit = {
+    val code =
+      """trait T
+        |class C {
+        |  def intTrait(o: Ordered[BigInt]) = 1 == o
+        |  def traitInt(o: Ordered[BigInt]) = o == 1
+        |  def charTrait(o: Ordered[BigInt]) = 'a' == o
+        |  def boxedTrait(i: Integer, o: T) = i == o
+        |  def numberIterable(n: Number, o: Iterable[Int]) = n == o
+        |  def stringTrait(s: String, o: Ordered[BigInt]) = s == o
+        |  def classTrait(c: C, o: Ordered[BigInt]) = c == o
+        |}
+        |""".stripMargin
+    val c = compileClasses(code, allowMessage = _ => true).find(_.name == "C").get
+    // A number or character compared with a trait-typed value that could be a ScalaNumber
+    for (m <- List("boxedTrait", "numberIterable"))
+      assertInvoke(getMethod(c, m), "scala/runtime/BoxesRunTime", "equalsNumObject")
+    for (m <- List("intTrait", "traitInt", "charTrait"))
+      assertInvoke(getMethod(c, m), "scala/runtime/BoxesRunTime", "equals")
+    // Neither side is a number, or the other side is a class that cannot be a ScalaNumber
+    for (m <- List("stringTrait", "classTrait"))
+      assertInvoke(getMethod(c, m), "java/util/Objects", "equals")
   }
 }

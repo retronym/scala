@@ -94,6 +94,12 @@ trait Reporting extends internal.Reporting { self: ast.Positions with Compilatio
       }
     }
 
+    /** Report a malformed `-Wconf` or `-quickfix`. Otherwise it is only noticed once a message is issued. */
+    def checkConfiguration(): Unit = {
+      wconf
+      quickfixFilters
+    }
+
     private val skipRewriteAction = Set(Action.WarningSummary, Action.InfoSummary, Action.Silent)
 
     private def registerTextEdit(m: Message): Boolean =
@@ -146,14 +152,19 @@ trait Reporting extends internal.Reporting { self: ast.Positions with Compilatio
       suspendedMessages.clear()
     }
 
-    private def nowarnAction(warning: Message): Action =
-      suppressions.getOrElse(repSrc(warning.pos.source), Nil).find(_.matches(warning)) match {
+    // Warnings about a deprecated definition itself, see `deprecatedDefinitionWarning`.
+    private val definitionDeprecations = mutable.Set.empty[Message]
+
+    private def nowarnAction(warning: Message): Action = {
+      val ofDefinition = definitionDeprecations.remove(warning)
+      suppressions.getOrElse(repSrc(warning.pos.source), Nil).find(s => s.matches(warning) && !(s.synthetic && ofDefinition)) match {
         case Some(s) =>
           s.markUsed()
           if (s.verbose) Action.WarningVerbose else Action.Silent
         case _ =>
           Action.Warning
       }
+    }
 
     def clearSuppressionsComplete(sourceFile: SourceFile): Unit = suppressionsComplete -= repSrc(sourceFile)
 
@@ -321,6 +332,16 @@ trait Reporting extends internal.Reporting { self: ast.Positions with Compilatio
       deprecationWarning(pos, msg, since, siteName(site), siteName(origin), actions)
     def deprecationWarning(pos: Position, origin: Symbol, site: Symbol, msg: String, since: String): Unit =
       deprecationWarning(pos, msg, since, siteName(site), siteName(origin), actions = Nil)
+
+    /** A warning in the deprecation category about the definition of the deprecated symbol `origin`.
+     *  Unlike a reference to a deprecated symbol, it is reported although it is positioned in a deprecated definition:
+     *  the synthetic suppression that the definition's `@deprecated` annotation implies does not apply to it.
+     */
+    def deprecatedDefinitionWarning(pos: Position, origin: Symbol, site: Symbol, msg: String): Unit = {
+      val warning = Message.Deprecation(pos, msg, siteName(site), siteName(origin), Version.fromString(""), Nil)
+      definitionDeprecations += warning
+      issueIfNotSuppressed(warning)
+    }
 
     def deprecationWarning(pos: Position, origin: Symbol, site: Symbol): Unit = {
       val version = origin.deprecationVersion.getOrElse("")
@@ -733,19 +754,21 @@ object Reporting {
 
     val VersionPattern: Regex = """(?:.*?\s+)??(\d+)(?:\.(\d+)(?:\.(\d+))?)?(?:\W.*)?""".r
     def fromString(s: String): Version = s match {
-      case VersionPattern(maj, min, pat) =>
-        ParseableVersion(s, maj.toInt, Option(min).map(_.toInt), Option(pat).map(_.toInt))
-      case _ =>
-        NonParseableVersion(s)
+      case VersionPattern(maj, min, pat) => fromComponents(s, maj, min, pat)
+      case _ => NonParseableVersion(s)
     }
 
     val VersionNumberPattern: Regex = """(\d+)(?:\.(\d+)(?:\.(\d+))?)?""".r
     def fromNumberOnlyString(s: String): Version = s match {
-      case VersionNumberPattern(maj, min, pat) =>
-        ParseableVersion(s, maj.toInt, Option(min).map(_.toInt), Option(pat).map(_.toInt))
-      case _ =>
-        NonParseableVersion(s)
+      case VersionNumberPattern(maj, min, pat) => fromComponents(s, maj, min, pat)
+      case _ => NonParseableVersion(s)
     }
+
+    // The patterns accept any number of digits. A component that doesn't fit an Int, as in
+    // `since = "20240131120000"`, makes the version non-parseable.
+    private def fromComponents(orig: String, maj: String, min: String, pat: String): Version =
+      try ParseableVersion(orig, maj.toInt, Option(min).map(_.toInt), Option(pat).map(_.toInt))
+      catch { case _: NumberFormatException => NonParseableVersion(orig) }
   }
 
   sealed trait MessageFilter {

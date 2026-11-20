@@ -854,7 +854,16 @@ abstract class TreeGen {
           var cnt = 0
           val restDefs = for ((vname, tpt, pos, original) <- vars) yield atPos(pos) {
             cnt += 1
-            ValDef(mods, vname.toTermName, tpt, Select(Ident(tmp), TermName(s"_$cnt")))
+            val sel = Select(Ident(tmp), TermName(s"_$cnt"))
+            // The tuple's type arguments are inferred from the variables' types, widening a singleton type such
+            // as `1` or `s.type`. The match has tested the value against that type, so cast it back.
+            val rhs = tpt match {
+              case SingletonTypeTree(_) =>
+                val castTpt = TypeTree().setOriginal(tpt.duplicate).setPos(tpt.pos.focus)
+                TypeApply(Select(sel, nme.asInstanceOf_), castTpt :: Nil)
+              case _ => sel
+            }
+            ValDef(mods, vname.toTermName, tpt, rhs)
               .updateAttachment(NamePos(pos))
               .tap(propagatePatVarDefAttachments(original, _))
           }
@@ -869,6 +878,9 @@ abstract class TreeGen {
     else ValFrom(pat1, mkCheckIfRefutable(pat1, rhs)).setPos(pos)
   }
 
+  // TODO scala/scala review S3: refutability is decided here, in the parser, from the pattern's syntax
+  // alone, so `for (Box(i) <- xs)` and `for (b: Box <- xs)` call `withFilter` even when the pattern
+  // cannot fail for the element type (scala/bug#1336, scala/bug#5589). Scala 3 decides it against the type in the typer.
   def mkCheckIfRefutable(pat: Tree, rhs: Tree)(implicit fresh: FreshNameCreator) =
     if (treeInfo.isVarPatternDeep(pat)) rhs
     else {

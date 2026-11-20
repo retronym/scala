@@ -4,7 +4,7 @@ import java.io.ByteArrayOutputStream
 import java.nio.file.{FileSystems, Files, Path}
 import java.util.jar.Attributes
 import java.util.jar.Attributes.Name
-import org.junit.{Assert, Test}
+import org.junit.{Assert, Ignore, Test}
 
 import scala.tools.nsc.{CloseableRegistry, Global, Settings}
 import scala.tools.testkit.{BytecodeTesting, ForDeletion}
@@ -45,6 +45,59 @@ class MultiReleaseJarTest extends BytecodeTesting {
       Assert.assertEquals(List("newApi", "oldApi"), declsOfC(temp1.path, "9"))
       Assert.assertEquals(List("oldApi"), declsOfC(temp2.path, "8"))
     }
+  }
+
+  // Without `-release`, a multi-release JAR is read flat: the base entries are used and
+  // META-INF/versions is ignored, although javac and the JVM running on 9+ use the versioned
+  // entries. Pinned as on 2.13.x.
+  // TODO scala/scala review F9: if the default changes to the running JDK's version (or the
+  // `-target`'s), the expected value here becomes List("newApi", "oldApi").
+  @Test
+  def mrJarWithoutRelease(): Unit = {
+    if (!Properties.isJavaAtLeast("9")) return
+    Using.resource(ForDeletion(Files.createTempFile("mr-jar-test-", ".jar"))) { temp =>
+      def code(newApi: String) = s"package p1; abstract class Versioned { def oldApi: Int; $newApi }"
+      createZip(temp.path, List(
+        "/p1/Versioned.class" -> compileToBytes(code("")).head._2,
+        "/META-INF/versions/9/p1/Versioned.class" -> compileToBytes(code("def newApi: Int")).head._2,
+        "/META-INF/MANIFEST.MF" -> createManifest))
+      val g = newGlobal(temp.path, release = None)
+      try {
+        new g.Run
+        val decls = g.rootMirror.staticClass("p1.Versioned").info.decls.filterNot(_.isConstructor).map(_.name.toString).toList.sorted
+        Assert.assertEquals(List("oldApi"), decls)
+      } finally g.close()
+    }
+  }
+
+  // Expected-correct and ignored: a class that exists only under META-INF/versions/9 is not found
+  // even with `-release 9`, because the archive's directory listing skips META-INF/versions and
+  // only looks up the versioned entry for a name that also exists at the base. Enabled, it fails
+  // on JDK 9+ (on JDK 8 it returns early).
+  @Test @Ignore("scala/scala review F9: a class only under META-INF/versions/N is not found with -release N")
+  def mrJarVersionedOnlyClass(): Unit = {
+    if (!Properties.isJavaAtLeast("9")) return
+    Using.resource(ForDeletion(Files.createTempFile("mr-jar-test-", ".jar"))) { temp =>
+      createZip(temp.path, List(
+        "/p1/Base.class" -> compileToBytes("package p1; class Base").head._2,
+        "/META-INF/versions/9/p1/Only9.class" -> compileToBytes("package p1; class Only9").head._2,
+        "/META-INF/MANIFEST.MF" -> createManifest))
+      val g = newGlobal(temp.path, release = Some("9"))
+      try {
+        new g.Run
+        Assert.assertNotEquals(g.NoSymbol, g.rootMirror.getClassIfDefined("p1.Base"))
+        Assert.assertNotEquals("p1.Only9 under META-INF/versions/9 should be found with -release 9", g.NoSymbol, g.rootMirror.getClassIfDefined("p1.Only9"))
+      } finally g.close()
+    }
+  }
+
+  private def newGlobal(jarPath: Path, release: Option[String]): Global = {
+    val settings = new Settings()
+    settings.usejavacp.value = true
+    settings.classpath.value = jarPath.toAbsolutePath.toString
+    val g = new Global(settings)
+    release.foreach(settings.release.value = _)
+    g
   }
 
   @Test

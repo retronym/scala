@@ -106,6 +106,12 @@ abstract class LambdaLift extends InfoTransform {
      */
     private val proxyNames       = mutable.HashMap[Symbol, Name]()
 
+    /** Overrides `proxyNames` for the proxy of a free variable (`_2`) in a particular owner (`_1`), see `computeFreeVars`. */
+    private val ownerProxyNames  = mutable.HashMap[(Symbol, Symbol), Name]()
+
+    private def proxyNameIn(owner: Symbol, fv: Symbol): Name =
+      ownerProxyNames.getOrElse((owner, fv), proxyNames.getOrElse(fv, fv.name))
+
     /** A flag to indicate whether new free variables have been found */
     private var changedFreeVars: Boolean = _
 
@@ -173,7 +179,12 @@ abstract class LambdaLift extends InfoTransform {
 //      println(s"mark free: ${sym.fullLocationString} marked free in $enclosure")
       (enclosure == logicallyEnclosingMember(sym.owner)) || {
         debuglog("%s != %s".format(enclosure, logicallyEnclosingMember(sym.owner)))
-        if (enclosure.isPackageClass || !markFree(sym, logicallyEnclosingMember(enclosure.skipConstructor.owner))) false
+        // A class local to a constructor has no outer pointer to its enclosing class, so it cannot
+        // reach a field of that class (or of a class further in): it needs its own copy. This happens
+        // when the class is nested in another local class, e.g. the function class that uncurry
+        // creates for a by-name argument of a super constructor call.
+        def outerUnreachable = enclosure.skipConstructor.isClassLocalToConstructor
+        if (enclosure.isPackageClass || !markFree(sym, logicallyEnclosingMember(enclosure.skipConstructor.owner)) && !outerUnreachable) false
         else {
           val ss = symSet(free, enclosure)
           if (!ss(sym)) {
@@ -192,8 +203,35 @@ abstract class LambdaLift extends InfoTransform {
     private def markCalled(sym: Symbol, owner: Symbol): Unit = {
 //      println(s"mark called: $sym of ${sym.owner} is called by $owner")
       symSet(called, owner) += sym
-      if (sym.enclClass != owner.enclClass) calledFromInner += sym
+      if (sym.enclClass != owner.enclClass) {
+        calledFromInner += sym
+        if (sym.isMethod && !sym.isConstructor) markOuterFree(owner)
+      }
     }
+
+    /** The outer parameters of the constructors of inner classes, as they appear in the trees. */
+    private val outerParams = mutable.HashMap[Symbol, Symbol]()
+
+    /** Called when code in `enclosure` refers to a member of an enclosing class: the field that holds a
+     *  captured variable (`markFree` found a class between `enclosure` and the variable), or a method
+     *  lifted to that class. Such a reference starts from the outer instance.
+     *
+     *  If `enclosure` is a method nested in a constructor, the reference is built from the outer
+     *  parameter of that constructor (see `OuterPathTransformer.outerValue`). That parameter is not
+     *  in scope once `enclosure` is lifted, so mark it as free in `enclosure`, like any other
+     *  captured local.
+     */
+    private def markOuterFree(enclosure: Symbol): Unit = {
+      @tailrec def enclConstructor(sym: Symbol): Symbol =
+        if (sym == NoSymbol || sym.isClass || sym.isLocalDummy) NoSymbol
+        else if (sym.isClassConstructor) sym
+        else enclConstructor(sym.owner)
+      if (enclosure.isMethod && !enclosure.isConstructor)
+        outerParams.get(enclConstructor(enclosure.owner)).foreach(markFree(_, enclosure))
+    }
+
+    private def markFreeOrOuter(sym: Symbol, enclosure: Symbol): Unit =
+      if (!markFree(sym, enclosure)) markOuterFree(enclosure)
 
     /** The traverse function */
     private val freeVarTraverser = new InternalTraverser {
@@ -206,19 +244,23 @@ abstract class LambdaLift extends InfoTransform {
             if (sym.isLocalToBlock) {
               renamable += sym
             }
-          case DefDef(_, _, _, _, _, _) =>
+          case DefDef(_, _, _, vparamss, _, _) =>
             if (sym.isLocalToBlock) {
               renamable += sym
               sym setFlag (PrivateLocal | FINAL)
             } else if (sym.isPrimaryConstructor) {
               symSet(called, sym) += sym.owner
             }
+            if (sym.isClassConstructor) vparamss match {
+              case (param :: _) :: _ if param.name == nme.OUTER && param.symbol.isArtifact => outerParams(sym) = param.symbol
+              case _ =>
+            }
           case Ident(name) =>
             if (sym == NoSymbol) {
               assert(name == nme.WILDCARD, name)
             } else if (sym.isLocalToBlock) {
               val owner = logicallyEnclosingMember(currentOwner)
-              if (sym.isTerm && !sym.isMethod) markFree(sym, owner)
+              if (sym.isTerm && !sym.isMethod) markFreeOrOuter(sym, owner)
               else if (sym.isMethod) markCalled(sym, owner)
                 //symSet(called, owner) += sym
             }
@@ -247,7 +289,7 @@ abstract class LambdaLift extends InfoTransform {
       do {
         changedFreeVars = false
         for ((caller, callees) <- called ; callee <- callees ; fvs <- free get callee ; fv <- fvs)
-          markFree(fv, caller)
+          markFreeOrOuter(fv, caller)
       } while (changedFreeVars)
 
       def renameSym(sym: Symbol): Unit = {
@@ -258,9 +300,15 @@ abstract class LambdaLift extends InfoTransform {
 
       def newName(sym: Symbol): Name = {
         val originalName = sym.name
-        def freshen(prefix: String): Name =
-          if (originalName.isTypeName) unit.freshTypeName(prefix)
-          else unit.freshTermName(prefix)
+        // The fresh name can be taken by a member of the class that the symbol is lifted to, as `$` is
+        // allowed in source identifiers: `class A { def f = { class B }; class B$1 }`.
+        @tailrec def freshen(prefix: String): Name = {
+          val name: Name =
+            if (originalName.isTypeName) unit.freshTypeName(prefix)
+            else unit.freshTermName(prefix)
+          if (sym.owner.enclClass.info.decls.containsName(name)) freshen(prefix)
+          else name
+        }
 
         val join = nme.NAME_JOIN_STRING
         if (sym.isAnonymousFunction && sym.owner.isMethod) {
@@ -285,22 +333,30 @@ abstract class LambdaLift extends InfoTransform {
         else renameSym(sym)
       }
 
+      // scala/bug#5252 The proxy of a free variable in a trait is an abstract getter. Mixin implements it with a field
+      // of the same name in each class that mixes in the trait. If that class captures the same variable, its own
+      // proxy field needs a different name, as does the corresponding parameter of its primary constructor (the
+      // constructors phase matches parameter accessors to constructor parameters by name).
+      for ((owner, freeValues) <- free if owner.isClass && !owner.isTrait) {
+        val mixinFree = owner.mixinClasses.filter(_.isTrait).flatMap(free.get)
+        for (fv <- freeValues if mixinFree.exists(_.contains(fv))) {
+          val name = unit.freshTermName(s"${fv.name}${nme.NAME_JOIN_STRING}")
+          ownerProxyNames((owner, fv)) = name
+          ownerProxyNames((owner.primaryConstructor, fv)) = name
+        }
+      }
+
       afterOwnPhase {
         for ((owner, freeValues) <- free.toList) {
           val newFlags = SYNTHETIC | (if (owner.isClass) PARAMACCESSOR else PARAM)
 
           proxies(owner) =
             for (fv <- freeValues.toList) yield {
-              val proxyName = proxyNames.getOrElse(fv, fv.name)
+              val proxyName = proxyNameIn(owner, fv)
               debuglog(s"new proxy $proxyName in ${owner.fullLocationString}")
               val proxy =
                 if (owner.isTrait) {
                   val accessorFlags = newFlags | ACCESSOR | SYNTHESIZE_IMPL_IN_SUBCLASS
-                  // scala-dev#408: fields for locals captured in a trait are non-final (created in mixin), as they are
-                  // assigned in a trait setter. For safe publication, subclass constructors need to call releaseFence.
-                  // We need to add the attachment in lambdalift, as mixin runs after the constructors phase.
-                  owner.children.foreach(_.primaryConstructor.updateAttachment(ConstructorNeedsFence))
-
                   // TODO do we need to preserve pre-erasure info for the accessors (and a NullaryMethodType for the getter)?
                   // can't have a field in the trait, so add a setter
                   val setter = owner.newMethod(nme.expandedSetterName(proxyName.setterName, owner), fv.pos, accessorFlags)
@@ -324,8 +380,9 @@ abstract class LambdaLift extends InfoTransform {
           throw new IllegalArgumentException("Could not find proxy for "+ sym.defString +" in "+ sym.ownerChain +" (currentOwner= "+ currentOwner +" )")
         debuglog("searching for " + sym + "(" + sym.owner + ") in " + enclosure + " " + logicallyEnclosingMember(enclosure))
 
-        val proxyName = proxyNames.getOrElse(sym, sym.name)
-        val ps = (proxies get logicallyEnclosingMember(enclosure)).toList.flatten find (_.name == proxyName)
+        val member = logicallyEnclosingMember(enclosure)
+        val proxyName = proxyNameIn(member, sym)
+        val ps = (proxies get member).toList.flatten find (_.name == proxyName)
         ps getOrElse searchIn(enclosure.skipConstructor.owner)
       }
       debuglog("proxy %s from %s has logical enclosure %s".format(
@@ -358,7 +415,11 @@ abstract class LambdaLift extends InfoTransform {
           else outerValue match {
             case EmptyTree => prematureSelfReference()
             case o         =>
-              val path = outerPath(o, currentClass.outerClass, clazz)
+              // a method nested in a constructor has captured the outer parameter of the constructor (see `markOuterFree`)
+              val capturedOuter = outerParam != NoSymbol && o.symbol == outerParam &&
+                free.get(logicallyEnclosingMember(currentOwner)).exists(_.contains(outerParam))
+              val base = if (capturedOuter) proxyRef(outerParam) else o
+              val path = outerPath(base, currentClass.outerClass, clazz)
               if (path.tpe <:< clazz.tpeHK) path
               else {
                 // scala/bug#9920 The outer accessor might have an erased type of the self type of a trait,
@@ -415,6 +476,13 @@ abstract class LambdaLift extends InfoTransform {
           }
 
         case ClassDef(_, _, _, _) =>
+          // scala-dev#408: fields for locals captured in a trait are non-final (created in mixin), as they are
+          // assigned in a trait setter. For safe publication, the constructor of each class that gets such a field
+          // needs to call releaseFence. That is every class that mixes the trait in, directly or through another trait.
+          // We need to add the attachment in lambdalift, as mixin runs after the constructors phase.
+          if (!sym.isTrait && sym.mixinClasses.exists(freeParams(_).nonEmpty))
+            sym.primaryConstructor.updateAttachment(ConstructorNeedsFence)
+
           val freeParamSyms = freeParams(sym)
           val freeParamDefs =
             if (tree.symbol.isTrait) {
@@ -466,7 +534,10 @@ abstract class LambdaLift extends InfoTransform {
     private def liftDef(tree: Tree): Tree = {
       val sym = tree.symbol
       val oldOwner = sym.owner
-      if (sym.isMethod && isUnderConstruction(sym.owner.owner)) { // # bug 1909
+      // The member that `sym` is local to, looking through enclosing local methods and values. A method nested in
+      // another local definition in a self- or super-constructor call can't be an instance method either.
+      @tailrec def enclMember(owner: Symbol): Symbol = if (owner.isLocalToBlock) enclMember(owner.owner) else owner
+      if (sym.isMethod && isUnderConstruction(enclMember(sym.owner).owner)) { // # bug 1909
          if (sym.isModule) { // Yes, it can be a module and a method, see comments on `isModuleNotMethod`!
            // TODO promote to an implementation restriction if we can reason that this *always* leads to VerifyError.
            // See neg/t1909-object.scala

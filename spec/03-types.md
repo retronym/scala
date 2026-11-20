@@ -106,11 +106,13 @@ forms.
 SimpleType  ::=  Path ‘.’ ‘type’
 ```
 
-A _singleton type_ is of the form ´p.´`type`. Where ´p´ is a path pointing to a
-value which [conforms](06-expressions.html#expression-typing) to
-`scala.AnyRef`, the type denotes the set of values consisting of `null` and the
-value denoted by ´p´ (i.e., the value ´v´ for which `v eq p`). Where the path
-does not conform to `scala.AnyRef` the type denotes the set consisting of only
+A _singleton type_ is of the form ´p.´`type`. Where
+[`scala.Null` conforms](#conformance) to ´p.´`type`, the type denotes the set
+of values consisting of `null` and the value denoted by ´p´ (i.e., the value
+´v´ for which `v eq p`). This is the case if ´p´ is a path pointing to a value
+of a class type which conforms to `scala.AnyRef`, but not, for example, if the
+type of ´p´ is a type parameter or abstract type whose lower bound does not
+include `scala.Null`. Otherwise the type denotes the set consisting of only
 the value denoted by ´p´.
 
 <!-- a pattern match/type test against a singleton type `p.type` desugars to `_ eq p` -->
@@ -854,9 +856,20 @@ The conformance relation ´(<:)´ is the smallest transitive relation that satis
 - Conformance includes equivalence. If `T \equiv U` then `T <: U`.
 - For every value type `T`, `scala.Nothing <: ´T´ <: scala.Any`.
 - For every type constructor ´T´ (with any number of type parameters), `scala.Nothing <: ´T´ <: scala.Any`.
-- For every value type ´T´, `scala.Null <: ´T´` unless `´T´ <: scala.AnyVal`.
+- For every class type or parameterized type ´T´ other than `scala.Nothing`,
+  `scala.Null <: ´T´` unless the class of ´T´ is a subclass of `scala.AnyVal`.
+- `scala.Null` conforms to a compound type `´T_1´ with ´\ldots´ with ´T_n´ {´R\,´}`
+  if it conforms to each of the component types ´T_i´.
+- `scala.Null` conforms to a singleton type `´p´.type` or literal type if
+  the underlying non-singleton type ´U´ of that type conforms to `scala.AnyRef`
+  and `scala.Null <: ´U´`. Here, the underlying non-singleton type of
+  `´p´.type` is the type of the path ´p´ if that type is not a singleton type,
+  and the underlying non-singleton type of the type of ´p´ otherwise; the
+  underlying non-singleton type of a literal type is the type of its literal.
 - A type variable or abstract type ´t´ conforms to its upper bound and
-  its lower bound conforms to ´t´.
+  its lower bound conforms to ´t´. In particular, `scala.Null` conforms to
+  ´t´ only if it conforms to the lower bound of ´t´; an upper bound which
+  conforms to `scala.AnyRef` is not sufficient.
 - A class type or parameterized type conforms to any of its base-types.
 - A singleton type `´p´.type` conforms to the type of the path ´p´.
 - A singleton type `´p´.type` conforms to the type `scala.Singleton`.
@@ -1027,11 +1040,17 @@ A type is _volatile_ if it falls into one of four categories:
 A compound type `´T_1´ with … with ´T_n´ {´R\,´}`
 is volatile if one of the following three conditions hold.
 
-1. One of ´T_2 , \ldots , T_n´ is a type parameter or abstract type, or
-1. ´T_1´ is an abstract type and either the refinement ´R´
+1. ´T_1´ is neither a type parameter nor an abstract type, and
+   one of ´T_2 , \ldots , T_n´ is a type parameter or abstract type, or
+1. ´T_1´ is a type parameter or abstract type and either the refinement ´R´
    or a type ´T_j´ for ´j > 1´ contributes an abstract member
    to the compound type, or
-1. one of ´T_1 , \ldots , T_n´ is a singleton type.
+1. one of ´T_1 , \ldots , T_n´ is volatile.
+
+For the purpose of the first two conditions, a singleton type `´p´.type`
+whose underlying type is a type parameter or abstract type is treated like
+that type parameter or abstract type. A singleton type among
+´T_1 , \ldots , T_n´ does not otherwise make the compound type volatile.
 
 Here, a type ´S´ _contributes an abstract member_ to a type ´T´ if
 ´S´ contains an abstract member that is also a member of ´T´.
@@ -1058,7 +1077,9 @@ The erasure mapping is defined as follows.
 - The erasure of an alias type is the erasure of its right-hand side.
 - The erasure of an abstract type is the erasure of its upper bound.
 - The erasure of the parameterized type `scala.Array´[T_1]´` is
- `scala.Array´[|T_1|]´`.
+  `scala.AnyRef` if ´T_1´ is a type parameter, an abstract type or a type
+  bound by an existential quantifier, and ´T_1´ does not conform to
+  `scala.AnyRef`. Otherwise, it is `scala.Array´[|T_1|]´`.
 - The erasure of every other parameterized type ´T[T_1 , \ldots , T_n]´ is ´|T|´.
 - The erasure of a singleton type `´p´.type` is the
   erasure of the type of ´p´.

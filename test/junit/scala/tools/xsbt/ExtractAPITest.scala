@@ -124,6 +124,35 @@ class ExtractAPITest extends BridgeTesting {
     )
   }
 
+  // A use of an annotation gets a copy of the tree of a default argument, which is all that is pickled for the
+  // annotated definition. If that tree changes, the API of the annotation class must change with it.
+  @Test
+  def `ExtractAPI should include the default arguments of the constructor of an annotation class`(): Unit = {
+    def annApi(const: String, default: String): ClassLike = {
+      val srcConsts = s"object Consts { final val I = $const; val J = 1; val K = 1 }"
+      val srcAnn = s"class ann(x: Int = $default, y: Int = 0) extends scala.annotation.StaticAnnotation"
+      val Seq(_, apis) = extractApisFromSrcs(List(srcConsts, srcAnn))
+      apis.find(c => c.name == "ann" && c.definitionType == DefinitionType.ClassDef).get
+    }
+    assertTrue(SameAPI(annApi("1", "Consts.I"), annApi("1", "Consts.I")))
+    // the default is the folded constant
+    assertFalse(SameAPI(annApi("1", "Consts.I"), annApi("2", "Consts.I")))
+    assertTrue(SameAPI(annApi("1", "Consts.J"), annApi("2", "Consts.J")))
+    assertFalse(SameAPI(annApi("1", "Consts.J"), annApi("1", "Consts.K")))
+  }
+
+  // The hash of the constructor is what invalidates a use: it has no other reference to what the default refers to.
+  @Test
+  def `A use of an annotation with a default argument should use the name of the constructor`(): Unit =
+    withTemporaryDirectory { tmpDir =>
+      val srcConsts = "object Consts { final val I = 1 }"
+      val srcAnn = "class ann(x: Int = Consts.I) extends scala.annotation.StaticAnnotation"
+      val (_, callback) = compileSrcss(tmpDir, mkReporter, List(List(srcConsts, srcAnn), List("@ann() class C")))
+      val usedNames = callback.usedNames("C")
+      assertTrue(usedNames.toString, usedNames.contains("ann;init;"))
+      assertFalse(usedNames.toString, usedNames.contains("I") || usedNames.contains("Consts"))
+    }
+
   @Test
   def `ExtractAPI should extract nested classes`(): Unit = {
     val src =

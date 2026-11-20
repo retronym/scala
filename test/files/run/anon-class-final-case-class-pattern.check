@@ -1,0 +1,13 @@
+anon-class-final-case-class-pattern.scala:5: warning: The outer reference in this type test cannot be checked at run time.
+  val y = new { final case class P(a: Int) }
+                                 ^
+anon-class-final-case-class-pattern.scala:6: warning: The outer reference in this type test cannot be checked at run time.
+  def f(x: Any) = x match { case y.P(a) => a; case _ => -1 }
+                                    ^
+anon-class-final-case-class-pattern.scala:9: warning: The outer reference in this type test cannot be checked at run time.
+    val z = new { final case class P(a: Int) }
+                                   ^
+anon-class-final-case-class-pattern.scala:10: warning: The outer reference in this type test cannot be checked at run time.
+    def g(x: Any) = x match { case z.P(a) => a; case _ => -1 }
+                                      ^
+warning: 4 feature warnings; re-run with -feature for details

@@ -206,7 +206,8 @@ abstract class CopyProp {
         }
       }
 
-      var staleStoreRemoved = toNullOut.nonEmpty
+      // A dead `ACONST_NULL; ASTORE x` to a live variable is left as it is, which is not a change.
+      var staleStoreRemoved = toNullOut.exists { case (vi, isStoreNull) => !isStoreNull || !liveRefVars(vi.`var`) }
       var intrinsicRewritten = false
       val callInlined = toInline.nonEmpty
 
@@ -499,10 +500,6 @@ abstract class CopyProp {
               if (compilerSettings.optAllowSkipClassLoading) toRemove += prod
               else popAfterProd()
           }
-
-          case MULTIANEWARRAY =>
-            toRemove += prod
-            handleInputs(prod, prod.asInstanceOf[MultiANewArrayInsnNode].dims)
 
           case _ =>
             popAfterProd()

@@ -30,9 +30,11 @@ private[internal] final class CommonOwners[U <: SymbolTable with Singleton](val 
   protected[internal] def commonOwner(tps: List[Type]): Symbol =
     if (tps.isEmpty) NoSymbol
     else {
-      commonOwnerMap.clear()
-      tps foreach (commonOwnerMap)
-      if (commonOwnerMap.result ne null) commonOwnerMap.result else NoSymbol
+      // Runtime reflection overrides `commonOwnerMap` to return a new map on each call.
+      val map = commonOwnerMap
+      map.clear()
+      tps foreach map
+      if (map.result ne null) map.result else NoSymbol
     }
 
   class CommonOwnerMap extends TypeCollector[Symbol](null) {

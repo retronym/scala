@@ -1,0 +1,7 @@
+for-refutable-syntactic.scala:17: error: value withFilter is not a member of NoFilter[Box]
+  def typed   = for (b: Box <- boxes) yield b.i
+                               ^
+for-refutable-syntactic.scala:18: error: value withFilter is not a member of NoFilter[Box]
+  def extract = for (Box(i) <- boxes) yield i
+                               ^
+2 errors

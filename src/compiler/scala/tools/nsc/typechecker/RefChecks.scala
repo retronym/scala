@@ -66,6 +66,9 @@ abstract class RefChecks extends Transform {
   def overridesTypeInPrefix(tp1: Type, tp2: Type, prefix: Type): Boolean = (tp1.dealiasWiden, tp2.dealiasWiden) match {
     case (MethodType(List(), rtp1), NullaryMethodType(rtp2)) => rtp1 <:< rtp2
     case (NullaryMethodType(rtp1), MethodType(List(), rtp2)) => rtp1 <:< rtp2
+    // the same for polymorphic methods: give the nullary method an empty parameter list, and let `<:<` relate the type parameters
+    case (PolyType(_, MethodType(List(), _)), PolyType(tparams2, NullaryMethodType(rtp2))) => tp1 <:< PolyType(tparams2, MethodType(Nil, rtp2))
+    case (PolyType(tparams1, NullaryMethodType(rtp1)), PolyType(_, MethodType(List(), _))) => PolyType(tparams1, MethodType(Nil, rtp1)) <:< tp2
     case (TypeRef(_, sym, _), _) if sym.isModuleClass        => overridesTypeInPrefix(NullaryMethodType(tp1), tp2, prefix)
     case (_, TypeRef(_, sym, _)) if sym.isModuleClass        => overridesTypeInPrefix(tp1, NullaryMethodType(tp2), prefix)
     case _                                                   => tp1 <:< tp2
@@ -239,6 +242,19 @@ abstract class RefChecks extends Transform {
 
 // Override checking ------------------------------------------------------------
 
+    private def uncurryAndErase(sym: Symbol, tp: Type): Type = erasure.erasure(sym)(uncurry.transformInfo(sym, tp))
+
+    /** Is `sym` a varargs bridge created by `erasedVarargBridge`, whose type is the erased type `erased`? */
+    private def isErasedVarargBridge(sym: Symbol, erased: Type): Boolean =
+      sym.hasFlag(VBRIDGE) && sym.isArtifact && exitingErasure(sym.tpe =:= erased)
+
+    /** Does `clazz` have an erased varargs bridge that implements the Java method `javaMember`? */
+    private def hasErasedVarargBridge(clazz: Symbol, javaMember: Symbol): Boolean =
+      isJavaVarArgsMethod(javaMember) && {
+        val erased = uncurryAndErase(javaMember, javaMember.info)
+        clazz.info.nonPrivateMemberAdmitting(javaMember.name, VBRIDGE).alternatives.exists(isErasedVarargBridge(_, erased))
+      }
+
     /** Add bridges for vararg methods that extend Java vararg methods
      */
     def addVarargBridges(clazz: Symbol): List[Tree] = {
@@ -267,6 +283,44 @@ abstract class RefChecks extends Transform {
           localTyper typed DefDef(bridge, body)
         }
 
+        // A varargs bridge whose type is `javaErased`, the erased type of the overridden Java method, for when that differs
+        // from the erasure of the bridge type seen from `clazz`. For `class JV<T> { String g(T... xs) }`, an override
+        // in `class C extends JV[String]` must implement `g(Object[])`, and Java callers pass an `Object[]`, so the
+        // array is wrapped as is and the arguments are cast to the types `member` expects.
+        def erasedVarargBridge(member: Symbol, javaErased: Type): Tree = {
+          log(s"Generating erased varargs bridge for ${member.fullLocationString} of type $javaErased")
+
+          val newFlags = (member.flags | VBRIDGE | ARTIFACT) & ~(PRIVATE | OVERRIDE | ABSOVERRIDE)
+          val bridge   = member.cloneSymbolImpl(clazz, newFlags) setPos clazz.pos
+          // An erased type refers to a generic class without type arguments (`Array[Comparable]` for a parameter
+          // bounded by `Comparable<T>`), which is not a type that a tree can have. Apply such classes to wildcards.
+          val applied = javaErased.map {
+            case tp @ TypeRef(pre, sym, Nil) if tp.isHigherKinded => classExistentialType(pre, sym)
+            case tp => tp
+          }
+          bridge.setInfo(applied.cloneInfo(bridge))
+          clazz.info.decls enter bridge
+
+          val memberTpe = self.memberType(member)
+          def castTo(tp: Type)(tree: Tree, from: Type) =
+            if (from <:< tp) tree else gen.mkAsInstanceOf(tree, existentialAbstraction(memberTpe.typeParams, tp), wrapInApply = false)
+          val params  = bridge.paramss.head
+          val args    = map2(params.init, memberTpe.params.init)((p, mp) => castTo(mp.tpe)(Ident(p), p.tpe))
+          val elemtp  = memberTpe.params.last.tpe.typeArgs.head
+          val array   = Ident(params.last)
+          val arrElem = params.last.tpe.typeArgs.head
+          // `wrapRefArray[T <: AnyRef]` can't be applied to a class that is a universal trait in Scala (`Comparable`,
+          // `Serializable`). The array is one of references all the same.
+          val wrapped =
+            if (isPrimitiveValueType(arrElem) || arrElem <:< AnyRefTpe) gen.mkWrapVarargsArray(array, arrElem)
+            else gen.mkWrapVarargsArray(gen.mkAsInstanceOf(array, arrayType(AnyRefTpe), wrapInApply = false), AnyRefTpe)
+          val lastarg = gen.wildcardStar(gen.mkAsInstanceOf(wrapped, existentialAbstraction(memberTpe.typeParams, seqType(elemtp)), wrapInApply = false))
+          val call    = localTyper typed Apply(Select(This(clazz), member), args :+ lastarg)
+          val body    = castTo(bridge.tpe.resultType)(call, call.tpe)
+
+          localTyper typed DefDef(bridge, body)
+        }
+
         // For all concrete non-private members (but: see below) that have a (Scala) repeated
         //   parameter: compute the corresponding method type `jtpe` with a Java repeated parameter
         //   if a method with type `jtpe` exists and that method is not a varargs bridge
@@ -287,8 +341,24 @@ abstract class RefChecks extends Transform {
               // if we find a bridge everything is OK. If we find another member,
               // we need to create a bridge
               val inherited1 = inherited filter (sym => !(sym hasFlag VBRIDGE) && (self memberType sym matches jtpe))
-              if (inherited1.exists)
-                bridges += varargBridge(member, jtpe)
+              if (inherited1.exists) {
+                // The JVM signature to override is the erasure of the Java method's own type, which differs from
+                // the erasure of `jtpe` if a parameter or the result has a type parameter of the Java class as
+                // its type (`g(T... xs)` erases to `g(Object[])`, not `g(String[])` in `C extends JV[String]`).
+                lazy val bridgeErased = uncurryAndErase(member, jtpe)
+                val javaErased =
+                  if (currentRun.erasurePhase == NoPhase) None
+                  else inherited1.alternatives.iterator.collect {
+                    case sym if sym.isJavaDefined => uncurryAndErase(sym, sym.info)
+                  }.find(tp => !exitingErasure(tp =:= bridgeErased))
+                javaErased match {
+                  case Some(tp) =>
+                    // An erased bridge inherited from a superclass calls `member` virtually.
+                    if (!inherited.alternatives.exists(isErasedVarargBridge(_, tp)))
+                      bridges += erasedVarargBridge(member, tp)
+                  case _ => bridges += varargBridge(member, jtpe)
+                }
+              }
             }
           }
         }
@@ -503,16 +573,29 @@ abstract class RefChecks extends Transform {
             val memberOverrides = member.isAnyOverride ||
               member.hasAnnotation(definitions.uncheckedOverrideClass) ||
               (member.isJavaDefined && !member.isDeferred) // In Java, the OVERRIDE flag is implied
+            // A Java class that extends a Scala class may override the accessors of a `var`, `val` or `lazy val`.
+            // javac doesn't know Scala's rules for those, and the author of `clazz` can't do anything about them.
+            def isJavaOverride = member.isJavaDefined && memberClass.isNonBottomSubClass(otherClass)
 
             // Concrete `other` requires `override` for `member`.
-            // Synthetic exclusion for (at least) default getters, fixes scala/bug#5178.
+            // Exclusion for default getters, fixes scala/bug#5178.
             // We cannot assign the OVERRIDE flag to the default getter:
             // one default getter might sometimes override, sometimes not. Example in comment on ticket.
-            if (!memberOverrides && !other.isDeferred && !member.isSynthetic)
-              overrideErrorConcreteMissingOverride()
+            // Other synthetic members that may override are created with the OVERRIDE flag, as the methods of a case class are.
+            // The conversion method of an implicit class is not: it has the name of the class, which cannot be given the modifier.
+            def isDefaultGetter = member.isSynthetic && member.isDefaultGetter
+            def isImplicitClassConversion(sym: Symbol) = sym.isSynthetic && sym.isImplicit && sym.isMethod
+            // An implicit class may override the implicit class of a parent, as its conversion overrides the parent's.
+            def overridesImplicitClassConversion = isImplicitClassConversion(member) && isImplicitClassConversion(other)
+            if (!memberOverrides && !other.isDeferred && !isDefaultGetter && !overridesImplicitClassConversion) {
+              if (isImplicitClassConversion(member) && isMemberClass)
+                overrideErrorWithMemberInfo(s"the conversion method of implicit class ${member.name} cannot override a concrete member, rename the class:")
+              else
+                overrideErrorConcreteMissingOverride()
+            }
             else if (other.isAbstractOverride && other.isIncompleteIn(clazz) && !member.isAbstractOverride)
               overrideErrorWithMemberInfo("`abstract override` modifiers required to override:")
-            else if (memberOverrides && other.hasFlag(ACCESSOR) && !other.hasFlag(STABLE | DEFERRED))
+            else if (memberOverrides && other.hasFlag(ACCESSOR) && !other.hasFlag(STABLE | DEFERRED) && !isJavaOverride)
               // TODO: this is not covered by the spec.
               overrideErrorWithMemberInfo("mutable variable cannot be overridden:")
             else if (memberOverrides &&
@@ -521,12 +604,12 @@ abstract class RefChecks extends Transform {
                      intersectionIsEmpty(member.extendedOverriddenSymbols, other.extendedOverriddenSymbols))
               overrideErrorWithMemberInfo("cannot override a concrete member without a third member that's overridden by both " +
                                           "(this rule is designed to prevent accidental overrides)")
-            else if (other.isStable && !member.isStable) // (1.4)
+            else if (other.isStable && !member.isStable && !isJavaOverride) // (1.4)
               overrideErrorWithMemberInfo("stable, immutable value required to override:")
             else if (member.isValue && member.isLazy &&
                        other.isValue && other.hasStableFlag && !other.isDeferred && !other.isLazy)
               overrideErrorWithMemberInfo("concrete non-lazy value cannot be overridden:")
-            else if (other.isValue && other.isLazy && member.isValue && !member.isLazy)
+            else if (other.isValue && other.isLazy && member.isValue && !member.isLazy && !isJavaOverride)
               overrideErrorWithMemberInfo("value must be lazy when overriding concrete lazy value:")
             else if (other.isDeferred && member.isTermMacro && member.extendedOverriddenSymbols.forall(_.isDeferred)) // (1.9)
               overrideErrorWithMemberInfo("macro cannot override abstract method:")
@@ -545,7 +628,8 @@ abstract class RefChecks extends Transform {
                 val msg = s"$mbr without a parameter list overrides ${other.fullLocationString} defined with a single empty parameter list"
                 val namePos = member.pos
                 val action =
-                  if (namePos.isDefined && namePos.source.sourceAt(namePos) == member.decodedName)
+                  // the parameter list of a polymorphic method goes after its type parameters, not after its name
+                  if (namePos.isDefined && namePos.source.sourceAt(namePos) == member.decodedName && member.typeParams.isEmpty)
                     runReporting.codeAction("add empty parameter list", namePos.focusEnd, "()", msg)
                   else Nil
                 overrideErrorOrNullaryWarning(msg, action)
@@ -654,10 +738,29 @@ abstract class RefChecks extends Transform {
         }
       }
 
+      // A class that is not accessible from `clazz`, such as a nested Java class with package access, is not overridden.
+      def isAccessibleInClazz(sym: Symbol) =
+        !sym.isPrivate && (!sym.hasAccessBoundary || sym.isProtected || clazz.hasTransOwner(sym.privateWithin))
+
+      // A type alias with the name of an inherited class is deprecated, as a class that shadows one is in checkNestedClassShadow.
+      // Warn where the pair is formed, in the class that defines the alias or mixes the two together, not in its subclasses.
+      def checkTypeAliasOverridesClass(alias: Symbol, cls: Symbol): Unit =
+        if (!clazz.parentSymbols.exists(p => p.isSubClass(alias.owner) && p.isSubClass(cls.owner))) {
+          val (pos, where) = if (alias.owner == clazz) (alias.pos, "") else (clazz.pos, s" defined in ${alias.owner}")
+          def msg(what: String) = s"overriding a nested class of a parent with a type alias is $what but $alias$where overrides $cls defined in ${cls.owner}; rename the type to something else"
+          if (currentRun.isScala3) runReporting.warning(pos, msg("deprecated"), WarningCategory.Scala3Migration, clazz)
+          else runReporting.deprecationWarning(pos, alias, currentOwner, msg("deprecated"), "2.13.19")
+        }
+
       val opc = new overridingPairs.PairsCursor(clazz)
       while (opc.hasNext) {
+        // A class that shadows a class of a parent is deprecated in checkNestedClassShadow.
         if (!opc.high.isClass)
           checkOverride(opc.currentPair)
+        else if (!opc.low.isClass && isAccessibleInClazz(opc.high)) {
+          if (opc.low.isAliasType) checkTypeAliasOverridesClass(opc.low, opc.high)
+          else checkOverride(opc.currentPair)
+        }
 
         opc.next()
       }
@@ -696,7 +799,7 @@ abstract class RefChecks extends Transform {
             // the test requires exitingErasure so shouldn't be
             // done if the compiler has no erasure phase available
                member.isJavaDefined
-            && (currentRun.erasurePhase == NoPhase || javaErasedOverridingSym(member) != NoSymbol)
+            && (currentRun.erasurePhase == NoPhase || javaErasedOverridingSym(member) != NoSymbol || hasErasedVarargBridge(clazz, member))
           )
 
         // 2. Check that only abstract classes have deferred members
@@ -823,11 +926,32 @@ abstract class RefChecks extends Transform {
             }
             (ps, qs)
           }
+          // An abstract Java method with package access is implemented only by a method of a class in the same
+          // package, or one that overrides such a method (JVMS 5.4.5). Scala's member lookup ignores that, so
+          // the member that hides it may not implement it at run time (javac: "S is not abstract and does not
+          // override abstract method foo() in J").
+          def checkJavaPackagePrivateImplemented(): Unit =
+            for (bc <- clazz.baseClasses.tail if bc.isJavaDefined && !bc.isInterface; decl <- bc.info.decls)
+              if (decl.isMethod && decl.isDeferred && overridingPairs.isJavaPackagePrivate(decl)) {
+                val impl = decl.matchingSymbol(clazz.thisType, admit = VBRIDGE)
+                // A redeclaration in a class of the same package overrides `decl`. If it is concrete, it implements `decl`.
+                // If it has wider access, abstract or not, it is overridden in turn from any package, so `impl` overrides
+                // `decl` transitively (JVMS 5.4.5). If it is abstract with package access, it is checked on its own.
+                // A trait's method is not a candidate: the JVM selects the abstract method of class `bc` before default methods.
+                def redeclaredInPackage = clazz.baseClasses.iterator.takeWhile(_ != bc).exists { c =>
+                  !c.isTrait && c.enclosingPackageClass == decl.privateWithin && decl.matchingSymbol(c, clazz.thisType).exists
+                }
+                if (impl.exists && !impl.isDeferred && !redeclaredInPackage)
+                  abstractClassError(sm"""|${infoStringWithLocation(decl)} has package access, so it is not implemented by
+                                          |${infoStringWithLocation(impl)}; only a method of a class in ${decl.privateWithin} can implement it""")
+              }
+
           val nonPrivateMembers = clazz.info.nonPrivateMembersAdmitting(VBRIDGE)
           // Avoid extra allocations with reverseIterator. Filter for abstract members of interest, and bad abstract override.
           val (missing, abstractIncomplete): (List[Symbol], List[Symbol]) =
             filtered(nonPrivateMembers.reverseIterator)(m => m.isDeferred & !ignoreDeferred(m))(m => m.isAbstractOverride && m.isIncompleteIn(clazz))
           if (missing.nonEmpty) emitErrors(missing, nonPrivateMembers)
+          else checkJavaPackagePrivateImplemented()
           // Check the remainder for invalid absoverride.
           for (member <- abstractIncomplete) {
             val explanation = member.superSymbolIn(clazz) match {
@@ -908,12 +1032,7 @@ abstract class RefChecks extends Transform {
          * The member IS accessible to classes in package a.b.c.  The javaAccessCheck logic
          * is restricting the set of matching signatures according to the above semantics.
          */
-        def javaAccessCheck(sym: Symbol) = (
-             !inclazz.isJavaDefined                             // not a java defined member
-          || !sym.hasAccessBoundary                             // no access boundary
-          || sym.isProtected                                    // marked protected in java, thus accessible to subclasses
-          || sym.privateWithin == member.enclosingPackageClass  // exact package match
-        )
+        def javaAccessCheck(sym: Symbol) = !overridingPairs.isJavaPackagePrivateElsewhere(sym, member)
         def classDecl = inclazz.info.nonPrivateDecl(member.name)
                         .orElse(inclazz.info.nonPrivateDecl(member.unexpandedName))
         def matchingSyms = classDecl.filter(sym => isSignatureMatch(sym) && javaAccessCheck(sym))
@@ -1136,7 +1255,10 @@ abstract class RefChecks extends Transform {
       // equals method inherited from Object or a case class synthetic equals (for
       // which we know the logic.)
       def isWarnable           = isReferenceOp || (isUsingDefaultScalaOp && isUsingWarnableEquals)
-      def isEitherNullable     = (NullTpe <:< receiver.info) || (NullTpe <:< actual.info)
+      // `null` is a value of both types, in which case the operands can be equal although the types are unrelated.
+      // The reference to an object is taken to be non-null.
+      def isNullable(s: Symbol) = !s.isModuleClass && (NullTpe <:< s.tpe_*)
+      def isBothNullable       = isNullable(receiver) && isNullable(actual)
       def isEitherValueClass   = actual.isDerivedValueClass || receiver.isDerivedValueClass
       def isBoolean(s: Symbol) = unboxedValueClass(s) == BooleanClass
       def isUnit(s: Symbol)    = unboxedValueClass(s) == UnitClass
@@ -1148,6 +1270,9 @@ abstract class RefChecks extends Transform {
       def isMaybeAnyValue(s: Symbol) = isPrimitiveValueClass(unboxedValueClass(s)) || isMaybeValue(s)
       // used to short-circuit unrelatedTypes check if both sides are special
       def isSpecial(s: Symbol) = isMaybeAnyValue(s) || isAnyNumber(s)
+      // A value of a trait type can be a ScalaNumber, so the backend compares it with a number or character
+      // cooperatively: `5 == (BigInt(5): Ordered[BigInt])`
+      def isNumericAndTrait = isNumeric(receiver) && actual.isTrait || isNumeric(actual) && receiver.isTrait
       val nullCount            = onSyms(_.filter(_ == NullClass).size)
       def isNonsenseValueClassCompare = (
            !haveSubclassRelationship
@@ -1218,7 +1343,7 @@ abstract class RefChecks extends Transform {
       }
       else if (isNumeric(receiver)) {
         if (!isNumeric(actual))
-          if (isUnit(actual) || isBoolean(actual) || !isMaybeValue(actual))   // 5 == "abc"
+          if (isUnit(actual) || isBoolean(actual) || !(isMaybeValue(actual) || isNumericAndTrait))   // 5 == "abc"
             nonSensiblyNeq()
       }
       else if (receiver == StringClass) {
@@ -1231,7 +1356,8 @@ abstract class RefChecks extends Transform {
         if (rBase != NoSymbol) {
           if (aBase != NoSymbol && rBase != aBase)
             nonSensiblyNeq()
-          else if (!isCollection(actual) && !haveSubclassRelationship)
+          // a collection can implement an unrelated trait, as List implements Product and Serializable
+          else if (!isCollection(actual) && !haveSubclassRelationship && (isEffectivelyFinalDeep(actual) || !actual.isTrait))
             nonSensiblyNeq()
         }
       }
@@ -1241,7 +1367,7 @@ abstract class RefChecks extends Transform {
         else if (isNew(other) && (isEffectivelyFinalDeep(receiver) || isReferenceOp))   // object X ; X == new Y
           nonSensiblyNew()
         else if (isEffectivelyFinalDeep(actual) && isEffectivelyFinalDeep(receiver) && !haveSubclassRelationship) {  // object X, Y; X == Y
-          if (isEitherNullable)
+          if (isBothNullable)
             nonSensible("non-null ", alwaysEqual = false)
           else
             nonSensiblyNeq()
@@ -1257,7 +1383,7 @@ abstract class RefChecks extends Transform {
       else if (isWarnable && nullCount == 0 && !(isSpecial(receiver) && isSpecial(actual))) {
         // Warn if types are unrelated, without interesting lub. (Don't bother if we don't know anything about the values we're comparing.)
         def warnIfLubless(): Unit = {
-          if (isMaybeValue(actual) || isMaybeValue(receiver) || haveSubclassRelationship) {} // ignore trivial or related types
+          if (isMaybeValue(actual) || isMaybeValue(receiver) || haveSubclassRelationship || isNumericAndTrait) {} // ignore trivial or related types
           else {
             // better to have lubbed and lost
             // We erase the lub because the erased type is closer to what happens at run time.
@@ -1535,11 +1661,11 @@ abstract class RefChecks extends Transform {
           symbol.allOverriddenSymbols.filter(sym =>
             !sym.isDeprecated && !sym.isDeferred && !sym.hasDeprecatedOverridingAnnotation && !sym.enclClass.hasDeprecatedInheritanceAnnotation)
         if(!concrOvers.isEmpty)
-          runReporting.deprecationWarning(
+          runReporting.deprecatedDefinitionWarning(
             tree.pos,
             symbol,
             currentOwner,
-            s"${symbol.toString} overrides concrete, non-deprecated symbol(s):    ${concrOvers.map(_.name.decode).mkString(", ")}", "")
+            s"${symbol.toString} overrides concrete, non-deprecated symbol(s):    ${concrOvers.map(_.name.decode).mkString(", ")}")
       }
     }
     private def checkRepeatedParamArg(tree: Tree): Unit = {
@@ -1698,8 +1824,14 @@ abstract class RefChecks extends Transform {
             }
         }
 
-      def checkIsElidable(sym: Symbol): Unit = if (sym ne null) sym.elisionLevel.foreach { _ =>
-        if (!sym.isMethod || sym.isAccessor || sym.isLazy || sym.isDeferred) {
+      def checkIsElidable(sym: Symbol): Unit = if (sym ne null) sym.elisionLevel.foreach { level =>
+        if (sym.isConstructor) {
+          // Only an error where UnCurry would elide the constructor, which crashes the compiler or fails verification.
+          // At a level that does not elide it, the annotation has no effect.
+          if (level < settings.elidebelow.value)
+            reporter.error(sym.pos, s"constructor ${sym.owner.name}: Only concrete methods can be marked @elidable. A constructor cannot be elided.")
+        }
+        else if (!sym.isMethod || sym.isAccessor || sym.isLazy || sym.isDeferred) {
           val rest = if (sym.isDeferred) " The annotation affects only the annotated method, not overriding methods in subclasses." else ""
           reporter.error(sym.pos, s"${sym.name}: Only concrete methods can be marked @elidable.$rest")
         }

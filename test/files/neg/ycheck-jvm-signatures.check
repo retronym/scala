@@ -1,0 +1,12 @@
+ycheck-jvm-signatures.scala:6: warning: compiler bug: created generic signature for method max in C that does not conform to its erasure
+signature: <U:Ljava/lang/Object;>(TU;TU;)TU;
+erased signature: (Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+descriptor: (FF)F
+original type: [U](x: Float, y: Float): U
+if this is reproducible, please report bug at https://github.com/scala/bug/issues
+  def max[U <: Float](x: U, y: U): U = x
+      ^
+[Now checking: jvm]
+error: No warnings can be incurred under -Werror.
+1 warning
+1 error

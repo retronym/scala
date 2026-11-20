@@ -64,6 +64,11 @@ trait MarkupParsers {
     val eof = false
 
     def truncatedError(msg: String): Nothing = throw TruncatedXMLControl
+    // `Utility.parseCharRef` reports with the input at the terminating ';', which `content_AMP` goes on to accept,
+    // so the error must not skip a character as `reportSyntaxError(msg)` does.
+    override def xCharRef(ch: () => Char, nextch: () => Unit): String =
+      Utility.parseCharRef(ch, nextch, msg => reportSyntaxError(curOffset, "in XML literal: " + msg), truncatedError _)
+
     def xHandleError(that: Char, msg: String) =
       if (ch == SU) throw TruncatedXMLControl
       else reportSyntaxError(msg)
@@ -138,7 +143,9 @@ trait MarkupParsers {
             try handle.parseAttribute(r2p(start, mid, curOffset), tmp)
             catch {
               case _: RuntimeException =>
-                errorAndResult("error parsing attribute value", parser.errorTermTree)
+                // The value has been consumed up to its closing quote: don't skip a character as `reportSyntaxError(msg)` does.
+                reportSyntaxError(curOffset, "in XML literal: error parsing attribute value")
+                parser.errorTermTree
             }
 
           case '{'  =>

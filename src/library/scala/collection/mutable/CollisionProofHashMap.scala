@@ -24,6 +24,14 @@ import scala.runtime.Statics
   * as determined by the `Ordering` has to be consistent with `equals` and `hashCode`. Universal equality
   * of numeric types is not supported (similar to `AnyRefMap`).
   *
+  * Two keys are the same key if they have the same `hashCode` and the `Ordering` compares them as equal;
+  * neither `==` nor `equals` is consulted. For keys whose `Ordering` agrees with `==` this is the behavior
+  * of `mutable.HashMap`. It differs where the two disagree or where `hashCode` differs from `##`: with the
+  * default orderings `Double.NaN` is a single key that can be looked up and removed, `0.0` and `-0.0` are
+  * two keys, and under an `Ordering[Any]` that compares numbers by value `1` and `1L` are the same key but
+  * `1.0`, which has a different `hashCode`, is another one. A `null` key is only supported if the `Ordering`
+  * accepts it.
+  *
   * @see [[https://docs.scala-lang.org/overviews/collections-2.13/concrete-mutable-collection-classes.html#hash-tables "Scala's Collection Library overview"]]
   * section on `Hash Tables` for more information.
   *
@@ -36,7 +44,8 @@ final class CollisionProofHashMap[K, V](initialCapacity: Int, loadFactor: Double
   extends AbstractMap[K, V]
     with MapOps[K, V, Map, CollisionProofHashMap[K, V]] //--
     with StrictOptimizedIterableOps[(K, V), Iterable, CollisionProofHashMap[K, V]]
-    with StrictOptimizedMapOps[K, V, Map, CollisionProofHashMap[K, V]] { //--
+    with StrictOptimizedMapOps[K, V, Map, CollisionProofHashMap[K, V]] //--
+    with Serializable {
 
   private[this] final def sortedMapFactory: SortedMapFactory[CollisionProofHashMap] = CollisionProofHashMap
 
@@ -128,10 +137,13 @@ final class CollisionProofHashMap[K, V](initialCapacity: Int, loadFactor: Double
     put0(key, value, getOld, hash, idx)
   }
 
+  // returns `Some(oldValue)` if `getOld` is set and the key was present, `null` otherwise
   private[this] def put0(key: K, value: V, getOld: Boolean, hash: Int, idx: Int): Some[V] = {
-    val res = table(idx) match {
+    table(idx) match {
       case n: RBNode @uc =>
-        insert(n, idx, key, hash, value)
+        val old = insertIntoExisting(n, idx, key, hash, value, n)
+        if(old.asInstanceOf[AnyRef] ne Statics.pfMarker)
+          return (if(getOld) Some(old.asInstanceOf[V]) else null)
       case _old =>
         val old: LLNode = _old.asInstanceOf[LLNode]
         if(old eq null) {
@@ -141,12 +153,18 @@ final class CollisionProofHashMap[K, V](initialCapacity: Int, loadFactor: Double
           var prev: LLNode = null
           var n = old
           while((n ne null) && n.hash <= hash && remaining > 0) {
-            if(n.hash == hash && key == n.key) {
+            if(n.hash == hash && CollisionProofHashMap.sameKey(key, n.key)) {
               val old = n.value
               n.value = value
               return (if(getOld) Some(old) else null)
             }
             prev = n
+            n = n.next
+            remaining -= 1
+          }
+          // The loop above stops at the insertion point, which is the head of the bucket for a key whose hash is
+          // smaller than all the others. Count the rest of the bucket so that it is treeified wherever the key goes.
+          while((n ne null) && remaining > 0) {
             n = n.next
             remaining -= 1
           }
@@ -157,10 +175,9 @@ final class CollisionProofHashMap[K, V](initialCapacity: Int, loadFactor: Double
           if(prev eq null) table(idx) = new LLNode(key, hash, value, old)
           else prev.next = new LLNode(key, hash, value, prev.next)
         }
-        true
     }
-    if(res) contentSize += 1
-    if(res) Some(null.asInstanceOf[V]) else null //TODO
+    contentSize += 1
+    null
   }
 
   private[this] def treeify(old: LLNode, idx: Int): Unit = {
@@ -188,7 +205,7 @@ final class CollisionProofHashMap[K, V](initialCapacity: Int, loadFactor: Double
         val v = delete(t, idx, elem, hash)
         if(v.asInstanceOf[AnyRef] ne Statics.pfMarker) contentSize -= 1
         v
-      case nd: LLNode @uc if nd.hash == hash && nd.key == elem =>
+      case nd: LLNode @uc if nd.hash == hash && CollisionProofHashMap.sameKey(nd.key, elem) =>
         // first element matches
         table(idx) = nd.next
         contentSize -= 1
@@ -198,7 +215,7 @@ final class CollisionProofHashMap[K, V](initialCapacity: Int, loadFactor: Double
         var prev = nd
         var next = nd.next
         while((next ne null) && next.hash <= hash) {
-          if(next.hash == hash && next.key == elem) {
+          if(next.hash == hash && CollisionProofHashMap.sameKey(next.key, elem)) {
             prev.next = next.next
             contentSize -= 1
             return next.value
@@ -468,34 +485,29 @@ final class CollisionProofHashMap[K, V](initialCapacity: Int, loadFactor: Double
   }
 
   @`inline` private[this] def compare(key: K, hash: Int, node: RBNode): Int = {
-    /*val i = hash - node.hash
-    if(i != 0) i else*/ ordering.compare(key, node.key)
+    val i = Integer.compare(hash, node.hash)
+    if(i != 0) i else ordering.compare(key, node.key)
   }
 
   // ---- insertion ----
 
-  @tailrec private[this] final def insertIntoExisting(_root: RBNode, bucket: Int, key: K, hash: Int, value: V, x: RBNode): Boolean = {
+  // returns the old value or Statics.pfMarker if the key was added
+  @tailrec private[this] final def insertIntoExisting(_root: RBNode, bucket: Int, key: K, hash: Int, value: V, x: RBNode): Any = {
     val cmp = compare(key, hash, x)
     if(cmp == 0) {
+      val old = x.value
       x.value = value
-      false
+      old
     } else {
       val next = if(cmp < 0) x.left else x.right
       if(next eq null) {
         val z = CollisionProofHashMap.leaf(key, hash, value, red = true, x)
         if (cmp < 0) x.left = z else x.right = z
         table(bucket) = fixAfterInsert(_root, z)
-        return true
+        return Statics.pfMarker
       }
       else insertIntoExisting(_root, bucket, key, hash, value, next)
     }
-  }
-
-  private[this] final def insert(tree: RBNode, bucket: Int, key: K, hash: Int, value: V): Boolean = {
-    if(tree eq null) {
-      table(bucket) = CollisionProofHashMap.leaf(key, hash, value, red = false, null)
-      true
-    } else insertIntoExisting(tree, bucket, key, hash, value, tree)
   }
 
   private[this] def fixAfterInsert(_root: RBNode, node: RBNode): RBNode = {
@@ -775,9 +787,16 @@ object CollisionProofHashMap extends SortedMapFactory[CollisionProofHashMap] {
   }
 
   @`inline` private def compare[K, V](key: K, hash: Int, node: RBNode[K, V])(implicit ord: Ordering[K]): Int = {
-    /*val i = hash - node.hash
-    if(i != 0) i else*/ ord.compare(key, node.key)
+    val i = Integer.compare(hash, node.hash)
+    if(i != 0) i else ord.compare(key, node.key)
   }
+
+  /** Key identity for two keys with the same hash: the same test in list buckets as `compare` applies in trees,
+    * except that a `null` key, which most orderings reject, is only the same as itself.
+    */
+  @`inline` private def sameKey[K](a: K, b: K)(implicit ord: Ordering[K]): Boolean =
+    (a.asInstanceOf[AnyRef] eq b.asInstanceOf[AnyRef]) ||
+      ((a.asInstanceOf[AnyRef] ne null) && (b.asInstanceOf[AnyRef] ne null) && ord.compare(a, b) == 0)
 
   private final val treeifyThreshold = 8
 
@@ -860,11 +879,8 @@ object CollisionProofHashMap extends SortedMapFactory[CollisionProofHashMap] {
   private final class LLNode[K, V](var key: K, var hash: Int, var value: V, var next: LLNode[K, V]) extends Node {
     override def toString = s"LLNode($key, $value, $hash) -> $next"
 
-    private[this] def eq(a: Any, b: Any): Boolean =
-      if(a.asInstanceOf[AnyRef] eq null) b.asInstanceOf[AnyRef] eq null else a.asInstanceOf[AnyRef].equals(b)
-
     @tailrec def getNode(k: K, h: Int)(implicit ord: Ordering[K]): LLNode[K, V] = {
-      if(h == hash && eq(k, key) /*ord.compare(k, key) == 0*/) this
+      if(h == hash && sameKey(k, key)) this
       else if((next eq null) || (hash > h)) null
       else next.getNode(k, h)
     }

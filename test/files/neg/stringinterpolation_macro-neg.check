@@ -86,12 +86,12 @@ stringinterpolation_macro-neg.scala:40: error: # not allowed for d conversion
 stringinterpolation_macro-neg.scala:41: error: ',' only allowed for d conversion of integral types
   f"$d%,x"
        ^
+stringinterpolation_macro-neg.scala:42: error: Illegal combination of flags '+' and ' '
+  f"$d%+ (x"
+        ^
 stringinterpolation_macro-neg.scala:42: error: only use '+' for BigInt conversions to o, x, X
   f"$d%+ (x"
        ^
-stringinterpolation_macro-neg.scala:42: error: only use ' ' for BigInt conversions to o, x, X
-  f"$d%+ (x"
-        ^
 stringinterpolation_macro-neg.scala:42: error: only use '(' for BigInt conversions to o, x, X
   f"$d%+ (x"
          ^
@@ -157,6 +157,57 @@ stringinterpolation_macro-neg.scala:77: error: Missing conversion operator in '%
 stringinterpolation_macro-neg.scala:80: error: conversions must follow a splice; use %% for literal %, %n for newline
   f"${d}random-leading-junk%d"
                            ^
+stringinterpolation_macro-neg.scala:83: error: Missing conversion operator in '%1$'; use %% for literal %, %n for newline
+  f"$d%1$$"
+      ^
+stringinterpolation_macro-neg.scala:84: error: Width out of range
+  f"$d%2147483648d"
+       ^
+stringinterpolation_macro-neg.scala:85: error: Width out of range
+  f"$d%99999999999999999999d"
+       ^
+stringinterpolation_macro-neg.scala:86: error: Precision out of range
+  f"$f%.2147483648f"
+        ^
+stringinterpolation_macro-neg.scala:87: error: Argument index out of range
+  f"$d%2147483648$$d"
+       ^
+stringinterpolation_macro-neg.scala:88: error: invalid unicode escape at index 1 of \u
+  f"$d\u"
+       ^
+stringinterpolation_macro-neg.scala:89: error: invalid unicode escape at index 4 of \u00
+  f"$d\u00"
+          ^
+stringinterpolation_macro-neg.scala:92: error: Flag '-' requires a width
+  f"$d%-d"
+       ^
+stringinterpolation_macro-neg.scala:93: error: Flag '0' requires a width
+  f"$d%0d"
+       ^
+stringinterpolation_macro-neg.scala:94: error: Illegal combination of flags '-' and '0'
+  f"$d%-0 5d"
+        ^
+stringinterpolation_macro-neg.scala:95: error: Illegal combination of flags '+' and ' '
+  f"$d%+ d"
+        ^
+stringinterpolation_macro-neg.scala:96: error: Illegal combination of flags '-' and '0'
+  f"$f%-015f"
+        ^
+stringinterpolation_macro-neg.scala:97: error: Flag '0' requires a width
+  f"$f%0f"
+       ^
+stringinterpolation_macro-neg.scala:98: error: Flag '-' requires a width
+  f"$s%-s"
+       ^
+stringinterpolation_macro-neg.scala:99: error: Flag '-' requires a width
+  f"$c%-c"
+       ^
+stringinterpolation_macro-neg.scala:100: error: Flag '-' requires a width
+  f"$t%-tT"
+       ^
+stringinterpolation_macro-neg.scala:101: error: Flag '-' requires a width
+  f"$d%d%1$$-d"
+           ^
 stringinterpolation_macro-neg.scala:19: warning: Boolean format is null test for non-Boolean
   f"$s%b"
        ^
@@ -170,4 +221,4 @@ stringinterpolation_macro-neg.scala:65: warning: Index is not this arg
   f"$s%s $s%1$$s"
             ^
 4 warnings
-45 errors
+62 errors

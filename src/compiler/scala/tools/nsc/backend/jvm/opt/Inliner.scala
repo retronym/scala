@@ -375,7 +375,10 @@ abstract class Inliner {
 
         var currentMethodRolledBack = false
 
-        for ((r, aliasFrame) <- rsWithAliasFrames) if (!currentMethodRolledBack) {
+        // A null frame means the callsite is unreachable. The call graph only has callsites that were reachable when they
+        // were added, but rewriting a closure invocation to a body method of type Nothing inserts an ATHROW, and further
+        // invocations of the same closure are then rewritten, and added to the call graph, in the code after it.
+        for ((r, aliasFrame) <- rsWithAliasFrames) if (!currentMethodRolledBack && aliasFrame != null) {
           canInlineCallsite(r.callsite) match {
             case None =>
               doInline(r, aliasFrame, None)
@@ -874,6 +877,10 @@ abstract class Inliner {
     // of the values on the stack.
     // We don't need to worry about the method being too large for running an analysis. Callsites of
     // large methods are not added to the call graph.
+    // TODO scala/scala review O11: the callee is analysed afresh for every callsite inlined from it: 8,105
+    // analyses (145,676 instructions) of 1,605 distinct callees (38,130 instructions) compiling the typechecker
+    // sources with `-opt:inline:scala/**`. A cache keyed on the callee would have to be dropped when something is
+    // inlined into the callee; a cache of all analyses was removed in c5c28ebf30 for its memory cost.
     val analyzer = new BasicAnalyzer(callee, calleeDeclarationClass.internalName)
 
     for (originalReturn <- callee.instructions.iterator.asScala if isReturn(originalReturn)) {
@@ -1066,6 +1073,23 @@ abstract class Inliner {
       callsiteStackHeight > expectedArgs
     }
 
+    // The catch types of the callee's handlers are resolved in the callsite class when an exception
+    // is matched against them, so they need to be accessible there. Unlike an instruction, a handler
+    // cannot be fixed by inlining further, so it is not reported as `IllegalAccessInstructions`.
+    def illegalAccessHandler: Option[CannotInlineWarning] =
+      callee.tryCatchBlocks.asScala.iterator.filter(_.`type` != null).map(h =>
+        (h, classIsAccessible(bTypeForDescriptorOrInternalNameFromClassfile(h.`type`), callsiteClass))
+      ).collectFirst {
+        case (h, Right(false)) =>
+          IllegalAccessHandler(
+            calleeDeclarationClass.internalName, callee.name, callee.desc, callsite.isInlineAnnotated,
+            callsiteClass.internalName, h.`type`)
+        case (h, Left(cause)) =>
+          IllegalAccessCheckFailed(
+            calleeDeclarationClass.internalName, callee.name, callee.desc, callsite.isInlineAnnotated,
+            callsiteClass.internalName, h.handler, cause)
+      }
+
     if (callsiteTooLargeAfterInlining(callsiteMethod, callee)) {
       val warning = ResultingMethodTooLarge(
         calleeDeclarationClass.internalName, callee.name, callee.desc, callsite.isInlineAnnotated,
@@ -1076,7 +1100,7 @@ abstract class Inliner {
         calleeDeclarationClass.internalName, callee.name, callee.desc, callsite.isInlineAnnotated,
         callsiteClass.internalName, callsiteMethod.name, callsiteMethod.desc)
       Some(warning)
-    } else findIllegalAccess(callee.instructions, calleeDeclarationClass, callsiteClass) match {
+    } else illegalAccessHandler orElse (findIllegalAccess(callee.instructions, calleeDeclarationClass, callsiteClass) match {
       case Right(Nil) =>
         None
 
@@ -1091,18 +1115,22 @@ abstract class Inliner {
           calleeDeclarationClass.internalName, callee.name, callee.desc, callsite.isInlineAnnotated,
           callsiteClass.internalName, illegalAccessIns, cause)
         Some(warning)
-    }
+    })
   }
 
   /**
    * Check if a type is accessible to some class, as defined in JVMS 5.4.4.
-   *  (A1) C is public
+   *  (A1) C is public, and its package is exported to the module of D. Code compiled by scalac is
+   *       in the unnamed module, so for classes of the JDK the package must be exported to all
+   *       modules.
    *  (A2) C and D are members of the same run-time package
    */
   @tailrec
   final def classIsAccessible(accessed: BType, from: ClassBType): Either[OptimizerWarning, Boolean] = (accessed: @unchecked) match {
     // TODO: A2 requires "same run-time package", which seems to be package + classloader (JVMS 5.3.). is the below ok?
-    case c: ClassBType     => c.isPublic.map(_ || c.packageInternalName == from.packageInternalName)
+    case c: ClassBType     => c.isPublic.map(isPublic =>
+      c.packageInternalName == from.packageInternalName ||
+        isPublic && !byteCodeRepository.isInNonExportedSystemPackage(c.internalName))
     case a: ArrayBType     => classIsAccessible(a.elementType, from)
     case _: PrimitiveBType => Right(true)
   }
@@ -1173,7 +1201,13 @@ abstract class Inliner {
       }
     }
 
-    classIsAccessible(memberDeclClass, from) match { // B0
+    // B0 is about memberRefClass. Requiring memberDeclClass to be accessible as well is stricter than the JVMS.
+    val classesAccessible = for {
+      refClassAccessible  <- classIsAccessible(memberRefClass, from)
+      declClassAccessible <- if (refClassAccessible) classIsAccessible(memberDeclClass, from) else Right(false)
+    } yield declClassAccessible
+
+    classesAccessible match {
       case Right(true) => memberIsAccessibleImpl
       case r => r
     }
@@ -1221,6 +1255,38 @@ abstract class Inliner {
         }
         res
       }
+    }
+
+    // Are the classes named by `types` accessible? For a method type, the classes in its descriptor.
+    def allTypesAccessible(types: List[Type]): Either[OptimizerWarning, Boolean] = types match {
+      case Nil => Right(true)
+      case t :: ts =>
+        val r =
+          if (t.getSort == Type.METHOD) allTypesAccessible(t.getReturnType :: t.getArgumentTypes.toList)
+          else classIsAccessible(bTypeForDescriptorFromClassfile(t.getDescriptor), destinationClass)
+        r match {
+          case Right(true) => allTypesAccessible(ts)
+          case _ => r
+        }
+    }
+
+    // Bootstrap methods that don't use the Lookup object's access to members of the callsite class:
+    //  - StringConcatFactory converts the arguments to strings with public methods.
+    //  - SymbolLiteral calls the public `scala.Symbol.apply`, found through the class loader of
+    //    the callsite class.
+    // Not included: LambdaDeserialize looks up the lambda implementation methods of the callsite
+    // class, which may be private. StructuralCallSite would be fine, but scalac only emits it in a
+    // method together with a call to a private `reflMethod$Method` helper, so it is never inlined.
+    def isCopyableBootstrapMethod(bsm: asm.Handle): Boolean = bsm.getTag == H_INVOKESTATIC && ((bsm.getOwner, bsm.getName) match {
+      case ("java/lang/invoke/StringConcatFactory", "makeConcat" | "makeConcatWithConstants") => true
+      case ("scala/runtime/SymbolLiteral", "bootstrap") => true
+      case _ => false
+    })
+
+    // Method handles and dynamic constants could refer to members that are not accessible
+    def isCopyableBootstrapArgument(arg: Any): Boolean = arg match {
+      case _: String | _: Integer | _: java.lang.Long | _: java.lang.Float | _: java.lang.Double | _: Type => true
+      case _ => false
     }
 
     /*
@@ -1311,7 +1377,22 @@ abstract class Inliner {
         // the implMethod is public, lambdaMetaFactory doesn't use the Lookup object's extended
         // capability, and we can safely inline the instruction into a different class.
 
-        isAccessibleMethod(implMethod.getOwner, implMethod.getName, implMethod.getDesc, Type.getReturnType(indy.desc).getDescriptor)
+        //
+        // The classes named in the descriptor of the indy instruction (which includes the functional
+        // interface) and in the static arguments (the method types, and for `altMetafactory` the
+        // marker interfaces and bridge method types) are resolved in the class containing the
+        // instruction, so they need to be accessible as well.
+
+        isAccessibleMethod(implMethod.getOwner, implMethod.getName, implMethod.getDesc, Type.getReturnType(indy.desc).getDescriptor).flatMap(implAccessible =>
+          if (!implAccessible) Right(false)
+          else allTypesAccessible(Type.getMethodType(indy.desc) :: indy.bsmArgs.toList.collect { case t: Type => t }))
+
+      case indy: InvokeDynamicInsnNode if isCopyableBootstrapMethod(indy.bsm) && indy.bsmArgs.forall(isCopyableBootstrapArgument) =>
+        // These bootstrap methods don't use the Lookup object to access members of the callsite
+        // class, so the instruction can be moved to a different class. The classes named in the
+        // descriptor and in class or method type arguments are resolved in the class containing
+        // the instruction, so they need to be accessible.
+        allTypesAccessible(Type.getMethodType(indy.desc) :: indy.bsmArgs.toList.collect { case t: Type => t })
 
       case _: InvokeDynamicInsnNode => Left(UnknownInvokeDynamicInstruction)
 

@@ -1,0 +1,13 @@
+tailrec-throw-assign.scala:6: error: could not optimize @tailrec annotated method thr: it contains a recursive call not in tail position
+  @tailrec final def thr(n: Int): Exception = if (n == 0) new Exception else throw thr(n - 1)
+                                                                                      ^
+tailrec-throw-assign.scala:7: error: could not optimize @tailrec annotated method thrMatch: it contains a recursive call not in tail position
+  @tailrec final def thrMatch(n: Int): Exception = if (n == 0) new Exception else throw (n match { case _ => thrMatch(n - 1) })
+                                                                                                                     ^
+tailrec-throw-assign.scala:8: error: could not optimize @tailrec annotated method asg: it contains a recursive call not in tail position
+  @tailrec final def asg(n: Int): Unit = if (n > 0) x = asg(n - 1)
+                                                           ^
+tailrec-throw-assign.scala:11: error: could not optimize @tailrec annotated method asg: it contains a recursive call not in tail position
+    @tailrec def asg(n: Int): Unit = if (n > 0) y = asg(n - 1)
+                                                       ^
+4 errors

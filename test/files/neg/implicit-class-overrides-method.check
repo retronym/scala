@@ -1,0 +1,21 @@
+implicit-class-overrides-method.scala:6: error: the conversion method of implicit class Foo cannot override a concrete member, rename the class:
+def Foo(x: Int): AnyRef (defined in class A)
+  implicit class Foo(val x: Int)            // error, `new B().call` would return the wrapper
+                 ^
+implicit-class-overrides-method.scala:11: error: class C inherits conflicting members:
+  def Bar(x: Int): AnyRef (defined in trait T1) and
+  implicit def Bar(x: Int): C.this.Bar (defined in trait T2)
+  (note: this can be resolved by declaring an `override` in class C.)
+class C extends T1 with T2                  // error
+      ^
+implicit-class-overrides-method.scala:27: error: incompatible type in overriding
+implicit def Foo(x: Int): C2.this.Foo (defined in class A2);
+ found   : (x: Int): C2.this.Foo(in class C2)
+ required: (x: Int): C2.this.Foo(in class A2)
+  implicit class Foo(val x: Int)            // error, the result type of the conversion does not conform
+                 ^
+implicit-class-overrides-method.scala:30: error: `override` modifier required to override concrete member:
+implicit def Foo(x: Int): D2.this.Foo (defined in class A2)
+  def Foo(x: Int): Foo = null               // error, a user-written method still needs `override`
+      ^
+4 errors

@@ -887,6 +887,7 @@ trait StdNames {
     val setSymbol: NameType            = nameType("setSymbol")
     val setType: NameType              = nameType("setType")
     val shortValue: NameType           = nameType("shortValue")
+    val since: NameType                = nameType("since")
     val splice: NameType               = nameType("splice")
     val staticClass : NameType         = nameType("staticClass")
     val staticModule : NameType        = nameType("staticModule")

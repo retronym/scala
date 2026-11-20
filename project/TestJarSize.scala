@@ -21,8 +21,8 @@ object TestJarSize {
     if (actualBytes > (currentBytes * errorThreshold)) {
       fail(s"The $projectId jar is too big: $actualBytes bytes.")
     } else if (actualBytes > (currentBytes * warnThreshold)) {
-      val percent = (actualBytes - currentBytes).toDouble / currentBytes.toDouble
-      log.warn(s"The $projectId jar is getting too big: $actualBytes bytes or $percent% larger.")
+      val percent = (actualBytes - currentBytes) * 100.0 / currentBytes
+      log.warn(f"The $projectId jar is getting too big: $actualBytes bytes or $percent%.1f%% larger.")
     }
   }
 

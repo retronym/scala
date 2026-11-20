@@ -1526,7 +1526,11 @@ trait Namers extends MethodSynthesis {
           val toCheck = if (currentRun.isScala3) computeOverridden(immediate = true) else overridden
           // must check `.info.isInstanceOf[MethodType]`, not `.isMethod`, to exclude NullaryMethodType.
           // Note that the matching MethodType of a NullaryMethodType must be nilary not nelary.
-          toCheck != NoSymbol && toCheck.alternatives.exists(_.info.isInstanceOf[MethodType])
+          def isMethodType(tp: Type): Boolean = tp match {
+            case PolyType(_, restpe) => isMethodType(restpe)
+            case _                   => tp.isInstanceOf[MethodType]
+          }
+          toCheck != NoSymbol && toCheck.alternatives.exists(alt => isMethodType(alt.info))
         }
         if (vparamSymss.isEmpty && overridesNilary) {
           meth.updateAttachment(NullaryOverrideAdapted)
@@ -1847,11 +1851,18 @@ trait Namers extends MethodSynthesis {
     private def javaConstantType(expr: Tree, declared: Type): Type =
       if (!(isPrimitiveValueType(declared) || declared.typeSymbol == StringClass)) declared
       else {
+        // JLS 15.29: a constant variable is referred to by a simple name or by `TypeName.Identifier`,
+        // a field selected from any other expression, such as `OBJ.CONST`, is not a constant expression.
+        def isQualifiedByTypeName(typed: Tree) =
+          typed.attachments.get[OriginalTreeAttachment].fold(typed)(_.original) match {
+            case Select(qual, _) => qual.symbol != null && qual.symbol.isModule
+            case _               => false
+          }
         def resolve(ref: Tree): Constant =
           try typer.silent(_.typed(ref.duplicate, EXPRmode, WildcardType)) match {
             case SilentResultValue(typed) => typed.tpe match {
-              case ConstantType(c) => c
-              case _               => null
+              case ConstantType(c) if ref.isInstanceOf[Ident] || isQualifiedByTypeName(typed) => c
+              case _ => null
             }
             case _ => null
           } catch {

@@ -415,7 +415,8 @@ method.
 A type parameter ´A´ of a method or non-trait class may have one or more view
 bounds `´A´ <% ´T´`. In this case the type parameter may be
 instantiated to any type ´S´ which is convertible by application of a
-view to the bound ´T´.
+view to the bound ´T´. (View bounds are deprecated; an implicit parameter
+of function type can be used instead.)
 
 A type parameter ´A´ of a method or non-trait class may also have one
 or more context bounds `´A´ : ´T´`. In this case the type parameter may be
@@ -477,9 +478,12 @@ at the top. Their signatures follow the outline below.
 ```scala
 trait OptManifest[+T]
 object NoManifest extends OptManifest[Nothing]
-trait ClassManifest[T] extends OptManifest[T]
+trait ClassTag[T] extends OptManifest[T]
+type ClassManifest[T] = ClassTag[T]
 trait Manifest[T] extends ClassManifest[T]
 ```
+
+`ClassManifest` is a deprecated alias of the trait `scala.reflect.ClassTag`.
 
 If an implicit parameter of a method or constructor is of a subtype ´M[T]´ of
 class `OptManifest[T]`, _a manifest is determined for ´M[S]´_,
@@ -524,7 +528,7 @@ Then the following rules apply.
     a manifest is generated with the invocation
     `Manifest.intersectionType[T](´ms´)` where ´ms´ are the manifests
     determined for ´M[T_1] , \ldots , M[T_n]´.
-    Otherwise, if ´M´ is trait `ClassManifest`,
+    Otherwise, if ´M´ is `ClassManifest`,
     then a manifest is generated for the [intersection dominator](03-types.html#type-erasure)
     of the types ´T_1 , \ldots , T_n´.
 1.  If ´T´ is some other type, then if ´M´ is trait `OptManifest`,

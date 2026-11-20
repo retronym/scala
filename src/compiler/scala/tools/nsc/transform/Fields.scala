@@ -561,8 +561,6 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
     protected def typedPos(pos: Position)(tree: Tree): Tree = localTyper.typedPos(pos)(tree)
 
     def mkTypedUnit(pos: Position) = typedPos(pos)(CODE.UNIT)
-    // TODO: clean up. this method is not used
-    def deriveUnitDef(stat: Tree)  = deriveDefDef(stat)(_ => mkTypedUnit(stat.pos))
 
     def mkAccessor(accessor: Symbol)(body: Tree) = typedPos(accessor.pos)(DefDef(accessor, body)).asInstanceOf[DefDef]
 
@@ -716,9 +714,6 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
         case _ => EmptyTree
       }.filterNot(_ == EmptyTree) // there will likely be many EmptyTrees, but perhaps no thicket blocks that need expanding
     }
-
-    def rhsAtOwner(stat: ValOrDefDef, newOwner: Symbol): Tree =
-      atOwner(newOwner)(super.transform(stat.rhs.changeOwner(stat.symbol, newOwner)))
 
     override def transform(stat: Tree): Tree = {
       val currOwner = currentOwner // often a class, but not necessarily

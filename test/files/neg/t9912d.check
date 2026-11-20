@@ -1,0 +1,37 @@
+t9912d.scala:8: error: bridge generated for member method f: (a: Array[String]): String in class CArr
+which overrides method f: (a: Array[A]): String in trait TArr
+clashes with definition of method f: (a: Object): String in class Base;
+both have erased type (a: Object): String
+class CArr extends Base with TArr[String] { def f(a: Array[String]) = "CArr.f" }
+                                                ^
+t9912d.scala:11: error: bridge generated for member method f: (a: String): String in class CMem
+which overrides method f: (m: TMem.this.M): String in trait TMem
+clashes with definition of method f: (a: Object): String in class Base;
+both have erased type (m: Object): String
+class CMem extends Base with TMem { type M = String; def f(a: String) = "CMem.f" }
+                                                         ^
+t9912d.scala:14: error: bridge generated for member method f: (a: String with java.io.Serializable): String in class CAnd
+which overrides method f: (a: A with java.io.Serializable): String in trait TAnd
+clashes with definition of method f: (a: Object): String in class Base;
+both have erased type (a: Object): String
+class CAnd extends Base with TAnd[String] { def f(a: String with Serializable) = "CAnd.f" }
+                                                ^
+t9912d.scala:21: error: bridge generated for member method f: (a: List[String]): String in class CBound
+which overrides method f: (a: A): Object in trait TBound
+clashes with definition of method f: (a: List[Int]): Object in class BaseL;
+both have erased type (a: List): Object
+class CBound extends BaseL with TBound[List[String]] { def f(a: List[String]): String = "CBound.f" }
+                                                           ^
+t9912d.scala:24: error: bridge generated for member method f: (a: List[String]): String in class CList
+which overrides method f: (a: List[A]): Object in trait TList
+clashes with definition of method f: (a: List[Int]): Object in class BaseL;
+both have erased type (a: List): Object
+class CList extends BaseL with TList[String] { def f(a: List[String]): String = "CList.f" }
+                                                   ^
+t9912d.scala:27: error: bridge generated for member method f: (a: List[String]): String in class CMemL
+which overrides method f: (a: TMemL.this.M): Object in trait TMemL
+clashes with definition of method f: (a: List[Int]): Object in class BaseL;
+both have erased type (a: List): Object
+class CMemL extends BaseL with TMemL { type M = List[String]; def f(a: List[String]): String = "CMemL.f" }
+                                                                  ^
+6 errors

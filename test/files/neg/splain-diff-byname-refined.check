@@ -1,0 +1,13 @@
+splain-diff-byname-refined.scala:5: error: type mismatch;
+  (=> java.lang.String|scala.Int) => java.lang.String
+  def byName: (=> Int) => String = (null: (=> String) => String)
+                                        ^
+splain-diff-byname-refined.scala:7: error: type mismatch;
+  Test.A {type x = Int|<none>; type y = <none>|Int}
+  def renamed: A { def y: Int } = (null: A { def x: Int })
+                                       ^
+splain-diff-byname-refined.scala:9: error: type mismatch;
+  Test.A {type x = Int; type y = <none>|String; type z = Int|<none>}
+  def missing: A { def y: String; def x: Int } = (null: A { def x: Int; def z: Int })
+                                                      ^
+3 errors

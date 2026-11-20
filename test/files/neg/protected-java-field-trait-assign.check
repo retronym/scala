@@ -1,0 +1,5 @@
+S.scala:3: error: Implementation restriction: trait S accesses protected variable f inside a concrete trait method.
+Add an accessor in a class extending class J as a workaround.
+  def set(): Unit = { f = 2 }
+                      ^
+1 error

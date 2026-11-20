@@ -116,4 +116,34 @@ class StringOpsTest {
     assertEquals("", "a".tail)
     assertThrows[UnsupportedOperationException]("".tail)
   }
+
+  @Test def patchClampsReplaced(): Unit = {
+    val indices = List(Int.MinValue, -1, 0, 1, 2, 4, 5, 6, Int.MaxValue)
+    for (s <- List("", "abcde"); from <- indices; replaced <- indices) {
+      val msg = s"\"$s\".patch($from, _, $replaced)"
+      assertEquals(msg, s.toList.patch(from, "XY", replaced).mkString, s.patch(from, "XY", replaced))
+      assertEquals(msg, s.toList.patch(from, "XY", replaced).mkString, s.patch(from, List('X', 'Y'), replaced))
+      assertEquals(msg, s.toList.patch[Any](from, List(1, 2), replaced), s.patch[Any](from, List(1, 2), replaced))
+      assertEquals(msg, s.toList.patch[Any](from, Iterator(1, 2), replaced), s.patch[Any](from, Iterator(1, 2), replaced))
+    }
+  }
+
+  @Test def groupedRequiresPositiveSize(): Unit = {
+    for (s <- List("", "abc"); size <- List(0, -1, Int.MinValue)) {
+      assertThrows[IllegalArgumentException](s.toList.grouped(size))
+      assertThrows[IllegalArgumentException](s.grouped(size), _.contains(s"size=$size"))
+    }
+    assertEquals(List("ab", "c"), "abc".grouped(2).toList)
+    assertEquals(List("abc"), "abc".grouped(Int.MaxValue).toList)
+    assertEquals(Nil, "".grouped(1).toList)
+  }
+
+  @Test def indexWhereNegativeFrom(): Unit = {
+    val s = "abcab"
+    for (from <- List(Int.MinValue, -1, 0, 1, 2, 4, 5, 6, Int.MaxValue); c <- "abcx") {
+      val msg = s"indexWhere(_ == '$c', $from)"
+      assertEquals(msg, s.toList.indexWhere(_ == c, from), s.indexWhere(_ == c, from))
+      assertEquals(msg, s.toList.indexOf(c, from), s.indexOf(c, from))
+    }
+  }
 }

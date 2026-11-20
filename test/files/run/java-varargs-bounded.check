@@ -1,0 +1,27 @@
+f(): 0
+f[Nothing](): 0
+f(null): 1
+f(Nil: _*): 0
+f(Seq(): _*): 0
+f(Seq.empty[String]: _*): 0
+f("a", sb): 2
+f(Seq("a", sb): _*): 2
+g("s"): 0
+g("s", Nil: _*): 0
+g("s", 1, 2): 2
+h(): 0
+h(Nil: _*): 0
+p(): 0
+p(Nil: _*): 0
+l(): 0
+l(Nil: _*): 0
+e(): 0
+e(Nil: _*): 0
+e(SECONDS): 1
+e(Seq(SECONDS): _*): 1
+new C[String].f(): 0
+new C[Nothing].f(): 0
+new C[Nothing].f(Nil: _*): 0
+viaTypeParam: 0
+S.s(): 0
+V.callScala: 1

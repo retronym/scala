@@ -1,0 +1,24 @@
+checksensible-nullable.scala:10: warning: comparing non-null values of types X and Y using `==` will always yield false
+  def eqXY(x: X, y: Y) = x == y           // w: equal if both are null
+                           ^
+checksensible-nullable.scala:11: warning: comparing non-null values of types X and Y using `!=` will always yield true
+  def neXY(x: X, y: Y) = x != y           // w: as above
+                           ^
+checksensible-nullable.scala:12: warning: comparing non-null values of types X and Y using `eq` will always yield false
+  def refXY(x: X, y: Y) = x eq y          // w: as above
+                            ^
+checksensible-nullable.scala:13: warning: comparing non-null values of types G[Int] and Y using `==` will always yield false
+  def eqGY(g: G[Int], y: Y) = g == y      // w: as above
+                                ^
+checksensible-nullable.scala:15: warning: comparing values of types X and O.type using `==` will always yield false
+  def eqXO(x: X) = x == O                 // w: always false, O is not null
+                     ^
+checksensible-nullable.scala:16: warning: comparing values of types O.type and X using `==` will always yield false
+  def eqOX(x: X) = O == x                 // w: as above
+                     ^
+checksensible-nullable.scala:17: warning: comparing values of types O.type and P.type using `==` will always yield false
+  def eqOP = O == P                       // w: always false
+               ^
+error: No warnings can be incurred under -Werror.
+7 warnings
+1 error

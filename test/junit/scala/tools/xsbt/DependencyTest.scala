@@ -96,6 +96,50 @@ class DependencyTest extends BridgeTesting {
     }
 
   @Test
+  def `Dependency phase should extract class dependencies from annotations of types`(): Unit = {
+    val srcConsts = "object Consts { final val I = 1 }"
+    val srcAnn = "class MyAnn(x: Int) extends scala.annotation.StaticAnnotation"
+    val srcSelf = "class OnSelf { self: OnSelf with Serializable @MyAnn(Consts.I) => }"
+    // An inferred type only keeps the annotations that are type constraints
+    val srcConstraint =
+      "class MyConstraint(x: Int) extends scala.annotation.StaticAnnotation with scala.annotation.TypeConstraint"
+    val srcLib = "class Lib { def g: Foo @MyConstraint(Consts.I) = null }"
+    val srcInferred = "class Inferred { def f = (new Lib).g }"
+    val memberRef =
+      extractDependenciesFromSrcs(srcConsts, srcAnn, srcConstraint, "class Foo", srcSelf, srcLib, srcInferred).memberRef
+    def includes(name: String, expected: Set[String]): Unit =
+      assertTrue(s"memberRef($name) = ${memberRef(name)}", expected.subsetOf(memberRef(name)))
+    includes("OnSelf", Set("MyAnn", "Consts"))
+    includes("Lib", Set("Foo", "MyConstraint", "Consts"))
+    includes("Inferred", Set("Lib", "Foo", "MyConstraint", "Consts"))
+  }
+
+  @Test
+  def `Dependency phase should extract class dependencies from refinements and existential quantifiers`(): Unit = {
+    val srcDefs =
+      """|class Box[T]
+         |object A { type T[X] = Box[X] }
+         |class C { type V = Int; class W; val c: C = this }
+         |class D { class W }
+         |object O { val p: C = new C }
+         |""".stripMargin
+    val srcParent = "class Parent { def f: Box[D#W { def member: Int }] = null }"
+    val srcMember = "class Member { def f: Box[AnyRef { def member: A.T[D#W] }] = null }"
+    val srcPath = "class Path { def f: Box[AnyRef { val v: O.p.c.W }] = null }"
+    val srcBound = "class Bound { def f: Box[X forSome { type X <: A.T[D#W] }] = null }"
+    val srcAlias = "class Alias { def f: Box[X forSome { type X <: A.T[C#V] }] = null }"
+    val memberRef = extractDependenciesFromSrcs(srcDefs, srcParent, srcMember, srcPath, srcBound, srcAlias).memberRef
+    def includes(name: String, expected: Set[String]): Unit =
+      assertTrue(s"memberRef($name) = ${memberRef(name)}", expected.subsetOf(memberRef(name)))
+    includes("Parent", Set("Box", "D", "D.W"))
+    includes("Member", Set("Box", "A", "D", "D.W"))
+    includes("Path", Set("Box", "O", "C", "C.W"))
+    includes("Bound", Set("Box", "A", "D", "D.W"))
+    includes("Alias", Set("Box", "A", "C"))
+    assertEquals(Set.empty, memberRef.keySet.filter(_.contains("refinement")))
+  }
+
+  @Test
   def `Dependency phase should extract class dependencies with trait as first parent`(): Unit = {
     val classDependencies = extractClassDependenciesTraitAsFirstPatent
     val memberRef = classDependencies.memberRef
@@ -237,6 +281,15 @@ class DependencyTest extends BridgeTesting {
     assertEquals(inheritance("A"), Set.empty)
     assertEquals(memberRef("B"), Set.empty)
     assertEquals(inheritance("B"), Set.empty)
+  }
+
+  @Test
+  def `Dependency phase should extract class dependencies from annotations in a 'classOf' literal`(): Unit = {
+    val srcConsts = "object Consts { final val I = 1 }"
+    val srcAnn = "class MyAnn(x: Int) extends scala.annotation.StaticAnnotation"
+    val srcA = "class A { def g = classOf[B @MyAnn(Consts.I)] }"
+    val memberRef = extractDependenciesFromSrcs(srcConsts, srcAnn, "class B", srcA).memberRef
+    assertEquals(Set("B", "MyAnn", "Consts"), memberRef("A"))
   }
 
   @Test

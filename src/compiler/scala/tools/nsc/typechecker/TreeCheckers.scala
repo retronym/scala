@@ -217,7 +217,7 @@ abstract class TreeCheckers extends AbstractAnalyzer {
     val checker = new TreeChecker(context)
     runWithUnit(unit) {
       checker.precheck.traverse(unit.body)
-      checker.typed(unit.body)
+      checker.typed(duplicateAndKeepPositions(unit.body))
       checker.postcheck.traverse(unit.body)
     }
   }
@@ -228,6 +228,16 @@ abstract class TreeCheckers extends AbstractAnalyzer {
     // If we don't intercept this all the synthetics get added at every phase,
     // with predictably unfortunate results.
     override protected def finishMethodSynthesis(templ: Template, clazz: Symbol, context: Context): Template = templ
+
+    // Erasure represents the injection `new VC(e)` of a value into a value class by `e` with its type set to
+    // `ErasedValueType(VC, U)` (`InjectDerivedValue` in `Erasure.Eraser.typed1`). Retyping `e` gives `U`;
+    // accept that where the erased value type is expected.
+    override protected def adapt(tree: Tree, mode: Mode, pt: Type, original: Tree = EmptyTree): Tree = pt match {
+      case ErasedValueType(_, underlying) if mode.inExprMode && !tree.tpe.isInstanceOf[ErasedValueType] && tree.tpe <:< underlying =>
+        tree.setType(pt)
+      case _ =>
+        super.adapt(tree, mode, pt, original)
+    }
 
     // XXX check for tree.original on TypeTrees.
     private def treesDiffer(t1: Tree, t2: Tree): Unit = {
@@ -261,22 +271,55 @@ abstract class TreeCheckers extends AbstractAnalyzer {
     override def typed(tree: Tree, mode: Mode, pt: Type): Tree = (
       if (passThrough(tree))
         super.typed(tree, mode, pt)
-      else
-        checkedTyped(tree, mode, pt)
+      else tree match {
+        case UnApply(_, args) => checkedUnApply(tree, args, mode)
+        case _                => checkedTyped(tree, mode, pt)
+      }
     )
-    private def checkedTyped(tree: Tree, mode: Mode, pt: Type): Tree = {
+    // Typer does not accept an `UnApply`: it creates them fully attributed from an `Apply` pattern,
+    // and they remain in the tree until patmat. The extractor call cannot be typed again as its
+    // argument is a dummy, so only check the sub-patterns, each against the type it had. That also
+    // enters their binders into scope for the guard and the body of the case.
+    private def checkedUnApply(tree: Tree, args: List[Tree], mode: Mode): Tree = {
+      args.foreach(arg => typed(arg, mode, if (arg.tpe eq null) WildcardType else arg.tpe))
+      tree
+    }
+    // An expected type can mention a skolem of an existential from the original typing, such as the
+    // inferred type argument in `foreachRec[_$1](xs)` for `xs: Array[_ <: AnyRef]`. Re-typing `xs` skolemizes
+    // its type afresh, which does not conform; expect any type in place of such a skolem.
+    private object existentialSkolemsToWildcards extends TypeMap {
+      def apply(tp: Type): Type = tp match {
+        case TypeRef(_, sym, Nil) if sym.isExistentialSkolem => WildcardType
+        case _ => tp.mapOver(this)
+      }
+    }
+    private def checkedTyped(tree: Tree, mode: Mode, pt0: Type): Tree = {
+      val tpe0 = tree.tpe
+      val pt = if (pt0.exists(_.typeSymbol.isExistentialSkolem)) existentialSkolemsToWildcards(pt0) else pt0
       val typed = wrap(tree)(super.typed(tree.clearType(), mode, pt))
 
       // Vlad: super.typed returns null for package defs, why is that?
+      // (`wrap` also returns null if re-typing threw, which has already been reported.)
       if (typed eq null)
-        return tree
+        return tree.setType(tpe0)
 
       if (typed.tpe ne null)
         assert(!typed.tpe.isErroneous, "Tree has erroneous type: " + typed)
 
-      if (tree ne typed)
-        treesDiffer(tree, typed)
+      // Carry on with `tree`, so that the difference is reported once rather than at every enclosing tree,
+      // but restore its type, so that the enclosing tree is not re-typed with an untyped child.
+      if (tree ne typed) {
+        if (!isRenamedValDef(tree, typed)) treesDiffer(tree, typed)
+        tree.setType(tpe0)
+      }
       tree
+    }
+    // The typer names a ValDef after its symbol (scala/bug#10009). SuperAccessors expands the name of a
+    // private field that an @inline method accesses (`makeNotPrivate`), but not the name in its definition.
+    private def isRenamedValDef(tree: Tree, typed: Tree) = (tree, typed) match {
+      case (vd: ValDef, vd1: ValDef) =>
+        vd.name != vd1.name && vd1.name == vd.symbol.name && vd.mods == vd1.mods && (vd.tpt eq vd1.tpt) && (vd.rhs eq vd1.rhs)
+      case _ => false
     }
 
     object precheck extends TreeStackTraverser {
@@ -312,7 +355,10 @@ abstract class TreeCheckers extends AbstractAnalyzer {
                   if (accessed != NoSymbol) {
                     val agetter = accessed.getterIn(sym.owner)
                     val asetter = accessed.setterIn(sym.owner)
-                    assertFn(agetter == sym || asetter == sym, s"$sym is getter or setter, but accessed sym $accessed shows $agetter and $asetter")
+                    // the setter of a trait val mixed into a class has its name expanded with the trait's (`T$_setter_$w_=`)
+                    def isMixedInTraitSetter = sym.isSetter && sym.owner.baseClasses.exists(bc =>
+                      bc.isTrait && sym.name == nme.expandedSetterName(accessed.setterName, bc))
+                    assertFn(agetter == sym || asetter == sym || isMixedInTraitSetter, s"$sym is getter or setter, but accessed sym $accessed shows $agetter and $asetter")
                   }
               }
             }
@@ -367,7 +413,10 @@ abstract class TreeCheckers extends AbstractAnalyzer {
         def symbolOf(t: Tree): Symbol  = if (t.symbol eq null) NoSymbol else t.symbol
         def typeOf(t: Tree): Type      = if (t.tpe eq null) NoType else t.tpe
         def infoOf(t: Tree): Type      = symbolOf(t).info
-        def referencesInType(tp: Type) = tp collect { case TypeRef(_, sym, _) => sym }
+        def referencesInType(tp: Type) = {
+          val bound = tp.collect { case ExistentialType(quantified, _) => quantified }.flatten
+          tp collect { case TypeRef(_, sym, _) if !bound.contains(sym) => sym }
+        }
         // Accessors are known to steal the type of the underlying field without cloning existential symbols at the new owner.
         // This happens in Namer#accessorTypeCompleter. We just look the other way here.
         if (symbolOf(tree).isAccessor)
@@ -377,7 +426,14 @@ abstract class TreeCheckers extends AbstractAnalyzer {
         val treeInfo = infoOf(tree)
         val treeTpe  = typeOf(tree)
 
-        def isOk(sym: Symbol) = treeSym hasTransOwner sym.enclosingSuchThat(x => !x.isTypeParameterOrSkolem) // account for higher order type params
+        // The parameter of the pattern matcher's `matchEnd` label has no owner (`MatchCodeGen`): it is in
+        // the scope of the innermost enclosing definition. (When uncurry moves the label into a function,
+        // nothing would move an owned parameter with it.)
+        val scopeSym =
+          if (treeSym.isValueParameter && treeSym.owner == NoSymbol) enclosingMemberDefs.headOption.fold(treeSym)(_.symbol)
+          else treeSym
+        // Is `tree` within the owner of `sym`, skipping (higher-order) type parameters and skolems?
+        def isOk(sym: Symbol) = scopeSym hasTransOwner sym.safeOwner.enclosingSuchThat(x => !x.isTypeParameterOrSkolem && !x.isExistentialSkolem)
         def isEligible(sym: Symbol) = (sym ne NoSymbol) && (
              sym.isTypeParameter
           || sym.isLocalToBlock
@@ -421,9 +477,16 @@ abstract class TreeCheckers extends AbstractAnalyzer {
 
       private def checkReturnReferencesDirectlyEnclosingDef(tree: Tree): Unit = tree match {
         case _: Return =>
+          // Until uncurry, a non-local return may be nested in the method of a synthetic class,
+          // such as the `applyOrElse` of a partial function literal.
+          def isNonLocal = phase.id <= currentRun.uncurryPhase.id && path.exists {
+            case dd: DefDef => dd.symbol == tree.symbol
+            case _          => false
+          }
           path collectFirst { case dd: DefDef => dd } match {
             case None                                 => errorFn(s"Return node ($tree) must be enclosed in a DefDef")
-            case Some(dd) if tree.symbol != dd.symbol => errorFn(s"Return symbol (${tree.symbol}} does not reference directly enclosing DefDef (${dd.symbol})")
+            case Some(dd) if tree.symbol != dd.symbol && !isNonLocal =>
+              errorFn(s"Return symbol (${tree.symbol}} does not reference directly enclosing DefDef (${dd.symbol})")
             case _                                    =>
           }
         case _ =>

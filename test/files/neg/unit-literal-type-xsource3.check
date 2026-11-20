@@ -1,0 +1,31 @@
+unit-literal-type-xsource3.scala:3: error: Illegal literal type (), use Unit instead [quickfixable]
+  def typeArg: Either[String, ()] = ???
+                              ^
+unit-literal-type-xsource3.scala:4: error: Illegal literal type (), use Unit instead [quickfixable]
+  def typeArg1: Option[()] = ???
+                       ^
+unit-literal-type-xsource3.scala:5: error: Illegal literal type (), use Unit instead [quickfixable]
+  def tupleElem: (Int, ()) = ???
+                       ^
+unit-literal-type-xsource3.scala:6: error: Illegal literal type (), use Unit instead [quickfixable]
+  def infixOperand: Int C () = ???
+                          ^
+unit-literal-type-xsource3.scala:7: error: Illegal literal type (), use Unit instead [quickfixable]
+  def repeated(xs: ()*) = ()
+                   ^
+unit-literal-type-xsource3.scala:8: error: Illegal literal type (), use Unit instead [quickfixable]
+  def byName(x: => ()) = ()
+                   ^
+unit-literal-type-xsource3.scala:9: error: Illegal literal type (), use Unit instead [quickfixable]
+  def bound[X: ()] = ()
+               ^
+unit-literal-type-xsource3.scala:10: error: Illegal literal type (), use Unit instead [quickfixable]
+  def upper[X <: ()] = ()
+                 ^
+unit-literal-type-xsource3.scala:11: error: Illegal literal type (), use Unit instead [quickfixable]
+  def compound(x: AnyRef with ()) = ()
+                              ^
+unit-literal-type-xsource3.scala:12: error: Illegal literal type (), use Unit instead [quickfixable]
+  def instance = new ()
+                     ^
+10 errors

@@ -45,10 +45,35 @@ abstract class JavaConstantFolder {
       case Literal(c)                     => checked(c)
       case Ident(_) | Select(_, _)        => checked(resolve(tree))
       case Apply(Select(x, op), Nil)      => unop(op, loop(x))
-      case Apply(Select(x, op), List(y))  => binop(op, loop(x), loop(y))
+      case Apply(Select(_, _), List(_))   => leftAssociated(tree)
       case If(c, x, y)                    => conditional(loop(c), loop(x), loop(y))
       case Typed(x, tpt)                  => cast(loop(x), tpt)
       case _                              => notConstant()
+    }
+    // The parser builds a left-deep tree for `a + b + c + ...`, which may be long: evaluate the left spine
+    // iteratively, and accumulate the operands of a string concatenation in a buffer.
+    def leftAssociated(tree: Tree): Constant = {
+      var spine: List[Tree] = Nil
+      var leftmost = tree
+      while (leftmost match {
+        case Apply(Select(x, _), List(_)) => spine ::= leftmost; leftmost = x; true
+        case _                            => false
+      }) ()
+      var acc = loop(leftmost)
+      var concat: java.lang.StringBuilder = null // if non-null, the value so far is its content, rather than `acc`
+      while (spine.nonEmpty) {
+        val Apply(Select(_, op), List(y)) = spine.head: @unchecked
+        spine = spine.tail
+        val rhs = loop(y)
+        if (op == nme.ADD && (concat != null || acc.tag == StringTag || rhs.tag == StringTag)) {
+          if (concat == null) concat = new java.lang.StringBuilder(acc.stringValue)
+          concat.append(rhs.stringValue) // JLS 5.1.11, which `Constant.stringValue` agrees with for primitives
+        } else {
+          if (concat != null) { acc = Constant(concat.toString); concat = null }
+          acc = binop(op, acc, rhs)
+        }
+      }
+      if (concat != null) Constant(concat.toString) else acc
     }
     loop(tree)
   }
@@ -80,9 +105,7 @@ abstract class JavaConstantFolder {
 
   private def binop(op: Name, x: Constant, y: Constant): Constant = {
     import nme._
-    if (op == ADD && (x.tag == StringTag || y.tag == StringTag))
-      Constant(x.stringValue + y.stringValue) // JLS 5.1.11, which `Constant.stringValue` agrees with for primitives
-    else if (x.tag == StringTag && y.tag == StringTag) op match {
+    if (x.tag == StringTag && y.tag == StringTag) op match {
       // string constants are interned, so reference equality is value equality
       case EQ => Constant(x.stringValue == y.stringValue)
       case NE => Constant(x.stringValue != y.stringValue)

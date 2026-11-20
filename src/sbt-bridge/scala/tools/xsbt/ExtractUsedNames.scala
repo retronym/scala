@@ -169,26 +169,39 @@ class ExtractUsedNames[GlobalType <: CallbackGlobal](val global: GlobalType)
     val namesUsedAtTopLevel = new NamesUsedInClass
 
     override def traverse(tree: Tree): Unit = {
+      handleTreeNode(tree)
+      super.traverse(tree)
+    }
+
+    private def handleTreeNode(tree: Tree): Unit = {
       handleAnnotations(tree)
       handleClassicTreeNode(tree)
       processMacroExpansion(tree)(handleMacroExpansion)
-      super.traverse(tree)
+      ()
     }
 
     /** After typer, the annotations of a definition only live in its symbol. */
     private def handleAnnotations(tree: Tree): Unit = tree match {
       case md: MemberDef if md.symbol != null && md.symbol != NoSymbol =>
         val annotations = md.symbol.annotations
-        if (annotations.nonEmpty) atOwner(md.symbol) {
-          annotations.foreach { annot =>
-            if (annot.original != EmptyTree) traverse(annot.original)
-            else {
-              addTypeNames(annot.atp)
-              annot.args.foreach(traverse)
-            }
-          }
-        }
+        if (annotations.nonEmpty) atOwner(md.symbol)(annotations.foreach(handleAnnotation))
       case _ =>
+    }
+
+    private def handleAnnotation(annot: AnnotationInfo): Unit =
+      if (annot.original != EmptyTree) traverse(annot.original)
+      else {
+        addTypeNames(annot.atp)
+        annot.args.foreach(traverse)
+      }
+
+    /** The type of a class literal, `classOf[C @ann]`, is the only place its annotations live. */
+    private def handleClassLiteral(tpe: Type): Unit = {
+      addTypeNames(tpe)
+      tpe.foreach {
+        case AnnotatedType(annotations, _) => annotations.foreach(handleAnnotation)
+        case _                             =>
+      }
     }
 
     val addSymbol: (JavaSet[Name], Symbol) => Unit = { (names: JavaSet[Name], symbol: Symbol) =>
@@ -296,7 +309,25 @@ class ExtractUsedNames[GlobalType <: CallbackGlobal](val global: GlobalType)
         val original = t.original
         if (!inspectedTypeTrees.contains(original)) {
           inspectedTypeTrees.add(original)
-          original.foreach(traverse)
+          traverse(original)
+        }
+
+      // The template of a compound type is not typed, so `super.traverse` finds few symbols in it
+      case CompoundTypeTree(templ) =>
+        traverseTypedRefinement(templ)(traverse)
+
+      // The original keeps the quantifiers as the parser built them. Their symbols know the typed bounds, but
+      // the typer expands `C#V` in those, so the references it left without a symbol are added as written.
+      case ExistentialTypeTree(_, whereClauses) =>
+        whereClauses.foreach { wc =>
+          if (!ignoredSymbol(wc.symbol)) addTypeNames(wc.symbol.info)
+          val names = getNamesOfEnclosingScope
+          wc.foreach {
+            case ref: RefTree if ignoredSymbol(ref.symbol) && !isEmptyName(ref.name) =>
+              names.add(ref.name)
+              ()
+            case _ =>
+          }
         }
 
       case t if t.hasSymbolField =>
@@ -308,6 +339,7 @@ class ExtractUsedNames[GlobalType <: CallbackGlobal](val global: GlobalType)
         addTypeNames(t.tpe)
       case l: Literal =>
         processOriginalTreeAttachment(l)(traverse)
+        if (l.value.tag == ClazzTag) handleClassLiteral(l.value.typeValue)
       case _ =>
     }
 
@@ -325,7 +357,7 @@ class ExtractUsedNames[GlobalType <: CallbackGlobal](val global: GlobalType)
     private var _currentScopedNamesCache: JavaMap[Name, EnumSet[UseScope]] = _
 
     @inline private def resolveNonLocal(from: Symbol): Symbol = {
-      val fromClass = enclOrModuleClass(from)
+      val fromClass = enclOrModuleClassSkippingRefinements(from)
       if (ignoredSymbol(fromClass) || fromClass.hasPackageFlag) NoSymbol
       else localToNonLocalClass.resolveNonLocal(fromClass)
     }

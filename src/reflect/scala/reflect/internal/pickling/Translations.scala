@@ -25,7 +25,7 @@ final class Translations[U <: SymbolTable with Singleton](val self: U) {
   def isTreeSymbolPickled(code: Int): Boolean = (code: @annotation.switch) match {
     case PACKAGEtree | CLASStree | MODULEtree | VALDEFtree | DEFDEFtree | TYPEDEFtree | LABELtree => true
     case IMPORTtree | TEMPLATEtree | BINDtree | FUNCTIONtree | RETURNtree                         => true
-    case APPLYDYNAMICtree | SUPERtree | THIStree | SELECTtree | IDENTtree                         => true
+    case APPLYDYNAMICtree | THIStree | SELECTtree | SELECTFROMTYPEtree | IDENTtree                => true
     case _                                                                                        => false
   }
   /** This method should be equivalent to tree.hasSymbolField, but that method

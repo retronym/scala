@@ -63,6 +63,16 @@ class ScalaVersionTest {
 
   }
 
+  @Test def `components that overflow Int are a bad version`(): Unit = {
+    def bad(v: String) = s"Bad version ($v) not major[.minor[.revision]][-suffix]"
+    for (v <- List("99999999999", "2.99999999999", "2.13.99999999999", "3.0.0-RC99999999999", "3.0.0-M99999999999")) {
+      assertThrows[NumberFormatException](ScalaVersion(v), _ == bad(v))
+      var errors = List.empty[String]
+      assertEquals(AnyScalaVersion, ScalaVersion(v, errors ::= _))
+      assertEquals(List(bad(v)), errors)
+    }
+  }
+
   // scala/bug#9377
   @Test def `missing version is as good as none`(): Unit = {
     assertEquals(NoScalaVersion, ScalaVersion(""))

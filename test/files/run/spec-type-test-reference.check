@@ -1,0 +1,7 @@
+List(false, true, true, true, true, true, true, true, false, true, false, false, false, Int 2, Integer 1)
+List(true, false, true, true, true, true, true, false, false, false, false, false, true, String 1, other)
+List(false, false, true, true, true, true, true, true, false, false, true, false, false, Number, other)
+List(false, true, true, true, true, true, true, true, false, true, false, true, false, false, Int 2, Integer 1)
+(false,1)
+List(false, true, true, true)
+List(false, true, true, false, false, false, true, false, true, true, false)

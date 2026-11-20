@@ -22,6 +22,13 @@ import scala.reflect.internal.SymbolPairs
  *  Most of the logic is in SymbolPairs, which contains generic
  *  pair-oriented traversal logic.
  */
+// TODO scala/scala review H27: the "unless" above holds only for `BridgesCursor` (erasure), whose
+// `skipOwnerPair` skips the pairs whose owners the non-trait parent already contains. For the
+// `PairsCursor` that RefChecks uses it is stale: its only skip is for two Java-defined owners (javac
+// checks them), so every class re-validates all pairs of its ancestors, e.g. 135 inherited pairs for
+// `class MyBuf extends ArrayBuffer[Int]`. Skipping, in RefChecks, the pairs whose members both come
+// from the superclass would be unsound: a type argument or a later mixin can make two such members a
+// pair only in the subclass (neg/overriding-pairs-inherited).
 abstract class OverridingPairs extends SymbolPairs {
   import global._
 
@@ -50,6 +57,7 @@ abstract class OverridingPairs extends SymbolPairs {
          (low.owner != high.owner)     // don't try to form pairs from overloaded members
       && !bothJavaOwnedAndEitherIsField(low, high)
       && !high.isPrivate               // private or private[this] members never are overridden
+      && !isJavaPackagePrivateElsewhere(high, low) // as in Java, a package-private member is not overridden from another package
       && !exclude(low)                 // this admits private, as one can't have a private member that matches a less-private member.
       && (lowMemberType matches (self memberType high))
     ) // TODO we don't call exclude(high), should we?
@@ -69,6 +77,14 @@ abstract class OverridingPairs extends SymbolPairs {
       }
     }
   }
+
+  /** A Java member with package access, which is overridden only by members of classes in the same package (JVMS 5.4.5). */
+  def isJavaPackagePrivate(sym: Symbol): Boolean =
+    sym.isJavaDefined && sym.hasAccessBoundary && !sym.isProtected
+
+  /** Is `sym` a Java member with package access, and `other` defined outside that package? */
+  def isJavaPackagePrivateElsewhere(sym: Symbol, other: Symbol): Boolean =
+    isJavaPackagePrivate(sym) && sym.privateWithin != other.enclosingPackageClass
 
   private def bothJavaOwnedAndEitherIsField(low: Symbol, high: Symbol): Boolean = {
     low.owner.isJavaDefined && high.owner.isJavaDefined &&

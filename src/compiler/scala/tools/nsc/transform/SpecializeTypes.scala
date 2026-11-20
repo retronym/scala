@@ -106,6 +106,12 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
   /** Concrete methods that use a specialized type, or override such methods. */
   private val concreteSpecMethods = perRunCaches.newWeakSet[Symbol]()
 
+  /** Getter (and setter, or NoSymbol) in a generic class for a specialized field without accessors, such as a
+   *  `private[this] var`. Code of the generic class accesses the field through them, because specialized
+   *  subclasses override them to access their own specialized field instead.
+   */
+  private val genericFieldAccessors = perRunCaches.newMap[Symbol, (Symbol, Symbol)]()
+
   private def specializedOn(sym: Symbol): List[Symbol] = {
     val GroupOfSpecializable = currentRun.runDefinitions.GroupOfSpecializable
     def expandGroup(tp: Type): List[Symbol] =
@@ -307,6 +313,37 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
     * but it should be okay for use outside of specialization.
     */
   def possiblySpecialized(sym: Symbol) = specializedTypeVars(sym).nonEmpty
+
+  /** Whether `sClass` has a `specInstance$` method, because it has specialized members that are field accessors.
+   *  The method is not pickled, so this also applies to classes that are not compiled in this run.
+   */
+  private def hasSpecializedFields(sClass: Symbol): Boolean =
+    exitingSpecialize(sClass.info.decls).exists(m =>
+      m.isMethod && m.hasFlag(SPECIALIZED) && satisfiable(typeEnv(m)) && info.get(m).exists(_.target.hasAccessorFlag))
+
+  /** The name of the method that the constructor of a generic class `clazz` calls to skip its initialisation in
+   *  a specialized instance (see `guardSpecializedInitializer` in Constructors), or of the overriding method
+   *  in a specialized subclass of `clazz`.
+   *
+   *  It is `specInstance$`, unless a superclass of `clazz` has such a method already: the specialized subclasses
+   *  of `clazz` do not extend the specialized subclasses of that superclass, so they must not override its method.
+   */
+  def specializedInstanceName(clazz: Symbol): TermName = {
+    val genericClazz = if (clazz.hasFlag(SPECIALIZED)) clazz.superClass else clazz
+    if (genericClazz.ancestors.exists(cls => !cls.isTrait && hasSpecializedFields(cls))) nme.expandedName(nme.SPECIALIZED_INSTANCE, genericClazz)
+    else nme.SPECIALIZED_INSTANCE
+  }
+
+  /** The specialized overloads of `sym`, such as `m$mcI$sp` for `def m(t: T): T` in `class B[@specialized(Int) T]`. */
+  def specializedOverloads(sym: Symbol): List[Symbol] = overloads(sym).map(_.sym)
+
+  /** Is `sym` a specialized overload in the class that declares its generic original, which forwards to that
+   *  original, as `m$mcI$sp` in `class B[@specialized(Int) T] { def m(t: T): T }` calls `m`?
+   */
+  def isForwarderToGeneric(sym: Symbol): Boolean = info.get(sym) match {
+    case Some(SpecialOverload(_, _)) => true
+    case _                           => false
+  }
 
   /** Refines possiblySpecialized taking into account the instantiation of the specialized type variables at `site` */
   def isSpecializedIn(sym: Symbol, site: Type) =
@@ -590,6 +627,24 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
    *  each combination of `stps`.
    */
   def specializeClass(clazz: Symbol, outerEnv: TypeEnv): List[Symbol] = {
+    /* The accessors in `clazz` for its specialized field `field`, see `genericFieldAccessors`. */
+    def mkGenericFieldAccessors(field: Symbol): (Symbol, Symbol) = {
+      val getterName = nme.expandedName(field.getterName, clazz)
+      def mkAccessor(name: TermName, flags: Long) = {
+        val sym = clazz.newMethod(name, field.pos, ACCESSOR | SYNTHETIC | SPECIALIZED | flags)
+        info(sym) = SpecializedAccessor(field)
+        sym
+      }
+      val getter = mkAccessor(getterName, if (field.isMutable) 0L else STABLE) setInfo MethodType(Nil, field.info)
+      val setter =
+        if (!field.isMutable) NoSymbol
+        else {
+          val sym = mkAccessor(getterName.setterName, 0L)
+          sym setInfo MethodType(sym.newSyntheticValueParams(List(field.info)), UnitTpe)
+        }
+      (getter, setter)
+    }
+
     def toSpecializedClass(env0: TypeEnv, normMembers: List[Symbol]): Symbol = {
       /* It gets hard to follow all the clazz and cls, and specializedClass
        * was both already used for a map and mucho long.  So "sClass" is the
@@ -731,12 +786,32 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
           case Some(NormalizedMember(tg)) => tg
           case _                          => m
         }
-        info(specMember) = Forward(om)
+        // `m1` must not override another member of `clazz`, such as an overload `def m(x: Int)` next to
+        // `def m(x: A)`. Without `m1`, `m` is inherited, which calls the generic implementation.
+        if (clashesWithOtherMember(m, specMember)) {
+          debuglog(s"not forwarding ${specMember.defString} in $sClass, it would override another member of $clazz")
+          decls1.unlink(specMember)
+        } else {
+          info(specMember) = Forward(om)
+          newOverload(specMember, om, typeEnv(om))
+        }
         info(om)         = if (original.isDeferred) Forward(original) else Implementation(original)
         typeEnv(om)      = env ++ typeEnv(m) // add the environment for any method tparams
 
-        newOverload(specMember, om, typeEnv(om))
         enterMember(om)
+      }
+
+      /* Whether `specMember`, the specialized clone of `m` in `sClass`, has the signature of a member of `clazz`
+       * other than `m`, so that it would override that member too.
+       */
+      def clashesWithOtherMember(m: Symbol, specMember: Symbol): Boolean = {
+        val specTpe = specMember.info
+        clazz.info.member(m.name).alternatives.exists { alt =>
+          (alt ne m) && alt.isMethod && {
+            val altTpe = sClass.thisType.memberType(alt)
+            (altTpe matches specTpe) || (erasure.erasure(alt)(altTpe) =:= erasure.erasure(specMember)(specTpe))
+          }
+        }
       }
 
       @tailrec def isTraitValSetter(sym: Symbol): Boolean =
@@ -744,7 +819,12 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
           (sym.hasFlag(SYNTHESIZE_IMPL_IN_SUBCLASS) || isTraitValSetter(sym.nextOverriddenSymbol))
 
       for (m <- normMembers) {
-        if (!needsSpecialization(fullEnv, m)) {
+        if (m.hasFlag(PRESUPER) && m.isValue && !m.isMethod) {
+          // An early definition is assigned before the super constructor call, which is not
+          // among the constructor statements that the specialized subclass replays (see
+          // `guardSpecializedInitializer` in Constructors). A specialized field would never
+          // be assigned, so keep the generic field and its accessors.
+        } else if (!needsSpecialization(fullEnv, m)) {
           if (m.isValue && !m.isMutable && !m.isMethod && !m.isDeferred && !m.isLazy && !m.isParamAccessor) {
             // non-specialized `val` fields are made mutable (in Constructors) and assigned from the
             // constructors of specialized subclasses. See PR scala/scala#9704.
@@ -756,7 +836,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
             addConcreteSpecMethod(m)
           // specialized members have to be overridable.
           if (m.isPrivate)
-            m.resetFlag(PRIVATE).setFlag(PROTECTED)
+            makeOverridable(m)
 
           if (m.isConstructor) {
             val specCtor = enterMember(cloneInSpecializedClass(m, x => x))
@@ -861,6 +941,17 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
               specVal.resetFlag(PRIVATE)
               debuglog("no accessors for %s/%s, specialized methods must access field in subclass".format(
                 m.name.decode, specVal.name.decode))
+              // A specialized instance only assigns `specVal`, so the code of the generic class must not read
+              // `m` directly. A param accessor `val` is the exception: the generic constructor assigns it too.
+              if (m.isMutable || !m.isParamAccessor) {
+                val (getter, setter) = genericFieldAccessors.getOrElseUpdate(m, mkGenericFieldAccessors(m))
+                val specGetter = enterMember(overrideIn(sClass, getter))
+                info(specGetter) = SpecializedAccessor(specVal)
+                if (setter != NoSymbol) {
+                  val specSetter = enterMember(overrideIn(sClass, setter))
+                  info(specSetter) = SpecializedAccessor(specVal)
+                }
+              }
             }
           }
           else if (m.isClass) {
@@ -911,7 +1002,11 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
     }
     if (subclasses.nonEmpty) clazz.resetFlag(FINAL)
     cleanAnyRefSpecCache(clazz, decls1)
-    decls1
+    val fieldAccessors = decls1.flatMap(m => genericFieldAccessors.get(m) match {
+      case Some((getter, setter)) => getter :: setter :: Nil filter (_ != NoSymbol)
+      case _                      => Nil
+    })
+    decls1 ::: fieldAccessors
   }
 
   /** Expand member `sym` to a set of normalized members. Normalized members
@@ -991,6 +1086,15 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
     }.mkString("env(", ", ", ")")
   }
 
+  /** Turn a private member into one that a specialized subclass can override. The qualifier lets the
+   *  body duplicated into the subclass call it on another instance of the original class, as it could
+   *  when it was private (a guarded tail call, scala/bug#9180).
+   */
+  private def makeOverridable(sym: Symbol): Unit = {
+    sym.resetFlag(PRIVATE).setFlag(PROTECTED)
+    sym.privateWithin = sym.enclosingPackageClass
+  }
+
   /** Specialize member `m` w.r.t. to the outer environment and the type
    *  parameters of the innermost enclosing class.
    *
@@ -1002,8 +1106,8 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
     def specializeOn(tparams: List[Symbol]): List[Symbol] = specializations(tparams) map { spec0 =>
       val spec = mapAnyRefsInOrigCls(spec0, owner)
       if (sym.isPrivate) {
-        sym.resetFlag(PRIVATE).setFlag(PROTECTED)
-        debuglog("Set %s to private[%s]".format(sym, sym.enclosingPackage))
+        makeOverridable(sym)
+        debuglog("Set %s to protected[%s]".format(sym, sym.enclosingPackage))
       }
 
       val specMember = subst(outerEnv)(specializedOverload(owner, sym, spec))
@@ -1608,16 +1712,38 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
         pre member specializedName(member, env) suchThat (_.tpe matches subst(env, member.tpe))
       }
 
+      /* Whether `sel` accesses a field of a generic class that needs an accessor, see `genericFieldAccessors`.
+       * Duplicated code in a specialized subclass selects from `this` of the subclass; it is rewired to the
+       * specialized field in `transformSelect`.
+       */
+      def isGenericFieldAccess(sel: Select) =
+        genericFieldAccessors.contains(sel.symbol) && !sel.qualifier.tpe.typeSymbol.hasFlag(SPECIALIZED)
+
       def transformSelect(sel: Select) = {
         val Select(qual, name) = sel
         debuglog(s"specializing Select(sym=${symbol.defString}, tree.tpe=${tree.tpe})")
 
         val qual1                     = transform(qual)
         def copySelect                = treeCopy.Select(tree, qual1, name)
-        def newSelect(member: Symbol) = atPos(tree.pos)(Select(qual1, member))
+        def newSelect(member: Symbol) = {
+          // `member` is the specialized overload of the method in its owner. For a super call, select the
+          // member that overrides it in the superclasses, as the typer would: in a specialized subclass of a
+          // class extending a specialized trait, that is the trait's specialized subtrait, which implements
+          // the overload. Mixin calls the implementation in the owner of the selected symbol, and the
+          // overload in the generic trait forwards to the generic method, which dispatches back here.
+          val member1 = qual1 match {
+            case _: Super => qual1.tpe.member(member.name).suchThat(alt => (alt eq member) || alt.allOverriddenSymbols.contains(member)).orElse(member)
+            case _        => member
+          }
+          atPos(tree.pos)(Select(qual1, member1))
+        }
         def typedOp(member: Symbol)   = localTyper typedOperator newSelect(member)
         def typedTree(member: Symbol) = localTyper typed newSelect(member)
 
+        // TODO scala/scala review P7: `specializedTypeVars(symbol.info)` runs for every Select (54,083 compiling
+        // the typechecker sources). And when `unify` below yields an empty `env`, `matchingSymbolInPrefix` finds
+        // `symbol` itself and the Select is retyped to the same member (189 times). `copySelect` for an empty
+        // `env` would avoid that, but the retyping can change `tree.tpe` once `qual` has been transformed.
         val ignoreEnv = specializedTypeVars(symbol.info).isEmpty || name == nme.CONSTRUCTOR
         if (ignoreEnv) overloads(symbol) find (_ matchesSym symbol) match {
           case Some(Overload(member, _)) => typedOp(member)
@@ -1674,7 +1800,19 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
 
         case Apply(sel @ Select(sup @ Super(qual, name), name1), args) if hasNewParents(sup) =>
           val sup1  = Super(qual, name) setPos sup.pos
-          val tree1 = Apply(Select(sup1, name1) setPos sel.pos, transformTrees(args))
+          // Call the specialized variant, as `transformSelect` does. The generic method in the
+          // specialized parent forwards to the variant with a virtual call, which would land in
+          // the override of the variant in this class, e.g. the method making this super call.
+          val name2 =
+            if (specializedTypeVars(symbol.info).isEmpty) name1
+            else {
+              val env = unify(symbol.tpe, sel.tpe, emptyEnv, strict = false, tparams = false)
+              overloads(symbol) find (_ matchesEnv env) match {
+                case Some(Overload(member, _)) if env.nonEmpty => member.name
+                case _                                         => name1
+              }
+            }
+          val tree1 = Apply(Select(sup1, name2) setPos sel.pos, transformTrees(args))
           val res   = localTyper.typedPos(tree.pos)(tree1)
           debuglog(s"retyping call to super, from: $symbol to ${res.symbol}")
           res
@@ -1721,6 +1859,14 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
           val pos = tree.pos
           debuglog(pos.source.file.name+":"+pos.line+": not specializing call to super inside illegal specialized inheritance class.\n" + pos.lineContent)
           tree
+
+        case Assign(sel @ Select(qual, _), rhs) if isGenericFieldAccess(sel) =>
+          val (_, setter) = genericFieldAccessors(sel.symbol)
+          localTyper.typedPos(tree.pos)(Apply(Select(transform(qual), setter), List(transform(rhs))))
+
+        case sel @ Select(qual, _) if isGenericFieldAccess(sel) =>
+          val (getter, _) = genericFieldAccessors(sel.symbol)
+          localTyper.typedPos(tree.pos)(Apply(Select(transform(qual), getter), Nil))
 
         case sel @ Select(_, _) =>
           transformSelect(sel)
@@ -2008,10 +2154,9 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
         }
       }
       if (hasSpecializedFields) {
-        val isSpecializedInstance = (sClass hasFlag SPECIALIZED) || sClass.parentSymbolsIterator.exists(_ hasFlag SPECIALIZED)
-        val sym = sClass.newMethod(nme.SPECIALIZED_INSTANCE, sClass.pos) setInfoAndEnter MethodType(Nil, BooleanTpe)
+        val sym = sClass.newMethod(specializedInstanceName(sClass), sClass.pos) setInfoAndEnter MethodType(Nil, BooleanTpe)
 
-        mbrs += DefDef(sym, Literal(Constant(isSpecializedInstance)).setType(BooleanTpe)).setType(NoType)
+        mbrs += DefDef(sym, Literal(Constant(sClass hasFlag SPECIALIZED)).setType(BooleanTpe)).setType(NoType)
       }
       mbrs.toList
     }
@@ -2071,6 +2216,10 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
   private def forwardCtorCall(pos: scala.reflect.internal.util.Position, receiver: Tree, paramss: List[List[ValDef]], clazz: Symbol): Tree = {
     log(s"forwardCtorCall($pos, $receiver, $paramss, $clazz)")
 
+    // Early definitions of the generic class are evaluated in its constructor, which may
+    // read the parameters, so the generic constructor must receive the actual arguments.
+    val genericHasEarlyDefs = clazz.superClass.info.decls.exists(_.hasFlag(PRESUPER))
+
     /* A constructor parameter `f` initializes a specialized field
      * iff:
      *   - it is specialized itself
@@ -2084,7 +2233,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
     )
 
     val argss = mmap(paramss)(x =>
-      if (initializesSpecializedField(x.symbol))
+      if (!genericHasEarlyDefs && initializesSpecializedField(x.symbol))
         gen.mkAsInstanceOf(Literal(Constant(null)).updateAttachment(SpecializedSuperConstructorCallArgument), x.symbol.tpe)
       else
         Ident(x.symbol)

@@ -325,7 +325,7 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
     def primaryConstrParams: List[Symbol]
     def usesSpecializedField: Boolean
 
-    lazy val hasSpecializedFieldsSym   = clazz.info.decl(nme.SPECIALIZED_INSTANCE)
+    lazy val hasSpecializedFieldsSym   = clazz.info.decl(specializeTypes.specializedInstanceName(clazz))
     // The constructor of a non-specialized class that has specialized subclasses
     // should use `q"${hasSpecializedFieldsSym}()"` to guard the initialization of specialized fields.
     lazy val guardSpecializedFieldInit = (hasSpecializedFieldsSym != NoSymbol) && !clazz.hasFlag(SPECIALIZED)
@@ -485,12 +485,17 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
     }
 
     // The constructor parameter with given getter name. This means the parameter name
-    // decodes to the same name that the getter decodes to
-    def parameterNamed(name: Name): Either[String, Symbol] =  
-      primaryConstrParams.filter(_.name.decodedName == name.decodedName) match {
+    // is the getter name, or else decodes to the same name that the getter decodes to.
+    // Distinct names can decode to the same name (`π` and `$u03C0`), so prefer the exact match.
+    def parameterNamed(name: Name): Either[String, Symbol] =
+      primaryConstrParams.filter(_.name == name) match {
         case List(p) => Right(p)
-        case Nil     => Left(s"No constructor parameter named $name (decoded to ${name.decodedName}) found in list of constructor parameters $primaryConstrParams (decoded to ${primaryConstrParams.map(_.decodedName)})")
-        case ps      => Left(s"$name matches multiple constructor parameters $ps")
+        case _ =>
+          primaryConstrParams.filter(_.name.decodedName == name.decodedName) match {
+            case List(p) => Right(p)
+            case Nil     => Left(s"No constructor parameter named $name (decoded to ${name.decodedName}) found in list of constructor parameters $primaryConstrParams (decoded to ${primaryConstrParams.map(_.decodedName)})")
+            case ps      => Left(s"$name matches multiple constructor parameters $ps")
+          }
       }
 
     // A transformer for expressions that go into the constructor

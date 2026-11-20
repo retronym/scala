@@ -226,6 +226,78 @@ class ExtractUsedNamesTest extends BridgeTesting {
       assertTrue(usedNames.toString, Set("MyAnn", "Consts", "I").subsetOf(usedNames))
     }
 
+  @Test
+  def `Used names extraction should extract the class named by a classOf literal`(): Unit = {
+    val usedNames = extractUsedNamesFromSrc("class Foo", "class A { def g = classOf[Foo] }")
+    assertTrue(usedNames("A").toString, usedNames("A").contains("Foo"))
+  }
+
+  @Test
+  def `Used names extraction should extract names from annotations in a classOf literal`(): Unit = {
+    val srcConsts = "object Consts { final val I = 1 }"
+    val srcAnn = "class MyAnn(x: Int) extends scala.annotation.StaticAnnotation"
+    val srcUse = "class A { def g = classOf[Foo @MyAnn(Consts.I)] }"
+    val usedNames = extractUsedNamesFromSrc(srcConsts, srcAnn, "class Foo", srcUse)
+    assertTrue(usedNames("A").toString, Set("Foo", "MyAnn", "Consts", "I").subsetOf(usedNames("A")))
+  }
+
+  @Test
+  def `Used names extraction should extract names from annotations of an inferred type`(): Unit = {
+    val srcConsts = "object Consts { final val I = 1 }"
+    // An inferred type only keeps the annotations that are type constraints
+    val srcAnn =
+      "class MyConstraint(x: Int) extends scala.annotation.StaticAnnotation with scala.annotation.TypeConstraint"
+    val srcLib = "class Lib { def g: Foo @MyConstraint(Consts.I) = null }"
+    val srcUse = "class Use { def f = (new Lib).g }"
+    val usedNames = extractUsedNamesFromSrc(srcConsts, srcAnn, "class Foo", srcLib, srcUse)
+    assertTrue(usedNames("Use").toString, Set("Foo", "MyConstraint", "Consts", "I").subsetOf(usedNames("Use")))
+  }
+
+  @Test
+  def `Used names extraction should extract names at every level of an original type tree`(): Unit = {
+    val srcDefs =
+      """|class Box[T]
+         |object A { type T[X] = Box[X] }
+         |object B { type U[X] = Box[X] }
+         |class C { type V = Int; class W; val c: C = this }
+         |""".stripMargin
+    val srcNested = "class Nested { def f: A.T[B.U[Box[C#V]]] = null }"
+    val srcPath = "class Path { val c: C = new C; def f: Box[c.c.c.W] = null }"
+    // The member of the refinement owns the tree of its type, but `Refined` is what uses the names in it
+    val srcRefined = "class Refined { def f: Box[C { def member: B.U[Int] }] = null }"
+    val srcExistential = "class Existential { def f: Box[X forSome { type X <: A.T[C#V] }] = null }"
+    val usedNames = extractUsedNamesFromSrc(srcDefs, srcNested, srcPath, srcRefined, srcExistential)
+    def includes(name: String, expected: Set[String]): Unit =
+      assertTrue(s"$name is missing ${expected -- usedNames(name)}", expected.subsetOf(usedNames(name)))
+    includes("Nested", Set("A", "T", "B", "U", "Box", "C", "V"))
+    includes("Path", Set("Box", "C", "c", "W"))
+    includes("Refined", Set("Box", "C", "B", "U"))
+    includes("Existential", Set("Box", "A", "T", "C"))
+  }
+
+  @Test
+  def `Used names extraction should extract names in refinements and existential quantifiers`(): Unit = {
+    val srcDefs =
+      """|class Box[T]
+         |object A { type T[X] = Box[X] }
+         |class C { type V = Int; class W; val c: C = this }
+         |object O { val p: C = new C }
+         |""".stripMargin
+    val srcParent = "class Parent { def f: Box[C#W { def member: Int }] = null }"
+    val srcMember = "class Member { def f: Box[AnyRef { def member: A.T[C#V] }] = null }"
+    val srcPath = "class Path { val q: C = new C; def f: Box[AnyRef { def member: Box[q.c.W]; val v: O.p.c.W }] = null }"
+    val srcBound = "class Bound { def f: Box[X forSome { type X <: A.T[C#V] }] = null }"
+    val srcWildcard = "class Wildcard { def f: Box[_ <: A.T[C#V]] = null }"
+    val usedNames = extractUsedNamesFromSrc(srcDefs, srcParent, srcMember, srcPath, srcBound, srcWildcard)
+    def includes(name: String, expected: Set[String]): Unit =
+      assertTrue(s"$name is missing ${expected -- usedNames(name)}", expected.subsetOf(usedNames(name)))
+    includes("Parent", Set("Box", "C", "W"))
+    includes("Member", Set("Box", "A", "T", "C", "V"))
+    includes("Path", Set("Box", "q", "O", "p", "c", "W"))
+    includes("Bound", Set("Box", "A", "T", "C", "V"))
+    includes("Wildcard", Set("Box", "A", "T", "C", "V"))
+  }
+
   // pending test for https://issues.scala-lang.org/browse/SI-7173
   @Test @Ignore
   def `Used names extraction should extract names of constants`(): Unit = {

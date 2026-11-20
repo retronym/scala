@@ -2311,4 +2311,28 @@ class InlinerTest extends BytecodeTesting {
       Incr(IINC, 2, 5), VarOp(ILOAD, 2), Jump(GOTO, Label(9)), Label(9),
       VarOp(ILOAD, 1), Op(IADD), Op(IRETURN)))
   }
+
+  @Test def closureInvokedTwiceAlwaysThrows(): Unit = {
+    // After `nm` is inlined, both invocations of the closure are rewritten to its body method. That method has
+    // return type Nothing, so an ATHROW follows the first call and the second call is unreachable.
+    val code =
+      """class C {
+        |  final def nm(a: => Int): Int = a + a
+        |  def t1: Int = nm(throw new RuntimeException("x"))
+        |  def t2: Int = nm({ return 3 })
+        |  @inline final def f(a: () => Int): Int = a() + a()
+        |  def t3: Int = f(() => throw new RuntimeException("x"))
+        |}
+      """.stripMargin
+    val c = compileClass(code)
+    for (t <- List("t1", "t3")) {
+      val m = getMethod(c, t)
+      assertInvokedMethods(m, List("java/lang/RuntimeException.<init>"))
+      assertEquals(m.instructions.toString, 1, m.instructions.count(_.opcode == ATHROW))
+    }
+    // the non-local return is thrown once, the handler remains
+    assertInvokedMethods(getMethod(c, "t2"), List(
+      "java/lang/Object.<init>", "scala/runtime/NonLocalReturnControl$mcI$sp.<init>",
+      "scala/runtime/NonLocalReturnControl.key", "scala/runtime/NonLocalReturnControl.value$mcI$sp"))
+  }
 }
