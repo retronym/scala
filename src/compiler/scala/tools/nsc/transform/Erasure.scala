@@ -344,7 +344,7 @@ abstract class Erasure extends InfoTransform
               args.foreach { elem =>
                 val elemSym = elem.typeSymbol
                 if (elemSym.isBottomClass) jsig1(ObjectTpe)
-                else if (elemSym.isDerivedValueClass) jsig(elem, unboxedVCs = false)
+                else if (elemSym.isDerivedValueClass) jsig(elem, existentiallyBound = Nil, toplevel = false, unboxedVCs = false)
                 else jsig1(elem)
               }
             }
