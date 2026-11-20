@@ -38,6 +38,9 @@ sealed trait ZipAndJarFileLookupFactory {
 
   def create(zipFile: AbstractFile, settings: Settings, closeableRegistry: CloseableRegistry): ClassPath = {
     val disabled = (settings.YdisableFlatCpCaching.value && !settings.YforceFlatCpCaching.value) || zipFile.file == null
+    // TODO scala/scala review F9: without -release, a multi-release JAR is read flat (base entries
+    // only), unlike javac and the JVM on 9+. Defaulting to the running JDK's version here would
+    // align them, at the cost of a manifest read and JarFile verification per JAR; needs measuring.
     val zipSettings = ZipSettings(settings.releaseValue)
     cache.checkCacheability(zipFile.toURL :: Nil, checkStamps = true, disableCache = disabled) match {
       case Left(_) =>
