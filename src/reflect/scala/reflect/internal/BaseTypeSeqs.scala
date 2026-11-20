@@ -127,6 +127,17 @@ trait BaseTypeSeqs {
       -1
     }
 
+    /** The type symbols of this sequence as a set, for when `baseTypeIndex(sym) >= 0` is asked for many `sym`. */
+    def typeSymbolSet: java.util.Set[Symbol] = {
+      val set = new java.util.HashSet[Symbol](typeSymbols.length * 2)
+      var i = 0
+      while (i < typeSymbols.length) {
+        set.add(typeSymbols(i))
+        i += 1
+      }
+      set
+    }
+
     /** Return all evaluated types in this sequence as a list */
     def toList: List[Type] = elems.toList
 
