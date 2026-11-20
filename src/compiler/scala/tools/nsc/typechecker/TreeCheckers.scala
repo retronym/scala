@@ -284,8 +284,18 @@ abstract class TreeCheckers extends AbstractAnalyzer {
       args.foreach(arg => typed(arg, mode, if (arg.tpe eq null) WildcardType else arg.tpe))
       tree
     }
-    private def checkedTyped(tree: Tree, mode: Mode, pt: Type): Tree = {
+    // An expected type can mention a skolem of an existential from the original typing, such as the
+    // inferred type argument in `foreachRec[_$1](xs)` for `xs: Array[_ <: AnyRef]`. Re-typing `xs` skolemizes
+    // its type afresh, which does not conform; expect any type in place of such a skolem.
+    private object existentialSkolemsToWildcards extends TypeMap {
+      def apply(tp: Type): Type = tp match {
+        case TypeRef(_, sym, Nil) if sym.isExistentialSkolem => WildcardType
+        case _ => tp.mapOver(this)
+      }
+    }
+    private def checkedTyped(tree: Tree, mode: Mode, pt0: Type): Tree = {
       val tpe0 = tree.tpe
+      val pt = if (pt0.exists(_.typeSymbol.isExistentialSkolem)) existentialSkolemsToWildcards(pt0) else pt0
       val typed = wrap(tree)(super.typed(tree.clearType(), mode, pt))
 
       // Vlad: super.typed returns null for package defs, why is that?
@@ -299,10 +309,17 @@ abstract class TreeCheckers extends AbstractAnalyzer {
       // Carry on with `tree`, so that the difference is reported once rather than at every enclosing tree,
       // but restore its type, so that the enclosing tree is not re-typed with an untyped child.
       if (tree ne typed) {
-        treesDiffer(tree, typed)
+        if (!isRenamedValDef(tree, typed)) treesDiffer(tree, typed)
         tree.setType(tpe0)
       }
       tree
+    }
+    // The typer names a ValDef after its symbol (scala/bug#10009). SuperAccessors expands the name of a
+    // private field that an @inline method accesses (`makeNotPrivate`), but not the name in its definition.
+    private def isRenamedValDef(tree: Tree, typed: Tree) = (tree, typed) match {
+      case (vd: ValDef, vd1: ValDef) =>
+        vd.name != vd1.name && vd1.name == vd.symbol.name && vd.mods == vd1.mods && (vd.tpt eq vd1.tpt) && (vd.rhs eq vd1.rhs)
+      case _ => false
     }
 
     object precheck extends TreeStackTraverser {
