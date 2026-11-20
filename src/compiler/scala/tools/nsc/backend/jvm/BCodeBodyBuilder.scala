@@ -1588,15 +1588,28 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
        * not using the rich equality is possible (their own equals method will do ok), except for
        * java.lang.Float and java.lang.Double: their `equals` have different behavior around `NaN`
        * and `-0.0`, see Javadoc (scala-dev#329).
+       *
+       * A number or character compared with a value of a trait or interface type also needs it: that
+       * value can be a `ScalaNumber` (`1 == (BigInt(1): Ordered[BigInt])`), and `Integer.equals` does
+       * not know about those.
        */
       val mustUseAnyComparator: Boolean = {
-        platform.isMaybeBoxed(l.tpe.typeSymbol) && platform.isMaybeBoxed(r.tpe.typeSymbol) && {
+        val lsym = l.tpe.typeSymbol
+        val rsym = r.tpe.typeSymbol
+        // erasure types a box call as Object
+        def unboxedSym(t: Tree) = t match {
+          case Apply(fun, _ :: Nil) if currentRun.runDefinitions.isBox(fun.symbol) => fun.symbol.info.resultType.typeSymbol
+          case _ => t.tpe.typeSymbol
+        }
+        def isNumOrChar(sym: Symbol) = (sym isNonBottomSubClass BoxedNumberClass) || (sym isNonBottomSubClass BoxedCharacterClass)
+        def isNumAndTrait(num: Tree, other: Symbol) = other.isTrait && isNumOrChar(unboxedSym(num))
+        val bothMaybeBoxed = platform.isMaybeBoxed(lsym) && platform.isMaybeBoxed(rsym) && {
           val areSameFinals = l.tpe.isFinalType && r.tpe.isFinalType && (l.tpe =:= r.tpe) && {
-            val sym = l.tpe.typeSymbol
-            sym != BoxedFloatClass && sym != BoxedDoubleClass
+            lsym != BoxedFloatClass && lsym != BoxedDoubleClass
           }
           !areSameFinals
         }
+        bothMaybeBoxed || isNumAndTrait(l, rsym) || isNumAndTrait(r, lsym)
       }
 
       if (mustUseAnyComparator) {
