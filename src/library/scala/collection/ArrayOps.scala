@@ -690,7 +690,7 @@ final class ArrayOps[A](private val xs: Array[A]) extends AnyVal {
     *           or `-1`, if none exists.
     */
   def indexWhere(@deprecatedName("f", "2.13.3") p: A => Boolean, from: Int = 0): Int = {
-    // not `max(from, 0)`: a branch is folded away when this is inlined with a constant `from`, as in `exists`
+    // not `max(from, 0)`: when this is inlined, as in `exists`, the branch keeps the inlined loop free of a call to `Math.max`
     var i = if (from < 0) 0 else from
     while(i < xs.length) {
       if(p(xs(i))) return i
