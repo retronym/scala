@@ -22,6 +22,11 @@ import scala.reflect.internal.SymbolPairs
  *  Most of the logic is in SymbolPairs, which contains generic
  *  pair-oriented traversal logic.
  */
+// TODO scala/scala review H27: the "unless" above is stale. The only pairs skipped are those
+// `skipOwnerPair` rules out (both owners Java-defined, javac checks them); every class re-validates
+// all pairs of its ancestors, e.g. 135 inherited pairs for `class MyBuf extends ArrayBuffer[Int]`.
+// Skipping pairs whose members both come from the superclass is unsound: a type argument or a
+// later mixin can make two such members a pair only in the subclass (neg/overriding-pairs-inherited).
 abstract class OverridingPairs extends SymbolPairs {
   import global._
 
