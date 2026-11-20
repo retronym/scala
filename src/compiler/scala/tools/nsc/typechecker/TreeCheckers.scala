@@ -284,8 +284,18 @@ abstract class TreeCheckers extends AbstractAnalyzer {
       args.foreach(arg => typed(arg, mode, if (arg.tpe eq null) WildcardType else arg.tpe))
       tree
     }
-    private def checkedTyped(tree: Tree, mode: Mode, pt: Type): Tree = {
+    // An expected type can mention a skolem of an existential from the original typing, such as the
+    // inferred type argument in `foreachRec[_$1](xs)` for `xs: Array[_ <: AnyRef]`. Re-typing `xs` skolemizes
+    // its type afresh, which does not conform; expect any type in place of such a skolem.
+    private object existentialSkolemsToWildcards extends TypeMap {
+      def apply(tp: Type): Type = tp match {
+        case TypeRef(_, sym, Nil) if sym.isExistentialSkolem => WildcardType
+        case _ => tp.mapOver(this)
+      }
+    }
+    private def checkedTyped(tree: Tree, mode: Mode, pt0: Type): Tree = {
       val tpe0 = tree.tpe
+      val pt = if (pt0.exists(_.typeSymbol.isExistentialSkolem)) existentialSkolemsToWildcards(pt0) else pt0
       val typed = wrap(tree)(super.typed(tree.clearType(), mode, pt))
 
       // Vlad: super.typed returns null for package defs, why is that?
