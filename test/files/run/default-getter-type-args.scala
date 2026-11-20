@@ -6,6 +6,13 @@ class Box[T](val a: T, val b: T = null.asInstanceOf[T]) { def get: T = if (b == 
 class Box3[T](a: T, b: T = null.asInstanceOf[T])(c: T = a) { override def toString = "" + a + b + c }
 case class CC[T](a: T, b: T = null.asInstanceOf[T])
 
+// an override that renames the type parameters inherits the default getter `A.m$default$2[T]`
+class A { def m[T](a: T, b: T = null.asInstanceOf[T]): T = if (b == null) a else b }
+class B extends A { override def m[U](a: U, b: U): U = if (b == null) a else b }
+// or swaps them: the getter's `T` is the override's `S`
+class A2 { def m[S, T](a: T, b: T = null.asInstanceOf[T]): T = if (b == null) a else b }
+class B2 extends A2 { override def m[T, S](a: S, b: S): S = if (b == null) a else b }
+
 object Test {
   def pick[T](a: T, b: T = null.asInstanceOf[T]): T = if (b == null) a else b
   def pickL[T](a: T)(b: T = null.asInstanceOf[T]): T = if (b == null) a else b
@@ -68,5 +75,11 @@ object Test {
 
     println(later(a = 1)("x"))
     println(later(1)(c = "x"))
+
+    // overrides with renamed type parameters
+    println(new B().m("a"))
+    println(new B().m(a = "a"))
+    println(new B2().m("a"))
+    println(new B2().m(a = "a"))
   }
 }

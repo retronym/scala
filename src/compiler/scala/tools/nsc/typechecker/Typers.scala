@@ -3962,12 +3962,13 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
                   arg1
                 }
                 // A call to a default getter of the applied method or constructor, inserted by `addDefaults`
-                // without type arguments, whose type parameters correspond to the method's.
+                // without type arguments, whose type parameters correspond to the method's by position. Not by
+                // name: an overriding method that inherits the default may rename them.
                 def isDefaultGetterOfFun(arg: Tree, argtparams: List[Symbol]): Boolean = {
                   val getter = arg.symbol
                   getter != null && getter.isDefaultGetter && fun.symbol != null &&
                     nme.defaultGetterToMethod(getter.name) == fun.symbol.name &&
-                    argtparams.corresponds(tparams)(_.name == _.name)
+                    sameLength(argtparams, tparams)
                 }
                 val args1 = map2(args, formals)(typedArgToPoly)
                 if (args1.exists(_.isErrorTyped)) duplErrTree
