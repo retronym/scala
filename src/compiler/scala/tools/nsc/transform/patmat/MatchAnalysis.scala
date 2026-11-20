@@ -44,6 +44,10 @@ trait TreeAndTypeAnalysis extends Debugging {
       case _ if pat.tpe <:< BooleanTpe || pat.tpe <:< UnitTpe || pat.tpe <:< StringTpe
                                                               => pat.tpe
       case Ident(_) | Select(_, _) | Literal(_)               => pt
+      // TODO scala/scala review Z2: `one.type` for `final val one = 1` is the literal type `1`, so `case y: one.type`
+      // types `y` as the scrutinee type and `y + 1` does not type check, whereas `case y: v.type` for a non-final
+      // `val v: Int` types `y` as `v.type`. Suggested direction: type the binder as the literal type and bind it to
+      // the literal in `TypeTestTreeMaker` (as a value path is bound to the path), which also applies to `_: 1`.
       case Typed(_, _) if pat.tpe.isInstanceOf[ConstantType]  => pt
       case _                                                  => pat.tpe
     }
