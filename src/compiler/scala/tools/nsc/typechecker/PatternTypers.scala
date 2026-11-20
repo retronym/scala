@@ -113,9 +113,19 @@ trait PatternTypers {
         || member.isOverloaded // the whole overloading situation is over the rails
       )
 
+      // A case class of an anonymous class, seen from outside through a value of the anonymous class's inferred
+      // type (`val y = new { case class P(a: Int) }; x match { case y.P(_) => }`): that type abstracts the class to a
+      // type member, so the type of the pattern would refer to the anonymous class's `this`, which is not in scope.
+      def isCaseClassOfInaccessibleAnonClass = {
+        val owner = caseClass.owner
+        owner.isAnonymousClass && fun.tpe.prefix.baseType(owner) == NoType
+      }
+
       // if we're already failing, no need to emit another error here
       if (fun.tpe.isErroneous)
         fun
+      else if (useConstructor && isCaseClassOfInaccessibleAnonClass)
+        CaseClassConstructorError(fun, s"$caseClass is defined in an anonymous class and cannot be used in a pattern outside of it")
       else if (useConstructor)
         logResult(s"convertToCaseConstructor($fun, $caseClass, pt=$pt)")(convertToCaseConstructor(fun, caseClass, pt))
       else if (!reallyExists(member))
