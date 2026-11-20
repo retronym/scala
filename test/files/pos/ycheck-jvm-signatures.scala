@@ -32,3 +32,8 @@ object O {
     new L
   }
 }
+
+// The bound of the class's `B` refers to the class's `A`, not to the method's `A <: String`.
+class Shadow[A, B <: A] {
+  def f[A <: String](b: B): A = null.asInstanceOf[A]
+}
