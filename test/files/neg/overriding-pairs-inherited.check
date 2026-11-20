@@ -1,0 +1,13 @@
+overriding-pairs-inherited.scala:9: error: class C1 inherits conflicting members:
+  def f(x: String): Int (defined in class A1) and
+  def f(x: String): Int (defined in class B1)
+  (note: this can be resolved by declaring an `override` in class C1.)
+class C1 extends B1[String]                                 // a pair in C1
+      ^
+overriding-pairs-inherited.scala:15: error: class C2 inherits conflicting members:
+  def g(x: C2.this.T): Int (defined in class A2) and
+  def g(x: Int): Int (defined in class B2)
+  (note: this can be resolved by declaring an `override` in class C2.)
+class C2 extends B2 with M2                                 // a pair in C2
+      ^
+2 errors
