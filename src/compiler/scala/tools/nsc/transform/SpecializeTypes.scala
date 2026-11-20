@@ -836,7 +836,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
             addConcreteSpecMethod(m)
           // specialized members have to be overridable.
           if (m.isPrivate)
-            m.resetFlag(PRIVATE).setFlag(PROTECTED)
+            makeOverridable(m)
 
           if (m.isConstructor) {
             val specCtor = enterMember(cloneInSpecializedClass(m, x => x))
@@ -1086,6 +1086,15 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
     }.mkString("env(", ", ", ")")
   }
 
+  /** Turn a private member into one that a specialized subclass can override. The qualifier lets the
+   *  body duplicated into the subclass call it on another instance of the original class, as it could
+   *  when it was private (a guarded tail call, scala/bug#9180).
+   */
+  private def makeOverridable(sym: Symbol): Unit = {
+    sym.resetFlag(PRIVATE).setFlag(PROTECTED)
+    sym.privateWithin = sym.enclosingPackageClass
+  }
+
   /** Specialize member `m` w.r.t. to the outer environment and the type
    *  parameters of the innermost enclosing class.
    *
@@ -1097,8 +1106,8 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
     def specializeOn(tparams: List[Symbol]): List[Symbol] = specializations(tparams) map { spec0 =>
       val spec = mapAnyRefsInOrigCls(spec0, owner)
       if (sym.isPrivate) {
-        sym.resetFlag(PRIVATE).setFlag(PROTECTED)
-        debuglog("Set %s to private[%s]".format(sym, sym.enclosingPackage))
+        makeOverridable(sym)
+        debuglog("Set %s to protected[%s]".format(sym, sym.enclosingPackage))
       }
 
       val specMember = subst(outerEnv)(specializedOverload(owner, sym, spec))
