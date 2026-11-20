@@ -16,7 +16,7 @@ package concurrent
 
 import java.util.concurrent.atomic._
 import scala.{unchecked => uc}
-import scala.annotation.tailrec
+import scala.annotation.{nowarn, tailrec}
 import scala.collection.concurrent.TrieMap.RemovalPolicy
 import scala.collection.generic.{DefaultSerializable, DefaultSerializationProxy}
 import scala.collection.immutable.{List, Nil}
@@ -703,6 +703,8 @@ final class TrieMap[K, V] private (r: AnyRef, rtupd: AtomicReferenceFieldUpdater
   private[this] val rootupdater = rtupd
   def hashing = hashingobj
   def equality = equalityobj
+  // Only written through `rootupdater`, which the unused-privates lint does not see.
+  @nowarn("msg=is never updated")
   @volatile private var root = r
 
   def this(hashf: Hashing[K], ef: Equiv[K]) = this(
