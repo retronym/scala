@@ -7,6 +7,9 @@ singleton-type-pattern-value-path.scala:106: warning: abstract type pattern B (t
 singleton-type-pattern-value-path.scala:110: warning: abstract type pattern B (the underlying of b.type) is unchecked since it is eliminated by erasure
     case y: b.type => "B " + (y + 41)
              ^
+singleton-type-pattern-value-path.scala:128: warning: abstract type pattern B (the underlying of BA) is unchecked since it is eliminated by erasure
+      case y: BA => "BA " + (y + 41)
+              ^
 int: Int 42, Int 42, Int 42, Int 42, Int 42, Int 42, no, no, no, no, no, no
 double: Double 2.0, Double 2.0, Double 2.0, Double 2.0, Double 2.0, Double 2.0, no, no, no, no, no, no
 char: no, no, no, no, no, no, Char A, Char A, no, no, no, no
@@ -27,3 +30,6 @@ string: String 1, no, no, no, no
 abstractType: T 1 Integer, T 1 Long, no, no
 bounded: B 42, B 42, B 42, B 42, B 42, B 42, no, no, no, no, no, no
 boundedTwice: B 42, B 42, B 42, B 42, B 42, B 42, no, no, no, no, no, no
+alias: IA 42, IA 42, IA 42, IA 42, IA 42, IA 42, no, no, no, no, no, no
+aliasTwice: IAA 42, IAA 42, IAA 42, IAA 42, IAA 42, IAA 42, no, no, no, no, no, no
+boundedAlias: BA 42, BA 42, BA 42, BA 42, BA 42, BA 42, no, no, no, no, no, no
