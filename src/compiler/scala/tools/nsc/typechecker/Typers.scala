@@ -1202,7 +1202,12 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
             context.warning(tree.pos, msg, Scala3Migration, action)
           }
           tree
-        } else if (mode.inPatternMode && { inferModulePattern(tree, pt); isPopulated(tree.tpe, approximateAbstracts(pt)) })
+        }
+        // TODO scala/scala review S1: `isPopulated` treats any two numeric value classes as overlapping,
+        // so a literal pattern that no value of `pt` can equal (`case 1.5` on Int, `case 1000` on Byte)
+        // is accepted silently (scala/bug#12722). A warning could compare the constant's value with
+        // the range of `pt` here; cooperative equality means `case 1.0` on Int must stay accepted.
+        else if (mode.inPatternMode && { inferModulePattern(tree, pt); isPopulated(tree.tpe, approximateAbstracts(pt)) })
           tree
         else {
           val constFolded = constfold(tree, pt, context.owner)
