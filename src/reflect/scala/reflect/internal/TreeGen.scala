@@ -880,7 +880,7 @@ abstract class TreeGen {
 
   // TODO scala/scala review S3: refutability is decided here, in the parser, from the pattern's syntax
   // alone, so `for (Box(i) <- xs)` and `for (b: Box <- xs)` call `withFilter` even when the pattern
-  // cannot fail for the element type (scala/bug#900). Scala 3 decides it against the type in the typer.
+  // cannot fail for the element type (scala/bug#1336, scala/bug#5589). Scala 3 decides it against the type in the typer.
   def mkCheckIfRefutable(pat: Tree, rhs: Tree)(implicit fresh: FreshNameCreator) =
     if (treeInfo.isVarPatternDeep(pat)) rhs
     else {

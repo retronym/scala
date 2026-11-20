@@ -1,6 +1,6 @@
 // A generator's pattern is treated as refutable unless it is syntactically a variable pattern,
 // so `withFilter` is required even where the pattern cannot fail for the generator's element type
-// (scala/bug#900). Pinned as on 2.13.x; Scala 3 checks refutability against the type.
+// (scala/bug#1336). Pinned as on 2.13.x; Scala 3 checks refutability against the type.
 //
 // TODO scala/scala review S3: under type-based refutability, `typed` and `extract` compile
 // without `withFilter`, so this file would move to pos/ (and the .check go away).
