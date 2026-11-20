@@ -4572,6 +4572,10 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
         def isPolymorphicSignatureCall =
           sym != null && sym.isJavaDefined && sym.owner.info.decl(sym.name).alternatives.exists(currentRun.runDefinitions.isPolymorphicSignature)
         val tp = targ.tpe
+        // TODO scala/scala review Y3: the cast is only wrong for `invokeExact` (and a VarHandle with
+        // invoke-exact behaviour); `invoke` and VarHandle access modes adapt the Object result, so
+        // `mh.invoke(c).asInstanceOf[String]` runs correctly but warns (run/sigpoly-cast-valid).
+        // Restrict the warning to `invokeExact`, or give it a lint category so it can be turned off.
         if (isPolymorphicSignatureCall && erasure.javaErasure(tp).typeSymbol != ObjectClass)
           context.warning(qual.pos,
             sm"""the cast does not set the result type of signature polymorphic method ${sym.name}, the call returns Object;
