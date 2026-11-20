@@ -1335,7 +1335,7 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
     private[this] val PackageAndClassPattern = """(.*\.)(.*)$""".r
 
     private def expandedName(sym: Symbol): String =
-      if (sym.isPrivate) nme.expandedName(sym.name.toTermName, sym.owner).toString
+      if (sym.isPrivate) nme.expandedName(sym.name.dropLocal.toTermName, sym.owner).toString
       else sym.name.toString
 
     /** The Java field corresponding to a given Scala field.
