@@ -1,4 +1,4 @@
 case 1000 / 1000L:         true
-isInstanceOf 1000 / 1000L: false
+isInstanceOf 1000 / 1000L: true
 case 1000 / new box:         true
 isInstanceOf 1000 / new box: true

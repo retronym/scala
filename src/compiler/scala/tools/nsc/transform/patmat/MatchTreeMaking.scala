@@ -543,10 +543,10 @@ trait MatchTreeMaking extends MatchCodeGen with Debugging {
           case expectedSingle @ SingleType(_, sym)      =>
             val expected = gen.mkAttributedQualifier(expectedSingle) // scala/bug#4577, scala/bug#4897
             if (expectedTp <:< AnyRefTpe) mkEqTest(expected)
-            // TODO scala/scala review C6: for a path that is not an AnyRef this is `==`, while the spec
-            // says `eq` and erasure's `isInstanceOf[x.type]` calls `equals`, so `1000L` matches
-            // `case _: x.type` for `x: Int = 1000` but is not `isInstanceOf[x.type]`
-            // (run/singleton-type-pattern-eq). retronym/scala#426 aligns `isInstanceOf` with this.
+            // scala/scala review C6: for a path that is not an AnyRef this is `==`, while the spec
+            // says `eq`. On this branch erasure's `isInstanceOf[x.type]` also uses `==`, because
+            // retronym/scala#426 is merged, so the two agree: `1000L` matches `case _: x.type` for
+            // `x: Int = 1000` and is `isInstanceOf[x.type]` (run/singleton-type-pattern-eq).
             else mkEqualsTest(expected)
           // Should revisit if we end up lifting `eq`'s definition to `Any`, as discussed here:
           // https://groups.google.com/d/msg/scala-internals/jsVlJI4H5OQ/8emZWRmgzcoJ
