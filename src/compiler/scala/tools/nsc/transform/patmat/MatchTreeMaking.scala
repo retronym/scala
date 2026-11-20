@@ -557,9 +557,12 @@ trait MatchTreeMaking extends MatchCodeGen with Debugging {
       // A pattern `x: p.type` for a path of a primitive type is tested with `p == scrutinee`, which is cooperative for
       // boxed numbers and chars: `1 == 1L`. So the scrutinee needn't be a box of the type of `p`, and a cast to `p.type`
       // would fail when it is unboxed. The only value of `p.type` is `p`, so that is what we bind instead.
+      // The type of `p` may be an abstract type bounded by a primitive type (`b: B` for `B <: Int`), which erases to it.
       private def bindsPath = !extractorArgTypeTest && (expectedTp match {
         case SingleType(_, _) =>
-          val expectedWide = expectedTp.widen.deconst
+          @tailrec def upperBoundClass(tp: Type): Type =
+            if (tp.typeSymbol.isAbstractType) upperBoundClass(tp.upperBound) else tp
+          val expectedWide = upperBoundClass(expectedTp.widen.deconst)
           isPrimitiveValueType(expectedWide) && !(testedBinder.info.widen <:< expectedWide)
         case _ => false
       })

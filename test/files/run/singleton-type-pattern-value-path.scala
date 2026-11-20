@@ -101,6 +101,16 @@ object Test {
     case _         => "no"
   }
 
+  // a path of an abstract type bounded by a primitive type erases to the primitive: the binder is the path
+  def bounded[B <: Int](b: B, x: Any): String = x match {
+    case y: b.type => "B " + (y + 41)
+    case _         => "no"
+  }
+  def boundedTwice[C <: Int, B <: C](b: B, x: Any): String = x match {
+    case y: b.type => "B " + (y + 41)
+    case _         => "no"
+  }
+
   def show(label: String, f: Any => String, xs: Any*): Unit =
     println(label + xs.map(x => Try(f(x)).fold(_.getClass.getSimpleName, identity)).mkString(": ", ", ", ""))
 
@@ -125,5 +135,7 @@ object Test {
     show("inner member", (new outer.Inner).member, inputs: _*)
     show("string", string, s, new String("s"), "s", 1, null)
     show("abstractType", abstractType(1, _), 1, 1L, 2, null)
+    show("bounded", bounded(1, _), inputs: _*)
+    show("boundedTwice", boundedTwice(1, _), inputs: _*)
   }
 }
