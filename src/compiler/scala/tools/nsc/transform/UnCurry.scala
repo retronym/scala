@@ -413,6 +413,16 @@ abstract class UnCurry extends InfoTransform
     }
     def isNonLocalReturn(ret: Return) = ret.symbol != currentOwner.enclMethod || currentOwner.isLazy || currentOwner.isAnonymousFunction
 
+    /** `String.+`, or a `+` of a primitive value class that takes a String: the methods the backend emits as a
+     *  String concatenation (see `ScalaPrimitives.CONCAT`).
+     */
+    private def isStringConcat(sym: Symbol) =
+      currentRun.runDefinitions.isStringAddition(sym) ||
+        sym.name == nme.PLUS && isPrimitiveValueClass(sym.owner) && (sym.paramss match {
+          case (p :: Nil) :: Nil => p.tpe.typeSymbol == StringClass
+          case _                 => false
+        })
+
 // ------ The tree transformers --------------------------------------------------------
 
     def mainTransform(tree: Tree): Tree = {
@@ -506,19 +516,25 @@ abstract class UnCurry extends InfoTransform
             // Read the param symbols before `transform(fn)`, because UnCurry replaces T* by Seq[T] (see DesugaredParameterType).
             // The call to `transformArgs` below needs `formals` that still have varargs.
             val fnParams = fn.tpe.params
-            val transformedFn = transform(fn)
+            // The backend flattens a chain of String concatenations and, for a StringBuilder concatenation (target 8),
+            // creates the builder before it evaluates the leftmost operand. So the receiver of a concatenation is
+            // evaluated with a value on the stack, unlike the receiver of other calls.
+            val transformedFn = if (isStringConcat(fn.symbol)) withNeedLift(needLift = true)(transform(fn)) else transform(fn)
             // scala/bug#6479: no need to lift in args to label jumps
             // scala/bug#11127: boolean && / || are emitted using jumps, the lhs stack value is consumed by the conditional jump
-            val noReceiverOnStack = fn.symbol.isLabel || fn.symbol == currentRun.runDefinitions.Boolean_and || fn.symbol == currentRun.runDefinitions.Boolean_or
+            // `synchronized` is emitted as monitorenter / body / monitorexit: the backend stores the monitor in a local
+            // before it evaluates the body, so the body starts with the stack that the `synchronized` expression started with.
+            val noReceiverOnStack = fn.symbol.isLabel || fn.symbol == currentRun.runDefinitions.Boolean_and || fn.symbol == currentRun.runDefinitions.Boolean_or ||
+              fn.symbol == Object_synchronized
             val needLift = needTryLift || !noReceiverOnStack
             withNeedLift(needLift) {
               treeCopy.Apply(tree, transformedFn, transformTrees(transformArgs(tree.pos, fn.symbol, args, fnParams)))
             }
 
-          case Assign(_: RefTree, _) =>
-            withNeedLift(needLift = true) { super.transform(tree) }
-
-          case Assign(lhs, _) if lhs.symbol.owner != currentMethod || lhs.symbol.hasFlag(LAZY | ACCESSOR) =>
+          case Assign(_, _) =>
+            // An assignment to a field has the receiver on the stack while the rhs is evaluated. So does an assignment to
+            // a local variable that is captured, which becomes `v.elem = rhs` in lambdalift (scala/bug#6154). Whether a
+            // local will be captured is not known here, so a `try` is lifted in the rhs of every assignment.
             withNeedLift(needLift = true) { super.transform(tree) }
 
           case ret @ Return(_) if isNonLocalReturn(ret) =>
