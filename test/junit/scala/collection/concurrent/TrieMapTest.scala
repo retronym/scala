@@ -1,7 +1,7 @@
 package scala.collection.concurrent
 
 import org.junit.Test
-import org.junit.Assert.assertEquals
+import org.junit.Assert.{assertEquals, assertSame}
 
 import scala.util.hashing.Hashing
 import scala.tools.testkit.AssertUtil.assertThrows
@@ -704,5 +704,105 @@ class TrieMapTest {
     assert(!TrieMap.from((1 to 5).map(x => x -> x)).isEmpty)
     assert(!TrieMap.from((1 to 10).map(x => x -> x)).isEmpty)
     assert(!TrieMap.from((1 to 100).map(x => x -> x)).isEmpty)
+  }
+
+  private val caseInsensitive: Equiv[String] = Equiv.fromFunction(_.equalsIgnoreCase(_))
+  private val constantHash: Hashing[String] = Hashing.fromFunction(_ => 42)
+  private val lowerCaseHash: Hashing[String] = Hashing.fromFunction(_.toLowerCase.hashCode)
+
+  @Test
+  def readOnlySnapshotLookupUsesEquiv(): Unit = {
+    val t = new TrieMap[String, Int](constantHash, caseInsensitive)
+    t("a") = 1
+    t("b") = 2
+    t.remove("b") // the two keys collide; removing one leaves the other in a tomb node until the next access
+    val ro = t.readOnlySnapshot()
+    assertEquals(Some(1), ro.get("a"))
+    assertEquals(Some(1), ro.get("A"))
+    assertEquals(true, ro.contains("A"))
+    assertEquals(None, ro.get("b"))
+    assertEquals(Some(1), t.get("A"))
+  }
+
+  @Test
+  def derivedMapsKeepHashingAndEquiv(): Unit = {
+    for (hashing <- List(constantHash, lowerCaseHash)) {
+      val t = new TrieMap[String, Int](hashing, caseInsensitive)
+      t("Key") = 1
+      t("other") = 2
+      def check(what: String, m: collection.Map[String, Int]): Unit = {
+        val tm = m.asInstanceOf[TrieMap[String, Int]]
+        assertSame(what, hashing, tm.hashing)
+        assertSame(what, caseInsensitive, tm.equality)
+        assertEquals(what, Some(1), m.get("KEY"))
+        assertEquals(what, Some(2), m.get("OTHER"))
+        assertEquals(what, 2, m.size)
+      }
+      check("original", t)
+      check("snapshot", t.snapshot())
+      check("clone", t.clone())
+      check("empty", t.empty.addAll(t))
+      check("filter", t.filter(_ => true))
+      check("filterNot", t.filterNot(_ => false))
+      check("partition", t.partition(_ => true)._1)
+      check("take", t.take(2))
+      check("tail", (t.clone() += ("x" -> 0)).filterInPlace((k, _) => k != "x"))
+      check("filter of a read-only snapshot", t.readOnlySnapshot().filter(_ => true))
+      check("groupBy", t.groupBy(_ => 0)(0))
+      val updated = t.clone()
+      updated("KEY") = 3
+      assertEquals(2, updated.size)
+      assertEquals(Some(3), updated.get("key"))
+      assertEquals(Some(1), t.get("key"))
+    }
+    val default = TrieMap("Key" -> 1)
+    assertEquals(None, default.clone().get("KEY"))
+    assertEquals(Some(1), default.filter(_ => true).get("Key"))
+    assertEquals(classOf[TrieMap.MangledHashing[_]], default.empty.hashing.getClass)
+  }
+
+  private def serialize(o: AnyRef): Array[Byte] = {
+    val bytes = new java.io.ByteArrayOutputStream
+    val out = new java.io.ObjectOutputStream(bytes)
+    out.writeObject(o)
+    out.close()
+    bytes.toByteArray
+  }
+  private def deserialize[T](bytes: Array[Byte]): T =
+    new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bytes)).readObject().asInstanceOf[T]
+
+  @Test
+  def serializationKeepsHashingAndEquiv(): Unit = {
+    for (hashing <- List(constantHash, lowerCaseHash)) {
+      val t = new TrieMap[String, Int](hashing, caseInsensitive)
+      t("Key") = 1
+      t("other") = 2
+      val d = deserialize[TrieMap[String, Int]](serialize(t))
+      assertEquals(2, d.size)
+      assertEquals(Some(1), d.get("KEY"))
+      assertEquals(Some(2), d.get("OTHER"))
+      assertEquals(hashing.hash("xyz"), d.hashing.hash("xyz"))
+      d("KEY") = 3
+      assertEquals(2, d.size)
+      assertEquals(Some(1), deserialize[TrieMap[String, Int]](serialize(d.snapshot())).remove("OTHER").map(_ - 1))
+    }
+  }
+
+  @Test
+  def serializedFormOfDefaultTrieMapIsUnchanged(): Unit = {
+    val t = TrieMap("Key" -> 1, "other" -> 2)
+    val bytes = serialize(t)
+    // the default proxy names the MapFactory, not a factory with hashing and equality
+    val text = new String(bytes, java.nio.charset.StandardCharsets.ISO_8859_1)
+    assertEquals(true, text.contains("scala.collection.MapFactory$ToFactory"))
+    assertEquals(false, text.contains("Hashing"))
+    assertEquals(false, text.contains("Equiv"))
+    val d = deserialize[TrieMap[String, Int]](bytes)
+    assertEquals(t, d)
+    assertEquals(None, d.get("KEY"))
+    assertEquals(classOf[TrieMap.MangledHashing[_]], d.hashing.getClass)
+    // clones, snapshots and filtered copies of a default map are default maps too
+    for (m <- List(t.clone(), t.snapshot(), t.filter(_ => true), t.empty))
+      assertEquals(true, new String(serialize(m), java.nio.charset.StandardCharsets.ISO_8859_1).contains("scala.collection.MapFactory$ToFactory"))
   }
 }
