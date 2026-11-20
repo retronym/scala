@@ -1871,6 +1871,9 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
           if (sym.isPublic && !sym.isConstructor) {
             oldsymbuf += sym
             newsymbuf += (
+              // TODO scala/scala review Z5: a class is abstracted to a type member, but its companion module is cloned
+              // with its real module class, whose members (`apply`, `unapply`) still refer to this class's `this`.
+              // Typing a pattern `y.P(_)` through such a module is rejected in `typedConstructorPattern`.
               if (sym.isClass)
                 tp.typeSymbol.newAbstractType(sym.name.toTypeName, sym.pos).setInfo(sym.existentialBound)
               else
