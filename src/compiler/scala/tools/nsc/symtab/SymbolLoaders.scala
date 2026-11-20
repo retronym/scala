@@ -298,6 +298,11 @@ abstract class SymbolLoaders {
       val classPathEntries = classPath.list(packageName)
 
       if (!root.isRoot)
+        // TODO scala/scala review P9: every classfile is entered, including flat-named nested and anonymous classes
+        // (`C$D`, `C$$anon$1`), which are 71 to 75% of the entries of the package scopes when compiling the
+        // typechecker sources. Scopes hash into a fixed 128 buckets (`Scope.HASHSIZE`), so a package lookup walks about
+        // 2.6 chain entries against 0.4 elsewhere. Skipping `$` names is risky (the classfile parser falls back to a
+        // top-level `C$D`, and a class may be named so); a hash table that grows with the package is the safer route.
         for (entry <- classPathEntries.classesAndSources) initializeFromClassPath(root, entry)
       if (!root.isEmptyPackageClass) {
         for (pkg <- classPathEntries.packages) {
