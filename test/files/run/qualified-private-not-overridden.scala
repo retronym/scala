@@ -7,13 +7,18 @@
 // TODO scala/scala review H56: if `private[A]` members are made overridable as in Scala 3, `B.f`
 // needs `override` and `b.callF` prints 2; if a diagnostic is added instead, this file compiles
 // with a warning at `B.f`, which appears in the .check.
+//
+// The namer still treats A's `f` as overridden when it infers a result type: `C.f` compiles only
+// because its type is given; with `def f = "x"` it fails (neg/qualified-private-namer-inferred).
 class A { private[A] def f = 1; def callF = f }
 class B extends A { def f = 2 }
+class C extends A { def f: String = "x" }
 
 object Test {
   def main(args: Array[String]): Unit = {
     val b = new B
     println(b.callF)
     println(b.f)
+    println(new C().f)
   }
 }
