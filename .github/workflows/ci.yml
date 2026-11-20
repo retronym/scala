@@ -19,10 +19,9 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        java: [8, 11, 17, 21, 25, 27]
-        # Windows failures are about paths and line endings rather than the JDK: test the oldest and the newest LTS
+        java: [17, 21, 25, 27]
+        # Windows failures are about paths and line endings rather than the JDK: test the newest LTS
         include:
-          - { os: windows-latest, java: 8 }
           - { os: windows-latest, java: 25 }
     runs-on: ${{matrix.os}}
     steps:

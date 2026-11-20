@@ -540,6 +540,49 @@ trait Printers extends api.Printers { self: SymbolTable =>
         // case SelectFromArray(qualifier, name, _) =>
         //   print(qualifier); print(".<arr>"); print(symName(tree, name))
 
+        case Jpms.ModuleDef(open, name, directives) =>
+          val currentOwner1 = currentOwner
+          if (tree.symbol != NoSymbol) currentOwner = tree.symbol.owner
+          if (open) print("open ")
+          print("module ")
+          print(name)
+          if (directives.nonEmpty) {
+            print(" {")
+            printColumn(directives, "", ";", "}")
+          }
+          currentOwner = currentOwner1
+        case Jpms.RequiresDirective(moduleName, transitive, isStatic) =>
+          print("requires ")
+          if (transitive) print("transitive ")
+          if (isStatic) print("static ")
+          print(moduleName)
+        case Jpms.ExportsDirective(packageName, tos) =>
+          print("exports ")
+          print(packageName)
+          tos match {
+            case Nil =>
+            case _ => print(" to ")
+              printSeq(tos)(to => print(to))(print(", "))
+          }
+        case Jpms.OpensDirective(packageName, tos) =>
+          print("opens ")
+          print(packageName)
+          tos match {
+            case Nil =>
+            case _ => print(" to ")
+              printSeq(tos)(to => print(to))(print(", "))
+          }
+        case Jpms.UsesDirective(typeName) =>
+          print("uses ")
+          print(typeName)
+        case Jpms.ProvidesDirective(typeName, providers) =>
+          print("provides ")
+          print(typeName)
+          providers match {
+            case Nil =>
+            case _ => print(" with ")
+              printSeq(providers)(provider => print(provider))(print(", "))
+          }
         case tree =>
           xprintTree(this, tree)
       }

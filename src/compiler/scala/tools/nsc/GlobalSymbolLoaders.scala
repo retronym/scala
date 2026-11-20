@@ -37,6 +37,9 @@ abstract class GlobalSymbolLoaders extends symtab.SymbolLoaders {
   protected def compileLate(srcfile: io.AbstractFile): Unit =
     currentRun.compileLate(srcfile)
 
+  override protected def jpmsModuleOfSource(srcfile: io.AbstractFile): String =
+    currentRun.jpmsModuleTable.moduleOfSource(srcfile)
+
   def warning(pos: Position, msg: String, category: WarningCategory, site: String): Unit =
     runReporting.warning(pos, msg, category, site)
 }
