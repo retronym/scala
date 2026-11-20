@@ -287,6 +287,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     // Update the surrounding scopes
     protected[this] def changeNameInOwners(name: Name): Unit = {
       if (owner.isClass) {
+        scopeRewritten()
         var ifs = owner.infos
         while (ifs != null) {
           ifs.info.decls.rehash(this, name)
@@ -1610,6 +1611,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     def info_=(info: Type): Unit = {
       assert(info ne null, "Can't assign a null type")
       if (infos ne null) {
+        if (isClass && infos.info.isComplete) classInfoReplaced()
         infos.reset(currentPeriod, info)
       } else
         infos = TypeHistory(currentPeriod, info, null)
@@ -1655,6 +1657,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     }
 
     def hasRawInfo: Boolean = infos ne null
+    /** Has the latest info of this symbol been completed? Unlike `hasCompleteInfo`, never adapts the info to the current phase. */
+    private[internal] final def hasCompletedInfo: Boolean = (infos ne null) && infos.info.isComplete
     def hasCompleteInfo = hasRawInfo && rawInfo.isComplete
 
     // does not run adaptToNewRun, which is prone to trigger cycles (scala/bug#8029)
