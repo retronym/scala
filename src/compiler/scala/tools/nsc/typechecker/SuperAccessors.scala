@@ -240,6 +240,11 @@ abstract class SuperAccessors extends transform.Transform with transform.TypingT
             for (s <- decls) {
               val privateWithin = s.privateWithin
               def isPrivateWithinNonCompanionModule = privateWithin.isModuleClass
+              // TODO scala/scala review H56: expanding the name here, before RefChecks, means a `private[C]`
+              // member is never part of an overriding pair: `class B extends A { def f = 2 }` over
+              // `private[A] def f` needs no `override` and A's callers keep A's `f`
+              // (run/qualified-private-not-overridden). SLS 5.2 does not say this; Scala 3 requires
+              // `override`. Either the spec says so, or RefChecks should see the unexpanded pair.
               if (privateWithin.isClass && !s.hasFlag(EXPANDEDNAME | PROTECTED) && !isPrivateWithinNonCompanionModule && !s.isConstructor) {
                 val savedName = s.name
                 decls.unlink(s)
