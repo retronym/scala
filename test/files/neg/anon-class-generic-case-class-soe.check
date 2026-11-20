@@ -1,0 +1,12 @@
+anon-class-generic-case-class-soe.scala:5: error: can't existentially abstract over parameterized type this.P[A]
+    val x = new { trait TM { type E; def e: E }; case class P[A](a: A) extends TM { type E = A; def e = a } } // error
+            ^
+anon-class-generic-case-class-soe.scala:6: error: type mismatch;
+ found   : this.P[Int]
+ required: x.TM
+    val t: x.TM = x.P(1) // error
+                     ^
+anon-class-generic-case-class-soe.scala:7: error: class P is defined in an anonymous class and cannot be used in a pattern outside of it
+    t match { case x.P(a) => a } // error
+                     ^
+3 errors
