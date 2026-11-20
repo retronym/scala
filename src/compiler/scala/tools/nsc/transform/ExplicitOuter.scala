@@ -49,7 +49,8 @@ abstract class ExplicitOuter extends InfoTransform
     !clazz.isPackageClass && !clazz.outerClass.isStaticOwner
 
   private def haveSameOuter(parent: Type, clazz: Symbol) = {
-    val owner = clazz.owner
+    // the class whose `this` the outer pointer of `clazz` refers to, also for a local or anonymous class
+    val owner = clazz.outerClass
     val parentSym = parent.typeSymbol
 
     parentSym.isClass && owner.isClass &&
