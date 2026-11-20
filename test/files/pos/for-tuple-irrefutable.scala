@@ -1,6 +1,6 @@
 // This test fails: it records that a tuple pattern in a generator requires `withFilter` although
 // the pattern is irrefutable for the element type, and SLS 6.19 only inserts the filter for a
-// pattern that is not irrefutable. See also neg/for-refutable-syntactic and scala/bug#900.
+// pattern that is not irrefutable. See also neg/for-refutable-syntactic and scala/bug#1336.
 final class NoFilter[A](a: A) {
   def map[B](f: A => B): NoFilter[B] = new NoFilter(f(a))
   def foreach(f: A => Unit): Unit = f(a)

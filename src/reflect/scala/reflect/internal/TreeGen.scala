@@ -869,9 +869,6 @@ abstract class TreeGen {
     else ValFrom(pat1, mkCheckIfRefutable(pat1, rhs)).setPos(pos)
   }
 
-  // TODO scala/scala review X22: a tuple pattern `(a, b)` is not a variable pattern, so it gets a
-  // `withFilter` call although it is irrefutable for a generator of tuples; SLS 6.19 only filters
-  // patterns that are not irrefutable (pos/for-tuple-irrefutable, see also scala/bug#900).
   def mkCheckIfRefutable(pat: Tree, rhs: Tree)(implicit fresh: FreshNameCreator) =
     if (treeInfo.isVarPatternDeep(pat)) rhs
     else {
@@ -880,6 +877,9 @@ abstract class TreeGen {
         CaseDef(Ident(nme.WILDCARD), EmptyTree, Literal(Constant(false)))
       )
       val visitor = mkVisitor(cases, checkExhaustive = false, nme.CHECK_IF_REFUTABLE_STRING)
+      // TODO scala/scala review X22: a tuple pattern `(a, b)` is not a variable pattern, so it gets this
+      // `withFilter` call although it is irrefutable for a generator of tuples; SLS 6.19 only filters
+      // patterns that are not irrefutable (pos/for-tuple-irrefutable, scala/bug#1336, scala/bug#5589).
       atPos(rhs.pos)(Apply(Select(rhs, nme.withFilter), visitor :: Nil))
     }
 
