@@ -302,9 +302,9 @@ abstract class Duplicators extends AbstractAnalyzer {
         // A jump that tailcalls generated for a call on another instance passes that instance as the new `this`.
         // In the copy of the method in a specialized subclass, the instance need not be an instance of that
         // subclass (a `C[Int]` may have been created in generic code), so jump only if it is one, and call
-        // the method otherwise, as the code before tailcalls did. If the method cannot be called here (it was
-        // private, which specialization turns into protected, and the instance is not one of this subclass),
-        // keep the unconditional jump, which fails verification if this subclass is loaded (scala/bug#9180).
+        // the method otherwise, as the code before tailcalls did. If the method cannot be called here, keep the
+        // unconditional jump, which fails verification if this subclass is loaded (scala/bug#9180). (A private
+        // method can be called: specialization turns it into one that is protected within its package.)
         case Apply(fun @ Ident(_), recv :: args)
         if fun.symbol.isLabel && tailLabelsInNewClass(updateSym(fun.symbol)) && !recv.isInstanceOf[This] && !guardedJumps(tree) =>
           val method = fun.symbol.owner // the method in the original class
