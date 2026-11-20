@@ -234,6 +234,11 @@ abstract class UnCurry extends InfoTransform
       } else {
         val mustExpand = mustExpandFunction(fun)
         // method definition with the same arguments, return type, and body as the original lambda
+        // TODO scala/scala review P2: lifting the body substitutes the parameters, changes the owner and (in a
+        // static object) rewrites `this`, each a full traversal including nested lambdas, and the outermost lambda
+        // is lifted first. A lambda nested k deep is thus traversed by each of its enclosing lambdas: quadratic in
+        // nesting depth (19% of the visits are repeats compiling the typechecker sources). Fusing the passes, or
+        // lifting innermost first, would help.
         val liftedMethod = gen.mkLiftedFunctionBodyMethod(localTyper)(fun.symbol.owner, fun)
 
         // new function whose body is just a call to the lifted method
