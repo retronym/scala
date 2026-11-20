@@ -299,10 +299,17 @@ abstract class TreeCheckers extends AbstractAnalyzer {
       // Carry on with `tree`, so that the difference is reported once rather than at every enclosing tree,
       // but restore its type, so that the enclosing tree is not re-typed with an untyped child.
       if (tree ne typed) {
-        treesDiffer(tree, typed)
+        if (!isRenamedValDef(tree, typed)) treesDiffer(tree, typed)
         tree.setType(tpe0)
       }
       tree
+    }
+    // The typer names a ValDef after its symbol (scala/bug#10009). SuperAccessors expands the name of a
+    // private field that an @inline method accesses (`makeNotPrivate`), but not the name in its definition.
+    private def isRenamedValDef(tree: Tree, typed: Tree) = (tree, typed) match {
+      case (vd: ValDef, vd1: ValDef) =>
+        vd.name != vd1.name && vd1.name == vd.symbol.name && vd.mods == vd1.mods && (vd.tpt eq vd1.tpt) && (vd.rhs eq vd1.rhs)
+      case _ => false
     }
 
     object precheck extends TreeStackTraverser {
