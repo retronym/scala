@@ -5150,6 +5150,10 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
           }
           if (retry) {
             val Select(qual, name) = fun: @unchecked
+            // TODO scala/scala review P5: the retry types `args` again without an expected type, and an argument
+            // that is itself a failed application retries in turn, so `1 + (1 + (... + bd))` with `bd: BigDecimal`
+            // costs 2^depth implicit searches (69,615 at depth 12). Remembering each argument's pt-less typing would
+            // make this linear; reusing the trees of the first attempt would not, as those were typed against `pt`.
             tryTypedArgs(args, forArgMode(fun, mode)) match {
               case Some(args1) if !args1.exists(arg => arg.exists(_.isErroneous)) =>
                 val qual1 =
