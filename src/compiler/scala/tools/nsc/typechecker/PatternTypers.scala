@@ -116,9 +116,11 @@ trait PatternTypers {
       // A case class of an anonymous class, seen from outside through a value of the anonymous class's inferred
       // type (`val y = new { case class P(a: Int) }; x match { case y.P(_) => }`): that type abstracts the class to a
       // type member, so the type of the pattern would refer to the anonymous class's `this`, which is not in scope.
+      // That only matters for the outer test of the pattern: explicitouter drops it for a final class (with an
+      // "outer reference cannot be checked" warning), and such a pattern has always worked.
       def isCaseClassOfInaccessibleAnonClass = {
         val owner = caseClass.owner
-        owner.isAnonymousClass && fun.tpe.prefix.baseType(owner) == NoType
+        owner.isAnonymousClass && !caseClass.isEffectivelyFinal && fun.tpe.prefix.baseType(owner) == NoType
       }
 
       // if we're already failing, no need to emit another error here
