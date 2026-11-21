@@ -44,6 +44,8 @@ Each PR head is merged onto the base with `--no-ff`, in this order. retronym/sca
 | retronym/scala#496 | Remember failed member lookups of an import | clean |
 | retronym/scala#511 | Allocate less in Context.lookupSymbol | conflict in `Contexts.scala` with retronym/scala#268, which already avoids the closure over the imported symbol: its side is taken there. `SymbolLookup` is pooled on this branch, so the pooled lookup's `clear()` also drops the import state that #511 moves into fields and the reused `ImportCursor`'s contexts |
 
+A commit on top makes `-Yuniques-layout` default to `chunked-weak` (retronym/scala#239), so benchmarks need no `-Dscala.uniques.layout`; the property still applies when the option is not given.
+
 Cherry-picked from #11318 (`integration/2.13.x`), not in any PR above and not in 2.13.x:
 
 - Avoid allocation in Symbol.filter when all alternatives match
