@@ -1107,10 +1107,13 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     private def isDeclaredByOwner = (owner.info decl name).alternatives exists (alternatives contains _)
 
     final def isStructuralRefinementMember = owner.isStructuralRefinement && isPossibleInRefinement && isPublic
-    final def isPossibleInRefinement       = (
-         !isConstructor
-      && allOverriddenSymbols.forall(_.owner.isRefinementClass) // this includes allOverriddenSymbols.isEmpty
-    )
+    /** Equivalent to `!isConstructor && allOverriddenSymbols.forall(_.owner.isRefinementClass)`, but stops at the
+     *  first overridden symbol that is not a member of a refinement class. */
+    final def isPossibleInRefinement: Boolean =
+      !isConstructor && !(isOverridingSymbol && owner.ancestors.exists { base =>
+        val overridden = overriddenSymbol(base)
+        (overridden ne NoSymbol) && !overridden.owner.isRefinementClass
+      })
 
     /** A a member of class `base` is incomplete if
      *  (1) it is declared deferred or
