@@ -25,7 +25,25 @@ import scala.reflect.internal.settings.MutableSettings
 import scala.reflect.internal.{TreeGen => InternalTreeGen}
 import scala.reflect.io.AbstractFile
 
+/** Flags that are constant per universe.
+ *
+ *  This is `SymbolTable`'s first mixin so that its fields are set before the initializers of the others, some of which read them.
+ */
+private[reflect] trait UniverseFlags {
+  /** Is this symbol table a part of a compiler universe? */
+  final val isCompilerUniverse: Boolean = computeIsCompilerUniverse
+
+  /** The value of `isCompilerUniverse`. An override can't refer to the state of its universe, which doesn't exist yet. */
+  protected def computeIsCompilerUniverse: Boolean = false
+
+  /** Do symbols lock in `info`, `rawInfo` and `tpe_*`? Runtime reflection's do, including in `ReflectGlobal`. */
+  final val hasSynchronizedSymbols: Boolean = computeHasSynchronizedSymbols
+
+  protected def computeHasSynchronizedSymbols: Boolean = false
+}
+
 abstract class SymbolTable extends macros.Universe
+                              with UniverseFlags
                               with Collections
                               with Names
                               with Symbols
@@ -343,23 +361,32 @@ abstract class SymbolTable extends macros.Universe
   def slowButSafeEnteringPhaseNotLaterThan[T](target: Phase)(op: => T): T =
     if (isCompilerUniverse) enteringPhaseNotLaterThan(target)(op) else op
 
+  /** `nextFrom` and `next` wrap around to the head of the circular list, at `NoPhase.id`, when nothing
+   *  follows. Seen from a phase after `NoPhase`, the head is the end of the list.
+   */
+  @inline private def isEnd(it: InfoTransformer, from: Phase#Id): Boolean =
+    it.pid == NoPhase.id && from != NoPhase.id
+
   final def isValid(period: Period): Boolean =
     period != 0 && runId(period) == currentRunId && {
       val pid = phaseId(period)
-      if (phase.id > pid) nextFrom(pid).pid >= phase.id
-      else nextFrom(phase.id).pid >= pid
+      val lo = Math.min(pid, phase.id)
+      val hi = Math.max(pid, phase.id)
+      val it = nextFrom(lo)
+      isEnd(it, lo) || it.pid >= hi
     }
 
   final def isValidForBaseClasses(period: Period): Boolean = {
     @tailrec
-    def noChangeInBaseClasses(it: InfoTransformer, limit: Phase#Id): Boolean = (
-      it.pid >= limit ||
-      !it.changesBaseClasses && noChangeInBaseClasses(it.next, limit)
+    def noChangeInBaseClasses(it: InfoTransformer, from: Phase#Id, limit: Phase#Id): Boolean = (
+      isEnd(it, from) || it.pid >= limit ||
+      !it.changesBaseClasses && noChangeInBaseClasses(it.next, from, limit)
     )
     period != 0 && runId(period) == currentRunId && {
       val pid = phaseId(period)
-      if (phase.id > pid) noChangeInBaseClasses(nextFrom(pid), phase.id)
-      else noChangeInBaseClasses(nextFrom(phase.id), pid)
+      val lo = Math.min(pid, phase.id)
+      val hi = Math.max(pid, phase.id)
+      noChangeInBaseClasses(nextFrom(lo), lo, hi)
     }
   }
 
@@ -477,6 +504,8 @@ abstract class SymbolTable extends macros.Universe
 
       javaCaches foreach (_.clear())
       javaCaches = javaCaches.filter(_.isValid)
+
+      dropUniques()
     }
 
     def newWeakMap[K, V]()        = recordCache(mutable.WeakHashMap.empty[K, V])
@@ -528,9 +557,11 @@ abstract class SymbolTable extends macros.Universe
   /** The phase which has given index as identifier. */
   final val phaseWithId: Array[Phase] = Array.fill(MaxPhases)(NoPhase)
 
-  /** Is this symbol table a part of a compiler universe?
+  /** The layout of the table that hash-conses types, read when each run creates it: "weak" for
+   *  `util.WeakHashSet`, "chunked" or "chunked-weak" for a strong or weak `util.ChunkedInterner`,
+   *  or "default" for the system property `scala.uniques.layout`, else "weak".
    */
-  def isCompilerUniverse = false
+  protected[scala] def uniquesLayout: String = "default"
 
   @deprecated("use enteringPhase", "2.10.0") // Used in sbt 0.12.4
   @inline final def atPhase[T](ph: Phase)(op: => T): T = enteringPhase(ph)(op)

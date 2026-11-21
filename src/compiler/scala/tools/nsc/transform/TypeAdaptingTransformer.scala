@@ -26,6 +26,9 @@ trait TypeAdaptingTransformer { self: TreeDSL =>
 
     def typedPos(pos: Position)(tree: Tree): Tree
 
+    /** `tree`, typed, cast to `pt`: `gen.mkAttributedCast`, which types the cast with a `Typer`. */
+    protected def typedCast(tree: Tree, pt: Type): Tree = gen.mkAttributedCast(tree, pt)
+
     /**
      * scala/bug#4148: can't always replace box(unbox(x)) by x because
      *   - unboxing x may lead to throwing an exception, e.g. in "aah".asInstanceOf[Int]
@@ -102,7 +105,8 @@ trait TypeAdaptingTransformer { self: TreeDSL =>
               case ArrayClass => assert(pt.typeSymbol != ArrayClass, "array") ; tree
               case _          =>
                 val unboxer = currentRun.runDefinitions.unboxMethod(pt.typeSymbol)
-                if (settings.isDeveloper) assert(boxedClass(pt.typeSymbol).tpe <:< tree.tpe, s"${tree.tpe} is not a boxed ${pt}")
+                // `null.asInstanceOf[Int]` unboxes `null`, to the zero of the primitive type.
+                if (settings.isDeveloper) assert(tree.tpe <:< NullTpe || boxedClass(pt.typeSymbol).tpe <:< tree.tpe, s"${tree.tpe} is not a boxed ${pt}")
                 Apply(unboxer, tree)  // don't `setType pt` the Apply tree, as the Apply's fun won't be typechecked if the Apply tree already has a type
             }
         }
@@ -141,7 +145,7 @@ trait TypeAdaptingTransformer { self: TreeDSL =>
         // See scala/bug#2386 for one example of when this might be necessary.
         val needsExtraCast = isPrimitiveValueType(tree.tpe.typeArgs.head) && !isPrimitiveValueType(pt.typeArgs.head)
         val tree1 = if (needsExtraCast) gen.mkRuntimeCall(nme.toObjectArray, List(tree)) else tree
-        gen.mkAttributedCast(tree1, pt)
+        typedCast(tree1, pt)
       } else {
         tree match {
           case ld: LabelDef =>
@@ -152,7 +156,7 @@ trait TypeAdaptingTransformer { self: TreeDSL =>
             }
             deriveLabelDef(ld)(rhs => cast(rhs, pt)).setType(pt)
           case _ =>
-            gen.mkAttributedCast(tree, pt)
+            typedCast(tree, pt)
         }
       }
     }

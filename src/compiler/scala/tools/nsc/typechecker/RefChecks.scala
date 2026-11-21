@@ -83,8 +83,11 @@ abstract class RefChecks extends Transform {
   class RefCheckTransformer(@unused unit: CompilationUnit) extends AstTransformer {
     private final val indent = "  "
 
-    var localTyper: analyzer.Typer = typer
+    // A typer for each template entered, made when `localTyper` is next read.
+    private[this] val typers = new analyzer.TyperStack(typer)
+    def localTyper: analyzer.Typer = typers.typer
     var currentApplication: Tree = EmptyTree
+    private[this] val NamedApplyInfoTag = reflect.classTag[analyzer.NamedApplyInfo]
     var inAnnotation: Boolean = false
     var inPattern: Boolean = false
     @inline final def savingInPattern[A](body: => A): A = {
@@ -466,8 +469,7 @@ abstract class RefChecks extends Transform {
         /* Is the intersection between given two lists of overridden symbols empty? */
         def intersectionIsEmpty(syms1: List[Symbol], syms2: List[Symbol]) = !syms1.exists(syms2.contains)
 
-        if (memberClass == ObjectClass && otherClass == AnyClass) () // skip -- can we have a mode of symbolpairs where this pair doesn't even appear?
-        else if (typesOnly) checkOverrideTypes()
+        if (typesOnly) checkOverrideTypes()
         else {
           // o: public | protected        | package-protected  (aka java's default access)
           // ^-may be overridden by member with access privileges-v
@@ -658,6 +660,10 @@ abstract class RefChecks extends Transform {
       while (opc.hasNext) {
         if (!opc.high.isClass)
           checkOverride(opc.currentPair)
+        // A term pair is only yielded if the member types matched. Erasure's double-definition check reuses that.
+        // Java-defined members are left out: `checkOverride` cooks their raw types after they were matched.
+        if (!typesOnly && opc.low.isTerm && !opc.low.isJavaDefined && !opc.high.isJavaDefined)
+          overridingPairs.recordMatchedAtRefchecks(clazz, opc.low, opc.high)
 
         opc.next()
       }
@@ -826,7 +832,7 @@ abstract class RefChecks extends Transform {
           val nonPrivateMembers = clazz.info.nonPrivateMembersAdmitting(VBRIDGE)
           // Avoid extra allocations with reverseIterator. Filter for abstract members of interest, and bad abstract override.
           val (missing, abstractIncomplete): (List[Symbol], List[Symbol]) =
-            filtered(nonPrivateMembers.reverseIterator)(m => m.isDeferred & !ignoreDeferred(m))(m => m.isAbstractOverride && m.isIncompleteIn(clazz))
+            filtered(nonPrivateMembers.reverseIterator)(m => m.isDeferred && !ignoreDeferred(m))(m => m.isAbstractOverride && m.isIncompleteIn(clazz))
           if (missing.nonEmpty) emitErrors(missing, nonPrivateMembers)
           // Check the remainder for invalid absoverride.
           for (member <- abstractIncomplete) {
@@ -1479,7 +1485,7 @@ abstract class RefChecks extends Transform {
         case TypeRef(pre, _, args) =>
           // checking the prefix here gives us spurious errors on e.g. a private[process]
           // object which contains a type alias, which normalizes to a visible type.
-          args.filterNot(_ eq NoPrefix).flatMap(lessAccessibleSymsInType(_, memberSym))
+          args.filterNot(_.isNoPrefix).flatMap(lessAccessibleSymsInType(_, memberSym))
         case _ =>
           Nil
       }
@@ -1772,11 +1778,9 @@ abstract class RefChecks extends Transform {
     private def transformCaseApply(tpe: Type, pos: Position) = {
       val rtpe = tpe.finalResultType
       assert(rtpe.typeSymbol hasFlag CASE, tpe)
-      localTyper.typedOperator {
-        atPos(pos) {
-          Select(New(TypeTree(rtpe)), rtpe.typeSymbol.primaryConstructor)
-        }
-      }
+      // What `localTyper.typedOperator` would assign: a constructor selected from `new` needs no context.
+      val ctor = rtpe.typeSymbol.primaryConstructor
+      atPos(pos)(Select(New(TypeTree(rtpe)) setType rtpe, ctor)) setType rtpe.memberType(ctor)
     }
 
     private def transformApplication(tree: Tree, fun: Tree, @unused targs: List[Tree], argss: List[List[Tree]]): Tree = {
@@ -2026,7 +2030,7 @@ abstract class RefChecks extends Transform {
     } // end checkInterestingResultInStatement
 
     override def transform(tree: Tree): Tree = {
-      val savedLocalTyper = localTyper
+      val savedDepth = typers.depth
       val savedCurrentApplication = currentApplication
       try {
         val sym = tree.symbol
@@ -2066,7 +2070,7 @@ abstract class RefChecks extends Transform {
             r.transform(this)
 
           case Template(_, _, body) =>
-            localTyper = localTyper.atOwner(tree, currentOwner)
+            typers.enter(tree, currentOwner)
             for (stat <- body)
               if (!checkInterestingResultInStatement(stat) && treeInfo.isPureExprForWarningPurposes(stat)) {
                 val msg = "a pure expression does nothing in statement position"
@@ -2282,6 +2286,11 @@ abstract class RefChecks extends Transform {
 
         checkUnexpandedMacro(result)
 
+        // RefChecks is the last phase to consult NamedApplyInfo; dropping it here frees the typer
+        // and context chain it holds, which would otherwise be copied onto the trees of later phases.
+        if (result.hasAttachment[analyzer.NamedApplyInfo](NamedApplyInfoTag))
+          result.removeAttachment[analyzer.NamedApplyInfo](NamedApplyInfoTag)
+
         result
       } catch {
         case ex: TypeError =>
@@ -2289,7 +2298,7 @@ abstract class RefChecks extends Transform {
           reporter.error(tree.pos, ex.getMessage())
           tree
       } finally {
-        localTyper = savedLocalTyper
+        typers.depth = savedDepth
         currentApplication = savedCurrentApplication
       }
     }

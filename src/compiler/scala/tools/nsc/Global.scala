@@ -55,7 +55,7 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
 
   // the mirror --------------------------------------------------
 
-  override def isCompilerUniverse = true
+  override protected def computeIsCompilerUniverse = true
   override val useOffsetPositions = !currentSettings.Yrangepos.value
 
   type RuntimeClass = java.lang.Class[_]
@@ -89,6 +89,7 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
   // alternate constructors ------------------------------------------
 
   override def settings = currentSettings
+  override protected def nameTableKind: String = settings.YnameTable.value
 
   override def isSymbolLockTracingEnabled = settings.cyclic.value
 
@@ -1143,6 +1144,13 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
   /** The id of the currently active run
    */
   override def currentRunId = curRunId
+  /** `-Yuniques-layout` if given; otherwise `-Dscala.uniques.layout`, so that a benchmark can choose the
+   *  layout without a compiler option, else the option's default.
+   */
+  override protected[scala] def uniquesLayout: String = {
+    val layout = settings.YuniquesLayout
+    if (layout.isSetByUser) layout.value else System.getProperty("scala.uniques.layout", layout.value)
+  }
 
   def echoPhaseSummary(ph: Phase) = {
     /* Only output a summary message under debug if we aren't echoing each file. */

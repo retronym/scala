@@ -283,6 +283,7 @@ trait ScalaSettings extends StandardScalaSettings with Warnings { _: MutableSett
   val breakCycles     = BooleanSetting    ("-Ybreak-cycles", "Attempt to break cycles encountered during typing")
   val check           = PhasesSetting     ("-Ycheck", "Check the tree at the end of")
   val Ycompacttrees   = BooleanSetting    ("-Ycompact-trees", "Use compact tree printer when displaying trees.")
+  val YnameTable      = ChoiceSetting     ("-Yname-table", "store", "How names are stored: one char array, a String per name, or Strings in a table shared between compilers.", List("chars", "string", "shared"), "shared")
   val noCompletion    = BooleanSetting    ("-Yno-completion", "Disable tab-completion in the REPL.")
   val termConflict    = ChoiceSetting     ("-Yresolve-term-conflict", "strategy", "Resolve term conflicts.", List("package", "object", "error"), "error")
   val Ynogenericsig   = BooleanSetting    ("-Yno-generic-signatures", "Suppress generation of generic signatures for Java.")
@@ -364,6 +365,7 @@ trait ScalaSettings extends StandardScalaSettings with Warnings { _: MutableSett
   val unsafe = MultiStringSetting("-Yrelease", "packages", "Expose platform packages hidden under --release")
   val exposeEmptyPackage = BooleanSetting ("-Yexpose-empty-package", "Internal only: expose the empty package.").internalOnly()
   val Ydelambdafy        = ChoiceSetting  ("-Ydelambdafy", "strategy", "Strategy used for translating lambdas into JVM code.", List("inline", "method"), "method")
+  val YuniquesLayout     = ChoiceSetting  ("-Yuniques-layout", "layout", "The type interner's table layout for each run; if not given, -Dscala.uniques.layout, else chunked-weak.", List("default", "weak", "chunked", "chunked-weak"), "chunked-weak").internalOnly()
 
   // Allows a specialised jar to be written. For instance one that provides stable hashing of content, or customisation of the file storage
   val YjarFactory = StringSetting   ("-YjarFactory", "classname", "factory for jar files", classOf[DefaultJarFactory].getName)
@@ -562,6 +564,7 @@ trait ScalaSettings extends StandardScalaSettings with Warnings { _: MutableSett
   def optWarningNoInlineMissingBytecode            = optWarnings.contains(optWarningsChoices.noInlineMissingBytecode)
   def optWarningNoInlineMissingScalaInlineInfoAttr = optWarnings.contains(optWarningsChoices.noInlineMissingScalaInlineInfoAttr)
 
+  val YeagerTypingTransformerContexts = BooleanSetting("-Yeager-typing-transformer-contexts", "Make the contexts of typing transformers eagerly, at each owner (for comparison).").internalOnly()
   val YprofileEnabled = BooleanSetting("-Yprofile-enabled", "Enable profiling.")
   val YprofileDestination = StringSetting("-Yprofile-destination", "file", "Profiling output - specify a file or `-` for console.", "").
     withPostSetHook( _ => YprofileEnabled.value = true )

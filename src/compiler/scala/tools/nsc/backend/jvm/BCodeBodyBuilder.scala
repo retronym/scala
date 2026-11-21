@@ -209,7 +209,7 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
           genLoadTo(thenp, resKind, LoadDestination.Jump(postIf))
           markProgramPoint(failure)
           genLoadTo(elsep, resKind, LoadDestination.FallThrough)
-          markProgramPoint(postIf)
+          markJoinPoint(postIf)
           resKind
         } else {
           genLoad(thenp, UNIT)
@@ -297,7 +297,7 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
           if (rhs == EmptyTree) { emitZeroOf(tk) }
           else { genLoad(rhs, tk) }
           bc.store(idx, tk)
-          val localVarStart = currProgramPoint()
+          val localVarStart = currPositionLabel()
           if (!isSynth) { // there are case <synthetic> ValDef's emitted by patmat
             varsInScope ::= (sym -> localVarStart)
           }
@@ -447,10 +447,11 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
     } // end of GenBCode.genLoad()
 
     def genAdaptAndSendToDest(generatedType: BType, expectedType: BType, dest: LoadDestination): Unit = {
-      if (generatedType != expectedType)
+      // OPT avoid emitting code that DCE would have to remove, typically after a branch of a `match` has jumped away
+      if (generatedType != expectedType && !isAtUnreachablePoint)
         adapt(generatedType, expectedType)
 
-      dest match {
+      if (!isAtUnreachablePoint) dest match {
         case LoadDestination.FallThrough =>
           ()
         case LoadDestination.Jump(label) =>
@@ -868,7 +869,7 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
       }
 
       if (postMatch != null)
-        markProgramPoint(postMatch)
+        markJoinPoint(postMatch)
       generatedType
     }
 
@@ -937,7 +938,7 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
           val label = new asm.Label
           jumpDest += ((sym -> JumpDestination.LoadArgTo(expectedType, LoadDestination.Jump(label))))
           stats foreach genStat
-          markProgramPoint(label)
+          markJoinPoint(label)
         } else {
           jumpDest += ((sym -> JumpDestination.LoadArgTo(expectedType, dest)))
           stats foreach genStat
@@ -975,7 +976,7 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
      */
     def emitLocalVarScopes(): Unit = {
       if (emitVars) {
-        val end = currProgramPoint()
+        val end = currPositionLabel()
         for ((sym, start) <- varsInScope.reverse) { emitLocalVarScope(sym, start, end) }
       }
     }

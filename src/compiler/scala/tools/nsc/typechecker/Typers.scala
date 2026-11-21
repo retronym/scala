@@ -121,6 +121,142 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
   private final val typerFreshNameCreators = perRunCaches.newAnyRefMap[Symbol, FreshNameCreator]()
   def freshNameCreatorFor(context: Context) = typerFreshNameCreators.getOrElseUpdate(context.outermostContextAtCurrentPos.enclClassOrMethod.owner, new FreshNameCreator)
 
+  /** Does the context of tree `tree` require a stable type?
+   *  It reads no typer state, so a phase after typer can ask without a typer (or a context) at hand.
+   */
+  private[nsc] def isStableContext(tree: Tree, mode: Mode, pt: Type) = {
+    def ptSym = pt.typeSymbol
+    def expectsStable = (
+         pt.isStable
+      || mode.inQualMode && !tree.symbol.isConstant
+      || !(tree.tpe <:< pt) && (ptSym.isAbstractType && pt.lowerBound.isStable || ptSym.isRefinementClass)
+    )
+    def isNarrowable(tpe: Type): Boolean = unwrapWrapperTypes(tpe) match {
+      case TypeRef(_, _, _) | RefinedType(_, _) => true
+      case tpe                                  => !isConstantType(tpe) && !phase.erasedTypes
+    }
+    (    isNarrowable(tree.tpe)
+      && mode.typingExprNotLhs
+      && expectsStable
+    )
+  }
+
+  /** `Typer.stabilize`. It reads `typer`, and its context, only to report an error or to resolve an
+   *  overloaded symbol: a caller that has ruled those out can pass `null`.
+   */
+  private[nsc] def stabilize(tree: Tree, pre: Type, mode: Mode, pt: Type, typer: Typer): Tree = {
+
+    val sym = {
+      // inferExprAlternative side-effects the tree's symbol.
+      if (tree.symbol.isOverloaded && !mode.inFunMode)
+        typer.infer.inferExprAlternative(tree, pt)
+      tree.symbol
+    }
+    val isStableIdPattern = mode.typingPatternNotConstructor && tree.isTerm
+    def isModuleTypedExpr = (
+         treeInfo.admitsTypeSelection(tree)
+      && (isStableContext(tree, mode, pt) || sym.isModuleNotMethod)
+    )
+    def isStableValueRequired = (
+         isStableIdPattern
+      || mode.in(all = EXPRmode, none = QUALmode) && !phase.erasedTypes
+    )
+    // To fully benefit from special casing the return type of
+    // getClass, we have to catch it immediately so expressions like
+    // x.getClass().newInstance() are typed with the type of x.
+    // For non-public classes, this aligns with Scala 3 under -Xsource:3: a private class
+    // can then escape into the inferred type of a non-private member (neg/t12974-escape).
+    def isGetClassCall = isGetClass(sym) && (pre.typeSymbol.isPublic || currentRun.isScala3)
+
+    if (tree.isErrorTyped)
+      tree
+    else if (!sym.isValue && isStableValueRequired) // (2)
+      typer.TyperErrorGen.NotAValueError(tree, sym)
+    else if (isStableIdPattern)                     // (1)
+      if (!treeInfo.isStableIdentifierPattern(tree)) typer.TyperErrorGen.UnstableTreeError(tree)
+      else if (sym.isModuleNotMethod) tree.setType(singleType(pre, sym))
+      else tree
+    else if (isModuleTypedExpr)                     // (3)
+      tree.setType(singleType(pre, sym))
+    else if (isGetClassCall)                        // (4)
+      tree.setType(MethodType(Nil, getClassReturnType(pre)))
+    else
+      tree
+  }
+
+  /** A reference to a stable method with no parameters gets the singleton type of its result where the
+   *  context requires a stable type. Like `isStableContext`, it reads no typer state.
+   */
+  private[nsc] def stabilizeFun(tree: Tree, mode: Mode, pt: Type): Tree = {
+    val sym = tree.symbol
+    val pre = tree match {
+      case Select(qual, _) => qual.tpe
+      case _               => NoPrefix
+    }
+    def stabilizable = (
+         pre.isStable
+      && sym.tpe.params.isEmpty
+      && (isStableContext(tree, mode, pt) || sym.isModule)
+    )
+    tree.tpe match {
+      case MethodType(_, _) if stabilizable => tree setType MethodType(Nil, singleType(pre, sym)) // TODO: should this be a NullaryMethodType?
+      case _                                => tree
+    }
+  }
+
+  /** A stack of the trees and owners a transformer has entered, and a typer for the innermost, each level's
+   *  made with `atOwner` on the one below it (or on `root`) when `typer` is next read. A phase after typer
+   *  that enters every template but types in few of them makes few typers and contexts.
+   *
+   *  `depth` saves and restores the stack around a step of the traversal: a typer made for a level stays
+   *  valid while that level is entered.
+   */
+  final class TyperStack(root: Typer) {
+    private[this] var trees     = new Array[Tree](16)
+    private[this] var owners    = new Array[Symbol](16)
+    private[this] var fromRoot  = new Array[Boolean](16)
+    private[this] var typers    = new Array[Typer](16)
+    private[this] var depth0    = 0
+    private[this] var made      = 0
+
+    /** Enters `tree` and `owner`, with a typer made on the enclosing level's. */
+    def enter(tree: Tree, owner: Symbol): Unit = push(tree, owner, isRoot = false)
+    /** Enters `tree` and `owner`, with a typer made on `root`, not on the enclosing level's. */
+    def enterFromRoot(tree: Tree, owner: Symbol): Unit = push(tree, owner, isRoot = true)
+
+    private def push(tree: Tree, owner: Symbol, isRoot: Boolean): Unit = {
+      val i = depth0
+      if (i == trees.length) {
+        trees = java.util.Arrays.copyOf(trees, i * 2)
+        owners = java.util.Arrays.copyOf(owners, i * 2)
+        fromRoot = java.util.Arrays.copyOf(fromRoot, i * 2)
+        typers = java.util.Arrays.copyOf(typers, i * 2)
+      }
+      trees(i) = tree
+      owners(i) = owner
+      fromRoot(i) = isRoot
+      depth0 = i + 1
+    }
+
+    def depth: Int = depth0
+    /** Leaves the levels above `d`. */
+    def depth_=(d: Int): Unit = {
+      depth0 = d
+      if (made > d) made = d
+    }
+
+    /** The typer for the innermost level entered, made now if it was not. */
+    def typer: Typer = {
+      while (made < depth0) {
+        val i = made
+        val base = if (i == 0 || fromRoot(i)) root else typers(i - 1)
+        typers(i) = base.atOwner(trees(i), owners(i))
+        made = i + 1
+      }
+      if (depth0 == 0) root else typers(depth0 - 1)
+    }
+  }
+
   abstract class Typer(context0: Context) extends TyperDiagnostics with Adaptation with Tag with PatternTyper with TyperContextErrors {
     private def unit = context.unit
     import typeDebug.ptTree
@@ -150,12 +286,6 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
     // requiring both the ACCESSOR and the SYNTHETIC bits to trigger the exemption
     private def isSyntheticAccessor(sym: Symbol) = sym.isAccessor && (!sym.isLazy || isPastTyper)
 
-    // when type checking during erasure, generate erased types in spots that aren't transformed by erasure
-    // (it erases in TypeTrees, but not in, e.g., the type a Function node)
-    def phasedAppliedType(sym: Symbol, args: List[Type]) = {
-      val tp = appliedType(sym, args)
-      if (phase.erasedTypes) erasure.specialScalaErasureFor(sym)(tp) else tp
-    }
 
     def typedDocDef(docDef: DocDef, mode: Mode, pt: Type): Tree =
       typed(docDef.definition, mode, pt)
@@ -461,25 +591,6 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       }
     }
 
-    /** Does the context of tree `tree` require a stable type?
-     */
-    private def isStableContext(tree: Tree, mode: Mode, pt: Type) = {
-      def ptSym = pt.typeSymbol
-      def expectsStable = (
-           pt.isStable
-        || mode.inQualMode && !tree.symbol.isConstant
-        || !(tree.tpe <:< pt) && (ptSym.isAbstractType && pt.lowerBound.isStable || ptSym.isRefinementClass)
-      )
-      def isNarrowable(tpe: Type): Boolean = unwrapWrapperTypes(tpe) match {
-        case TypeRef(_, _, _) | RefinedType(_, _) => true
-        case tpe                                  => !isConstantType(tpe) && !phase.erasedTypes
-      }
-      (    isNarrowable(tree.tpe)
-        && mode.typingExprNotLhs
-        && expectsStable
-      )
-    }
-
     /** Make symbol accessible. This means:
      *  If symbol refers to package object, insert `.package` as second to last selector.
      *  (exception for some symbols in scala package which are dealiased immediately)
@@ -522,62 +633,9 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
      *  3. Turn tree type into stable type if possible and required by context.
      *  4. Give getClass calls a more precise type based on the type of the target of the call.
      */
-    protected def stabilize(tree: Tree, pre: Type, mode: Mode, pt: Type): Tree = {
+    private[nsc] def stabilize(tree: Tree, pre: Type, mode: Mode, pt: Type): Tree = Typers.this.stabilize(tree, pre, mode, pt, this)
 
-      val sym = {
-        // inferExprAlternative side-effects the tree's symbol.
-        if (tree.symbol.isOverloaded && !mode.inFunMode)
-          inferExprAlternative(tree, pt)
-        tree.symbol
-      }
-      val isStableIdPattern = mode.typingPatternNotConstructor && tree.isTerm
-      def isModuleTypedExpr = (
-           treeInfo.admitsTypeSelection(tree)
-        && (isStableContext(tree, mode, pt) || sym.isModuleNotMethod)
-      )
-      def isStableValueRequired = (
-           isStableIdPattern
-        || mode.in(all = EXPRmode, none = QUALmode) && !phase.erasedTypes
-      )
-      // To fully benefit from special casing the return type of
-      // getClass, we have to catch it immediately so expressions like
-      // x.getClass().newInstance() are typed with the type of x.
-      // For non-public classes, this aligns with Scala 3 under -Xsource:3: a private class
-      // can then escape into the inferred type of a non-private member (neg/t12974-escape).
-      def isGetClassCall = isGetClass(sym) && (pre.typeSymbol.isPublic || currentRun.isScala3)
-
-      if (tree.isErrorTyped)
-        tree
-      else if (!sym.isValue && isStableValueRequired) // (2)
-        NotAValueError(tree, sym)
-      else if (isStableIdPattern)                     // (1)
-        if (!treeInfo.isStableIdentifierPattern(tree)) UnstableTreeError(tree)
-        else if (sym.isModuleNotMethod) tree.setType(singleType(pre, sym))
-        else tree
-      else if (isModuleTypedExpr)                     // (3)
-        tree.setType(singleType(pre, sym))
-      else if (isGetClassCall)                        // (4)
-        tree.setType(MethodType(Nil, getClassReturnType(pre)))
-      else
-        tree
-    }
-
-    def stabilizeFun(tree: Tree, mode: Mode, pt: Type): Tree = {
-      val sym = tree.symbol
-      val pre = tree match {
-        case Select(qual, _) => qual.tpe
-        case _               => NoPrefix
-      }
-      def stabilizable = (
-           pre.isStable
-        && sym.tpe.params.isEmpty
-        && (isStableContext(tree, mode, pt) || sym.isModule)
-      )
-      tree.tpe match {
-        case MethodType(_, _) if stabilizable => tree setType MethodType(Nil, singleType(pre, sym)) // TODO: should this be a NullaryMethodType?
-        case _                                => tree
-      }
-    }
+    def stabilizeFun(tree: Tree, mode: Mode, pt: Type): Tree = Typers.this.stabilizeFun(tree, mode, pt)
 
     @deprecated("Use the overload accepting a Type.", "2.12.9")
     def member(qual: Tree, name: Name): Symbol = member(qual.tpe, name)
@@ -2181,7 +2239,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
         rightAssocValDefs += ((sym, vdef1.rhs))
       if (vdef.hasAttachment[PatVarDefAttachment.type]) {
         sym.updateAttachment(PatVarDefAttachment)
-        if (sym.isSynthetic && sym.owner.isClass && (tpt1.tpe eq UnitTpe))
+        if (sym.isSynthetic && sym.owner.isClass && (tpt1.tpe == UnitTpe))
           if (sym.isPrivateThis && vdef.mods.isPrivateLocal && !sym.enclClassChain.exists(_.isInterpreterWrapper))
             context.warning(vdef.pos,
               s"Pattern definition introduces Unit-valued member of ${sym.owner.name}; consider wrapping it in `locally { ... }`.",
@@ -3013,7 +3071,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
                   NoType
               }
 
-            if (samTp eq NoType) false
+            if (samTp.isNoType) false
             else {
               /* Make a synthetic class symbol to represent the synthetic class that
              * will be spun up by LMF for this function. This is necessary because
@@ -3267,7 +3325,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
         else {
           val resTp =
             packedType(bodyTyped, fun.symbol).resultType.deconst match {
-              case ct: ConstantType if (bodyPt eq WildcardType) || (ct.widen <:< bodyPt) => ct.widen
+              case ct: ConstantType if bodyPt.isWildcardType || (ct.widen <:< bodyPt) => ct.widen
               case tp                                                                    => tp
             }
 
@@ -3567,9 +3625,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
           // less expensive than including them in inferMethodAlternative (see below).
           def shapeType(arg: Tree): Type = arg match {
             case Function(vparams, body) =>
-              // No need for phasedAppliedType, as we don't get here during erasure --
-              // overloading resolution happens during type checking.
-              // During erasure, the condition above (fun.symbol.isOverloaded) is false.
+              // We don't get here after typer: overloading resolution happens during type checking.
               functionType(vparams.map(_ => AnyTpe), shapeType(body))
             case Match(EmptyTree, _) => // A partial function literal
               appliedType(PartialFunctionClass, AnyTpe :: NothingTpe :: Nil)
@@ -6309,10 +6365,14 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       }
 
       // begin typed1
+      // Test for the class AbstractTypTree rather than the trait TypTree: most trees are not type trees,
+      // and a failed class test is cheaper than a failed interface test. SelectFromTypeTree is the only
+      // TypTree that is not an AbstractTypTree.
       tree match {
-        case tree: TypTree   => typedTypTree(tree)
-        case tree: MemberDef => typedMemberDef(tree)
-        case _               => typedInAnyMode(tree)
+        case tree: AbstractTypTree    => typedTypTree(tree)
+        case tree: MemberDef          => typedMemberDef(tree)
+        case tree: SelectFromTypeTree => typedTypTree(tree)
+        case _                        => typedInAnyMode(tree)
       }
     }
 

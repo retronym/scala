@@ -433,4 +433,56 @@ class TypesTest {
     assertTrue(typeOf[Nil.type @ann[T] forSome { type T }].isStable)
     assertFalse(typeOf[x.type forSome { val x: String }].isStable)
   }
+
+  trait In0; trait In1; trait In2
+
+  @Test
+  def testRefinedMapOverFlattensParents(): Unit = {
+    def replaceIn0(by: Type) = new TypeMap {
+      def apply(tp: Type): Type = if (tp.typeSymbol == typeOf[In0].typeSymbol) by else mapOver(tp)
+    }
+    def parentsAfter(by: Type) = replaceIn0(by)(typeOf[In0 with In1]) match {
+      case RefinedType(parents, _) => parents
+      case tp                      => fail(s"not a refinement: $tp"); Nil
+    }
+    assertEquals(typeOf[In1] :: typeOf[In2] :: typeOf[In1] :: Nil, parentsAfter(typeOf[In1 with In2]))
+    // A parent with declarations has to stay as it is, or they would be lost.
+    val withDecl = typeOf[In2 { def foo: Int }]
+    assertEquals(withDecl :: typeOf[In1] :: Nil, parentsAfter(withDecl))
+  }
+
+  // Each `::` in `in0 :: in1 :: in2 :: Nil` takes the lub of its element with those so far.
+  @Test
+  def testExtrapolatedLubOfInvariantHasFlatParents(): Unit = {
+    def foo(arg: Type) = appliedType(typeOf[Foo[Any]].typeConstructor, arg)
+    val tail = lub(foo(typeOf[In1]) :: foo(typeOf[In2]) :: Nil)
+    lub(foo(typeOf[In0]) :: tail :: Nil) match {
+      case ExistentialType(quantified :: Nil, _) =>
+        quantified.info.lowerBound match {
+          case RefinedType(parents, _) =>
+            assertEquals(parents.toString, List[Type](typeOf[In2], typeOf[In1], typeOf[In0]).map(_.typeSymbol).toSet, parents.map(_.typeSymbol).toSet)
+          case tp => fail(s"lower bound is not a refinement: $tp")
+        }
+      case tp => fail(s"lub is not existential: $tp")
+    }
+  }
+
+  @Test
+  def uniqueTypesCompareStructurally(): Unit = {
+    // Types made by `unique` must not rely on being the same instance to be =:=.
+    // Make a second instance of each, bypassing the uniques table, as happens when
+    // the table is cleared while types made before the clear are still cached.
+    def check(t1: Type, t2: Type): Unit = {
+      assertTrue(t1 ne t2)
+      assertTrue(s"$t1 =:= $t2", t1 =:= t2)
+      assertTrue(s"$t1 <:< $t2", t1 <:< t2)
+    }
+    val thisList = ThisType(ListClass)
+    check(SuperType(thisList, AnyRefTpe), new UniqueSuperType(thisList, AnyRefTpe))
+    check(ErasedValueType(ListClass, IntTpe), new UniqueErasedValueType(ListClass, IntTpe))
+    check(thisList, new UniqueThisType(ListClass))
+    check(SingleType(ThisType(ScalaPackageClass), PredefModule), new UniqueSingleType(ThisType(ScalaPackageClass), PredefModule))
+    check(TypeBounds(NothingTpe, AnyTpe), new UniqueTypeBounds(NothingTpe, AnyTpe))
+    check(ConstantType(Constant(1)), new UniqueConstantType(Constant(1)))
+  }
 }

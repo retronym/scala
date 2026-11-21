@@ -164,7 +164,7 @@ trait Infer extends Checkable {
 
   /** Is type fully defined, i.e. no embedded anytypes or wildcards in it?
    */
-  private[typechecker] def isFullyDefined(tp: Type): Boolean = tp match {
+  private[nsc] def isFullyDefined(tp: Type): Boolean = tp match {
     case _: ProtoType | NoType                       => false
     case NoPrefix | ThisType(_) | ConstantType(_)    => true
     case TypeRef(pre, _, args)                       => isFullyDefined(pre) && (args forall isFullyDefined)
@@ -183,7 +183,7 @@ trait Infer extends Checkable {
    *  @param upper      When `true` search for max solution else min.
    *  @throws NoInstance
    */
-  def solvedTypes(tvars: List[TypeVar], tparams: List[Symbol], getVariance: Variance.Extractor[Symbol], upper: Boolean, depth: Depth): List[Type] = {
+  def solvedTypes(tvars: List[TypeVar], tparams: List[Symbol], getVariance: Variance.Extractor[Symbol], upper: Boolean, depth: => Depth): List[Type] = {
     if (tvars.isEmpty) Nil else {
       printTyping("solving for " + parentheses(map2(tparams, tvars)((p, tv) => s"${p.name}: $tv")))
       // !!! What should be done with the return value of "solve", which is at present ignored?
@@ -292,7 +292,14 @@ trait Infer extends Checkable {
       if (sym.isError)
         tree.setSymbol(sym).setType(ErrorType)
       else {
-        val accessible = sym.filter(context.isAccessible(_, pre, site.isInstanceOf[Super])) match {
+        val superAccess = site.isInstanceOf[Super]
+        // OPT: the same as `sym.filter(context.isAccessible(_, pre, superAccess))`, without a closure
+        // for the usual case of a symbol that is not overloaded.
+        val filtered =
+          if (sym.isOverloaded) sym.filter(context.isAccessible(_, pre, superAccess))
+          else if ((sym eq NoSymbol) || context.isAccessible(sym, pre, superAccess)) sym
+          else NoSymbol
+        val accessible = filtered match {
           case NoSymbol if sym.isJavaDefined && context.unit.isJava => sym  // don't try to second guess Java; see #4402
           case sym1                                                 => sym1
         }
@@ -313,7 +320,7 @@ trait Infer extends Checkable {
               case _: SuperType if !sym.isConstructor && !owntype.isInstanceOf[OverloadedType] =>
                 owntype.map((tp: Type) => if (tp eq pre) site.symbol.thisType else tp)
               case _ =>
-                if ((owntype eq ObjectTpe) && isJava) ObjectTpeJava
+                if (isJava && owntype == ObjectTpe) ObjectTpeJava
                 else owntype
             }
           tree.setSymbol(sym1).setType(owntype1)
@@ -337,7 +344,7 @@ trait Infer extends Checkable {
       )
       def isCompatibleSam(tp: Type, pt: Type): Boolean = (definitions.isFunctionType(tp) || definitions.isPartialFunctionType(tp) || tp.isInstanceOf[MethodType] || tp.isInstanceOf[PolyType]) &&  {
         val samFun = samToFunctionType(pt)
-        (samFun ne NoType) && isCompatible(tp, samFun)
+        !samFun.isNoType && isCompatible(tp, samFun)
       }
 
       // can only compare if both types are repeated or neither is (T* is not actually a first-class type, even though it has a BTS and thus participates in subtyping)
@@ -817,12 +824,34 @@ trait Infer extends Checkable {
           case ExistentialType(_, qtpe)  => isApplicable(undetparams, qtpe, argtpes0, pt)
           case mt@MethodType(_, _)       => isApplicableToMethod(undetparams, mt, argtpes0, pt)
           case NullaryMethodType(restpe) => isApplicable(undetparams, restpe, argtpes0, pt)
+          case PolyType(_, mt: MethodType) if !arityAdmitsApplication(mt, argtpes0) => false
           case PolyType(tparams, restpe) => createFromClonedSymbols(tparams, restpe)((tps1, res1) => isApplicable(tps1 ::: undetparams, res1, argtpes0, pt))
           case ErrorType                 => true
           case _                         => false
         }
 //      println(s"isApplicable $res : $ftpe to $argtpes0 for $pt under $undetparams")
       res
+    }
+
+    /** False only if `isApplicableToMethod(_, mt, argtpes0, _)` is certain to be false
+     *  on the basis of the number of arguments alone.
+     *
+     *  Mirrors the length dispatch in `isApplicableToMethod`: when the argument count
+     *  differs from the (vararg-expanded) formal count, it only recurses if defaults can
+     *  fill missing parameters or the arguments can be tupled. Nothing consulted here
+     *  (parameter count, repeatedness, default flags) changes when the enclosing
+     *  `PolyType`'s type params are cloned and substituted, so `isApplicable` can use it
+     *  to skip that cloning for alternatives that cannot match.
+     */
+    private def arityAdmitsApplication(mt: MethodType, argtpes0: List[Type]): Boolean = {
+      val paramTypes = mt.paramTypes
+      val numArgs    = argtpes0.length
+      val numParams  = paramTypes.length
+      val numFormals =
+        if (isVarArgTypes(paramTypes)) numParams - 1 + math.max(0, numArgs - numParams + 1)
+        else numParams
+      def canTuple = !argtpes0.exists(isRepeatedParamType) && eligibleForTupleConversion(paramTypes, numArgs)
+      numFormals == numArgs || mt.params.exists(_.hasDefault) || canTuple
     }
 
     /**
@@ -1381,7 +1410,7 @@ trait Infer extends Checkable {
             val tp1 = memberTypeForSpecificity(pre, sym1, tree)
             val tp2 = memberTypeForSpecificity(pre, sym2, tree)
 
-            (    (tp2 eq ErrorType)
+            (    tp2.isErrorType
               || isWeaklyCompatible(tp1, pt) && !isWeaklyCompatible(tp2, pt)
               || isStrictlyMoreSpecific(tp1, tp2, sym1, sym2)
             )
