@@ -2051,30 +2051,29 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       if (isOverloaded) info.asInstanceOf[OverloadedType].alternatives
       else this :: Nil
 
-    def filter(cond: Symbol => Boolean): Symbol =
-      if (isOverloaded) {
-        var changed = false
-        var alts0: List[Symbol] = alternatives
-        var alts1: List[Symbol] = Nil
-
-        while (!alts0.isEmpty) {
-          if (cond(alts0.head))
-            alts1 ::= alts0.head
-          else
-            changed = true
-
-          alts0 = alts0.tail
-        }
-
-        if (!changed) this
-        else if (alts1.isEmpty) NoSymbol
-        else if (alts1.tail.isEmpty) alts1.head
-        else owner.newOverloaded(info.prefix, alts1.reverse)
-      }
-      else if (cond(this)) this
+    /** The alternatives of this symbol that satisfy `cond`: this symbol if all do, `NoSymbol` if none do.
+     *
+     *  Final and small so that the optimizer can inline it, and with it the call to `cond`, at the call site.
+     *  The overloaded case, which is rarer and has a loop, stays out of line in `filterAlternatives`,
+     *  which is `@noinline` so that the higher-order-method heuristic does not inline it with its closure argument.
+     */
+    @inline final def filter(cond: Symbol => Boolean): Symbol =
+      if (isOverloaded) filterAlternatives(cond)
+      else if (this.isInstanceOf[NoSymbol] || cond(this)) this
       else NoSymbol
 
-    def suchThat(cond: Symbol => Boolean): Symbol = {
+    @noinline private[Symbols] final def filterAlternatives(cond: Symbol => Boolean): Symbol = {
+      // List.filter returns the original list without allocating when all elements satisfy `cond`,
+      // and otherwise shares the longest satisfying suffix.
+      val alts = alternatives
+      val filtered = alts.filter(cond)
+      if (filtered eq alts) this
+      else if (filtered.isEmpty) NoSymbol
+      else if (filtered.tail.isEmpty) filtered.head
+      else owner.newOverloaded(info.prefix, filtered)
+    }
+
+    @inline final def suchThat(cond: Symbol => Boolean): Symbol = {
       val result = filter(cond)
       assert(!result.isOverloaded, result.alternatives)
       result
@@ -3732,7 +3731,6 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     override def companionModule = NoSymbol
     override def companionSymbol = NoSymbol
     override def isSubClass(that: Symbol) = false
-    override def filter(cond: Symbol => Boolean) = this
     override def defString: String = toString
     override def locationString: String = ""
     override def enclClassChain = Nil

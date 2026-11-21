@@ -292,7 +292,14 @@ trait Infer extends Checkable {
       if (sym.isError)
         tree.setSymbol(sym).setType(ErrorType)
       else {
-        val accessible = sym.filter(context.isAccessible(_, pre, site.isInstanceOf[Super])) match {
+        val superAccess = site.isInstanceOf[Super]
+        // OPT: the same as `sym.filter(context.isAccessible(_, pre, superAccess))`, without a closure
+        // for the usual case of a symbol that is not overloaded.
+        val filtered =
+          if (sym.isOverloaded) sym.filter(context.isAccessible(_, pre, superAccess))
+          else if ((sym eq NoSymbol) || context.isAccessible(sym, pre, superAccess)) sym
+          else NoSymbol
+        val accessible = filtered match {
           case NoSymbol if sym.isJavaDefined && context.unit.isJava => sym  // don't try to second guess Java; see #4402
           case sym1                                                 => sym1
         }
