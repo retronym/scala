@@ -1144,7 +1144,13 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
   /** The id of the currently active run
    */
   override def currentRunId = curRunId
-  override protected[scala] def uniquesLayout: String = settings.YuniquesLayout.value
+  /** `-Yuniques-layout` if given; otherwise `-Dscala.uniques.layout`, so that a benchmark can choose the
+   *  layout without a compiler option, else the option's default.
+   */
+  override protected[scala] def uniquesLayout: String = {
+    val layout = settings.YuniquesLayout
+    if (layout.isSetByUser) layout.value else System.getProperty("scala.uniques.layout", layout.value)
+  }
 
   def echoPhaseSummary(ph: Phase) = {
     /* Only output a summary message under debug if we aren't echoing each file. */
