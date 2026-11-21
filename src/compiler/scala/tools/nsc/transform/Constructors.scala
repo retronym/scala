@@ -54,7 +54,11 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
       if (uninitializedVals.size > 1)
         log("Checking constructor for init order issues among: " + uninitializedVals.toList.map(_.name.toString.trim).distinct.sorted.mkString(", "))
 
-      for (stat <- stats) {
+      // No warning is possible once every candidate val has been defined.
+      var remaining = stats
+      while (uninitializedVals.nonEmpty && remaining.nonEmpty) {
+        val stat = remaining.head
+        remaining = remaining.tail
         // Checking the qualifier symbol is necessary to prevent a selection on
         // another instance of the same class from potentially appearing to be a forward
         // reference on the member in the current class.
@@ -157,8 +161,7 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
    * as required by DelayedInit.
    */
   private trait OmittablesHelper {
-    def computeOmittableAccessors(clazz: Symbol, defs: List[Tree], auxConstructors: List[Tree], @unused constructor: List[Tree]): Set[Symbol] = {
-      val decls = clazz.info.decls.toSet
+    def computeOmittableAccessors(clazz: Symbol, defs: List[Tree], auxConstructors: List[Tree], @unused constructor: List[Tree]): collection.Set[Symbol] = {
       val isEffectivelyFinal = clazz.isEffectivelyFinal
 
       // Initially populated with all elision candidates.
@@ -173,7 +176,9 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
       // See run/t9408.scala for related test cases.
       def omittableParamAcc(sym: Symbol) = sym.isParamAccessor && sym.isPrivateLocal && !sym.isVariable
       def omittableOuterAcc(sym: Symbol) = isEffectivelyFinal && sym.isOuterAccessor && !sym.isOverridingSymbol
-      val omittables = mutable.Set.empty[Symbol] ++ (decls filter (sym => omittableParamAcc(sym) || omittableOuterAcc(sym))) // the closure only captures isEffectivelyFinal
+      val omittables = mutable.Set.empty[Symbol]
+      clazz.info.decls.foreach(sym => if (omittableParamAcc(sym) || omittableOuterAcc(sym)) omittables += sym)
+      if (omittables.isEmpty) return Set.empty
 
       // no point traversing further once omittables is empty, all candidates ruled out already.
       object detectUsages extends InternalTraverser {
@@ -192,10 +197,10 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
           }
       }
 
-      if (omittables.nonEmpty)
-        (defs.iterator ++ auxConstructors.iterator) foreach detectUsages.traverse
+      defs.foreach(detectUsages.traverse)
+      auxConstructors.foreach(detectUsages.traverse)
 
-      omittables.toSet
+      omittables
     }
   } // OmittablesHelper
 
@@ -495,12 +500,16 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
 
     // The constructor parameter with given getter name. This means the parameter name
     // decodes to the same name that the getter decodes to
-    def parameterNamed(name: Name): Either[String, Symbol] =  
-      primaryConstrParams.filter(_.name.decodedName == name.decodedName) match {
+    def parameterNamed(name: Name): Either[String, Symbol] = {
+      // `decodedName` makes a String and looks it up in the name table; a name without `$` decodes to itself.
+      def decodedName(n: Name): Name = if (n.isTermName && !n.containsChar('$')) n else n.decodedName
+      val decoded = decodedName(name)
+      primaryConstrParams.filter(p => decodedName(p.name) == decoded) match {
         case List(p) => Right(p)
         case Nil     => Left(s"No constructor parameter named $name (decoded to ${name.decodedName}) found in list of constructor parameters $primaryConstrParams (decoded to ${primaryConstrParams.map(_.decodedName)})")
         case ps      => Left(s"$name matches multiple constructor parameters $ps")
       }
+    }
 
     // A transformer for expressions that go into the constructor
     object intoConstructor extends AstTransformer {
@@ -728,7 +737,7 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
       val triage = new Triage; import triage._
 
       // omit unused outers
-      val omittableAccessor: Set[Symbol] =
+      val omittableAccessor: collection.Set[Symbol] =
         if (isDelayedInitSubclass) Set.empty
         else computeOmittableAccessors(clazz, defs, auxConstructors, constructorStats)
 
@@ -817,7 +826,8 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
       // Unlink all fields that can be dropped from class scope
       // Iterating on toList is cheaper (decls.filter does a toList anyway)
       val decls = clazz.info.decls
-      decls.toList.filter(omittableSym).foreach(decls.unlink)
+      if (omittableAccessor.nonEmpty)
+        decls.toList.filter(omittableSym).foreach(decls.unlink)
 
       // Eliminate all field/accessor definitions that can be dropped from template
       // We never eliminate delayed hooks or the constructors, so, only filter `defs`.
