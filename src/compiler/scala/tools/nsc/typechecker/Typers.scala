@@ -2670,8 +2670,8 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
               //   -> members that are hidden by the type of the block are made private
               classDecls foreach { toHide =>
                 if (toHide.isTerm
-                    && toHide.isPossibleInRefinement
                     && toHide.isPublic
+                    && toHide.isPossibleInRefinement
                     && !matchesVisibleMember(toHide)) {
                   (toHide
                    resetFlag (PROTECTED | LOCAL)

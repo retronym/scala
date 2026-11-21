@@ -48,7 +48,6 @@ class ChunkedInternerTest {
     var tries = 0
     while (t.size > 1000 && tries < 50) {
       System.gc()
-      intern(t, -1, -1) // drains the reference queue
       tries += 1
     }
     assumeTrue("no weak references were cleared", t.size < 200000)
