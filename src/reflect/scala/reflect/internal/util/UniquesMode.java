@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 /** Spike: selects the implementation of `Types.unique` once per JVM.
  *
- *  `-Dscalac.uniques=weak|direct|off` (default `direct`). `weak` is the per-run table, whose layout
+ *  `-Dscalac.uniques=weak|direct|off` (default `weak`). `weak` is the per-run table, whose layout
  *  `-Yuniques-layout` or `-Dscala.uniques.layout` chooses.
  *  `-Dscalac.uniques.stats=true` counts hits and misses and prints them at JVM exit.
  */
@@ -35,7 +35,7 @@ public final class UniquesMode {
   public static final AtomicLong runs = new AtomicLong();
 
   static {
-    String s = System.getProperty("scalac.uniques", "direct");
+    String s = System.getProperty("scalac.uniques", "weak");
     switch (s) {
       case "weak": MODE = WEAK; break;
       case "direct": MODE = DIRECT; break;
