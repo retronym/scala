@@ -2598,7 +2598,15 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
           val sym = overriddenSymbol(base)
           if (sym == NoSymbol) loop(rest) else sym
       }
-      if (isOverridingSymbol) loop(owner.ancestors) else NoSymbol
+      val curRunId = currentRunId
+      if (isOverridingSymbolCache == -curRunId) NoSymbol
+      else if (isOverridingSymbolCache == curRunId) loop(owner.ancestors)
+      else {
+        // One search answers both: `computeIsOverridingSymbol` is whether this loop finds a symbol.
+        val result = loop(owner.ancestors)
+        isOverridingSymbolCache = (if (result ne NoSymbol) 1 else -1) * curRunId
+        result
+      }
     }
 
     /** Returns all symbols overridden by this symbol, plus all matching symbols
