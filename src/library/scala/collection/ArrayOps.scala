@@ -423,7 +423,7 @@ final class ArrayOps[A](private val xs: Array[A]) extends AnyVal {
 
   def stepper[S <: Stepper[_]](implicit shape: StepperShape[A, S]): S with EfficientSplit = {
     import convert.impl._
-    val s = (shape.shape: @unchecked) match {
+    val s: Stepper[Any] = (shape.shape: @unchecked) match {
       case StepperShape.ReferenceShape => (xs: Any) match {
         case bs: Array[Boolean] => new BoxedBooleanArrayStepper(bs, 0, xs.length)
         case _ => new ObjectArrayStepper[AnyRef](xs.asInstanceOf[Array[AnyRef ]], 0, xs.length)

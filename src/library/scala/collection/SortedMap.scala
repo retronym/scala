@@ -176,7 +176,7 @@ trait SortedMapOps[K, +V, +CC[X, Y] <: Map[X, Y] with SortedMapOps[X, Y, CC, _],
   def collect[K2, V2](pf: PartialFunction[(K, V), (K2, V2)])(implicit @implicitNotFound(SortedMapOps.ordMsg) ordering: Ordering[K2]): CC[K2, V2] =
     sortedMapFactory.from(new View.Collect(this, pf))
 
-  override def concat[V2 >: V](suffix: IterableOnce[(K, V2)]): CC[K, V2] = sortedMapFactory.from(suffix match {
+  override def concat[V2 >: V](suffix: IterableOnce[(K, V2)]): CC[K, V2] = sortedMapFactory.from[K, V2](suffix match {
     case it: Iterable[(K, V2)] => new View.Concat(this, it)
     case _ => iterator.concat(suffix.iterator)
   })(using ordering)
