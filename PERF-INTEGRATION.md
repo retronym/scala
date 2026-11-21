@@ -44,6 +44,7 @@ Each PR head is merged onto the base with `--no-ff`, in this order. retronym/sca
 | retronym/scala#496 | Remember failed member lookups of an import | clean |
 | retronym/scala#511 | Allocate less in Context.lookupSymbol | conflict in `Contexts.scala` with retronym/scala#268, which already avoids the closure over the imported symbol: its side is taken there. `SymbolLookup` is pooled on this branch, so the pooled lookup's `clear()` also drops the import state that #511 moves into fields and the reused `ImportCursor`'s contexts |
 | retronym/scala#513 | Filter symbols in checkAccessible without a closure | conflict in `Symbols.scala` and `SymbolsTest.scala` only because this branch already has the first two commits of the PR (cherry-picked below, from #11318); the PR's side taken in both. Its last two commits are what it adds here: `Symbol.filter` final and `@inline` with a `@noinline` out-of-line overloaded case, and `checkAccessible` without a closure for a symbol that is not overloaded |
+| retronym/scala#515 | Reject polymorphic overloads on arity before cloning type params | clean |
 
 A commit on top makes `-Yuniques-layout` default to `chunked-weak` (retronym/scala#239), so benchmarks need no `-Dscala.uniques.layout`; the property still applies when the option is not given.
 
