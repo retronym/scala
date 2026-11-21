@@ -28,6 +28,33 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
     clearCount
   }
 
+  /** Counters that let a failed member lookup be remembered; see `ImportInfo` in the compiler.
+   *
+   *  A lookup such as `Type.nonLocalMember` reads only the member scopes of the base classes of the
+   *  type, after forcing their infos. The members of a class that is not a package can only grow
+   *  after its info is complete: a symbol owned by a class with a complete info is entered (a default
+   *  getter, a synthetic method, a package object member), or the info of a class is replaced. Both
+   *  increment `classMembersEpoch`. Symbols entered while their owner is being completed are not
+   *  counted, since no lookup has seen that class yet, nor symbols collected by `findMembers`.
+   *
+   *  A package scope only grows by entering a symbol at the front of `elems`, so a package lookup can
+   *  instead be keyed on the package's last entry. `scopeRewritesEpoch` counts the changes that bypass
+   *  that: renaming a member, and `enterBefore`.
+   */
+  private[this] var _classMembersEpoch: Int = 0
+  private[this] var _scopeRewritesEpoch: Int = 0
+  final def classMembersEpoch: Int = _classMembersEpoch
+  final def scopeRewritesEpoch: Int = _scopeRewritesEpoch
+  private[scala] final def classInfoReplaced(): Unit = _classMembersEpoch += 1
+  private[scala] final def scopeRewritten(): Unit = {
+    _scopeRewritesEpoch += 1
+    _classMembersEpoch += 1
+  }
+  private def symbolEntered(sym: Symbol): Unit = {
+    val owner = sym.owner
+    if (owner.isClass && !owner.hasPackageFlag && owner.hasCompletedInfo) _classMembersEpoch += 1
+  }
+
   /** An ADT to represent the results of symbol name lookups.
    */
   sealed trait NameLookup { def symbol: Symbol ; def isSuccess = false }
@@ -135,9 +162,13 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
       s
     }
 
+    /** Does this scope collect the result of `findMembers`, rather than declare anything? */
+    protected def isFindMemberScope: Boolean = false
+
     /** enter a scope entry
      */
     protected def enterEntry(e: ScopeEntry): Unit = {
+      if (!isFindMemberScope) symbolEntered(e.sym)
       flushElemsCache()
       if (hashtable ne null)
         enterInHash(e)
@@ -171,6 +202,7 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
       next.sym = sym
       next.next = newNext
       if (hasHashTable) next.tail = newNext
+      scopeRewritten()
       flushElemsCache()
       sym
     }
@@ -531,6 +563,7 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
    *  Therefore we introduce a special flavor of scopes to accommodate this quirk of `findMembers`
    */
   private[scala] def newFindMemberScope: Scope = new Scope() {
+    override protected def isFindMemberScope = true
     override def sorted = {
       val members = toList
       val owners = members.map(_.owner).distinct
