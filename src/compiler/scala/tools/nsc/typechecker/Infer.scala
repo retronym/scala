@@ -824,12 +824,34 @@ trait Infer extends Checkable {
           case ExistentialType(_, qtpe)  => isApplicable(undetparams, qtpe, argtpes0, pt)
           case mt@MethodType(_, _)       => isApplicableToMethod(undetparams, mt, argtpes0, pt)
           case NullaryMethodType(restpe) => isApplicable(undetparams, restpe, argtpes0, pt)
+          case PolyType(_, mt: MethodType) if !arityAdmitsApplication(mt, argtpes0) => false
           case PolyType(tparams, restpe) => createFromClonedSymbols(tparams, restpe)((tps1, res1) => isApplicable(tps1 ::: undetparams, res1, argtpes0, pt))
           case ErrorType                 => true
           case _                         => false
         }
 //      println(s"isApplicable $res : $ftpe to $argtpes0 for $pt under $undetparams")
       res
+    }
+
+    /** False only if `isApplicableToMethod(_, mt, argtpes0, _)` is certain to be false
+     *  on the basis of the number of arguments alone.
+     *
+     *  Mirrors the length dispatch in `isApplicableToMethod`: when the argument count
+     *  differs from the (vararg-expanded) formal count, it only recurses if defaults can
+     *  fill missing parameters or the arguments can be tupled. Nothing consulted here
+     *  (parameter count, repeatedness, default flags) changes when the enclosing
+     *  `PolyType`'s type params are cloned and substituted, so `isApplicable` can use it
+     *  to skip that cloning for alternatives that cannot match.
+     */
+    private def arityAdmitsApplication(mt: MethodType, argtpes0: List[Type]): Boolean = {
+      val paramTypes = mt.paramTypes
+      val numArgs    = argtpes0.length
+      val numParams  = paramTypes.length
+      val numFormals =
+        if (isVarArgTypes(paramTypes)) numParams - 1 + math.max(0, numArgs - numParams + 1)
+        else numParams
+      def canTuple = !argtpes0.exists(isRepeatedParamType) && eligibleForTupleConversion(paramTypes, numArgs)
+      numFormals == numArgs || mt.params.exists(_.hasDefault) || canTuple
     }
 
     /**
