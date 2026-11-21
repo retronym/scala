@@ -42,6 +42,7 @@ Each PR head is merged onto the base with `--no-ff`, in this order. retronym/sca
 | retronym/scala#273 | Walk scope entries in Scope.exists/forall/count | clean |
 | scala/scala#11381 | Keep infos and base types valid when no info transformer follows | clean. Without it a compile that stops after typer recomputes base classes and base type sequences on each namer/typer period change, which skews typer-only benchmarks |
 | retronym/scala#496 | Remember failed member lookups of an import | clean |
+| retronym/scala#511 | Allocate less in Context.lookupSymbol | conflict in `Contexts.scala` with retronym/scala#268, which already avoids the closure over the imported symbol: its side is taken there. `SymbolLookup` is pooled on this branch, so the pooled lookup's `clear()` also drops the import state that #511 moves into fields and the reused `ImportCursor`'s contexts |
 
 Cherry-picked from #11318 (`integration/2.13.x`), not in any PR above and not in 2.13.x:
 
