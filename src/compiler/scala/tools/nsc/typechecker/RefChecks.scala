@@ -80,6 +80,38 @@ abstract class RefChecks extends Transform {
     false
   }
 
+  /* A key of `RefCheckTransformer.boundsChecked`. The transformer looks up with one key it reuses, and stores a copy. */
+  private final class BoundsKey {
+    var pre: Type = _
+    var owner: Symbol = _
+    var tparams: List[Symbol] = _
+    var targs: List[Type] = _
+    private[this] var hash = 0
+    def set(pre: Type, owner: Symbol, tparams: List[Symbol], targs: List[Type]): this.type = {
+      this.pre = pre; this.owner = owner; this.tparams = tparams; this.targs = targs
+      var h = System.identityHashCode(pre) * 31 + System.identityHashCode(owner)
+      var ps = tparams
+      while (!ps.isEmpty) { h = h * 31 + System.identityHashCode(ps.head); ps = ps.tail }
+      var as = targs
+      while (!as.isEmpty) { h = h * 31 + System.identityHashCode(as.head); as = as.tail }
+      hash = h
+      this
+    }
+    def copy(): BoundsKey = new BoundsKey().set(pre, owner, tparams, targs)
+    override def hashCode: Int = hash
+    override def equals(other: Any): Boolean = other match {
+      case that: BoundsKey =>
+        (pre eq that.pre) && (owner eq that.owner) && sameRefs(tparams, that.tparams) && sameRefs(targs, that.targs)
+      case _ => false
+    }
+    private def sameRefs(xs: List[AnyRef], ys: List[AnyRef]): Boolean = {
+      var as = xs
+      var bs = ys
+      while (!as.isEmpty && !bs.isEmpty && (as.head eq bs.head)) { as = as.tail; bs = bs.tail }
+      as.isEmpty && bs.isEmpty
+    }
+  }
+
   class RefCheckTransformer(@unused unit: CompilationUnit) extends AstTransformer {
     private final val indent = "  "
 
@@ -1388,10 +1420,19 @@ abstract class RefChecks extends Transform {
       case _                                                                                  => transform(tree)
     }
 
+    /* The bounds checks of this unit that passed. A unit applies the same type constructors and methods to the same
+     * type arguments many times, and types are mostly hash-consed, so most checks repeat one that passed. Keys
+     * compare their parts by reference: a key built from types that are not hash-consed only misses. */
+    private[this] val boundsChecked = new java.util.HashSet[BoundsKey]
+    private[this] val boundsProbe = new BoundsKey
+
     /* Check whether argument types conform to bounds of type parameters */
     private def checkBounds(tree0: Tree, pre: Type, owner: Symbol, tparams: List[Symbol], argtps: List[Type]): Unit =
-      try typer.infer.checkBounds(tree0, pre, owner, tparams, argtps, "")
-      catch {
+      try {
+        val key = boundsProbe.set(pre, owner, tparams, argtps)
+        if (!boundsChecked.contains(key) && typer.infer.checkBounds(tree0, pre, owner, tparams, argtps, ""))
+          boundsChecked.add(key.copy())
+      } catch {
         case ex: TypeError =>
           reporter.error(tree0.pos, ex.getMessage())
           if (settings.explaintypes.value) {
