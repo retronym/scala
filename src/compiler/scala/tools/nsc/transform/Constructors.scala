@@ -491,12 +491,16 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
 
     // The constructor parameter with given getter name. This means the parameter name
     // decodes to the same name that the getter decodes to
-    def parameterNamed(name: Name): Either[String, Symbol] =  
-      primaryConstrParams.filter(_.name.decodedName == name.decodedName) match {
+    def parameterNamed(name: Name): Either[String, Symbol] = {
+      // `decodedName` makes a String and looks it up in the name table; a name without `$` decodes to itself.
+      def decodedName(n: Name): Name = if (n.isTermName && !n.containsChar('$')) n else n.decodedName
+      val decoded = decodedName(name)
+      primaryConstrParams.filter(p => decodedName(p.name) == decoded) match {
         case List(p) => Right(p)
         case Nil     => Left(s"No constructor parameter named $name (decoded to ${name.decodedName}) found in list of constructor parameters $primaryConstrParams (decoded to ${primaryConstrParams.map(_.decodedName)})")
         case ps      => Left(s"$name matches multiple constructor parameters $ps")
       }
+    }
 
     // A transformer for expressions that go into the constructor
     object intoConstructor extends AstTransformer {
