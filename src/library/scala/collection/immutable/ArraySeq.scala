@@ -309,7 +309,7 @@ object ArraySeq extends StrictOptimizedClassTagSeqFactory[ArraySeq] { self =>
    * `ArraySeq.unsafeWrapArray(a.asInstanceOf[Array[Int]])` does not work, it throws a
    * `ClassCastException` at runtime.
    */
-  def unsafeWrapArray[T](x: Array[T]): ArraySeq[T] = ((x: @unchecked) match {
+  def unsafeWrapArray[T](x: Array[T]): ArraySeq[T] = (((x: @unchecked) match {
     case null              => null
     case x: Array[AnyRef]  => new ofRef[AnyRef](x)
     case x: Array[Int]     => new ofInt(x)
@@ -321,7 +321,7 @@ object ArraySeq extends StrictOptimizedClassTagSeqFactory[ArraySeq] { self =>
     case x: Array[Short]   => new ofShort(x)
     case x: Array[Boolean] => new ofBoolean(x)
     case x: Array[Unit]    => new ofUnit(x)
-  }).asInstanceOf[ArraySeq[T]]
+  }): ArraySeq[Any]).asInstanceOf[ArraySeq[T]]
 
   @SerialVersionUID(3L)
   final class ofRef[T <: AnyRef](val unsafeArray: Array[T]) extends ArraySeq[T] {
