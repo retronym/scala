@@ -51,4 +51,10 @@ class SymbolsTest {
     assertSame(m, m.filter(_ => true))
     assertSame(NoSymbol, m.filter(_ => false))
   }
+
+  @Test
+  def filterNoSymbol(): Unit = {
+    // The predicate is not evaluated on NoSymbol.
+    assertSame(NoSymbol, NoSymbol.filter(_ => throw new AssertionError("evaluated")))
+  }
 }
