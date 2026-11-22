@@ -37,6 +37,15 @@ class UniqueTypeRefBenchmark {
     val a = definitions.ListClass.typeParams.head
     tpe = appliedType(mapTpe.typeConstructor, a.tpeHK :: appliedType(rootMirror.getRequiredClass("scala.util.Either"), a.tpeHK :: appliedType(definitions.ListClass, a.tpeHK) :: Nil) :: Nil)
     map = new SubstTypeMap(a :: Nil, definitions.StringTpe :: Nil)
+    // Look up other kinds of unique types too, so that the JIT sees every kind as a compile does
+    val scalaThis = ThisType(definitions.ScalaPackageClass)
+    var i = 0
+    while (i < 100000) {
+      SingleType(scalaThis, definitions.PredefModule)
+      ThisType(definitions.ScalaPackageClass)
+      TypeBounds(definitions.NothingTpe, definitions.StringTpe)
+      i += 1
+    }
   }
 
   @Benchmark def typeRefHit(): Any = {

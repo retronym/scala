@@ -18,6 +18,7 @@ import scala.collection.mutable
 import java.lang.ref.{WeakReference => jWeakRef}
 import scala.ref.{WeakReference => sWeakRef}
 import scala.reflect.internal.Depth
+import scala.reflect.internal.util.WeakHashSet
 import java.util.IdentityHashMap
 
 /** This trait overrides methods in reflect.internal, bracketing
@@ -53,10 +54,10 @@ private[reflect] trait SynchronizedTypes extends internal.Types { self: SymbolTa
     }
   }
 
-  // `unique` keeps its own table for a runtime universe, so `findUniqueTypeRef` can only search the compiler's.
-  override protected def findUniqueTypeRef(pre: Type, sym: Symbol, args: List[Type]): Type =
+  // `unique` keeps its own table for a runtime universe, so `findUnique` can only search the compiler's.
+  override protected def findUnique[C1, C2, C3](hash: Int, c1: C1, c2: C2, c3: C3, probe: WeakHashSet.Probe[Type, C1, C2, C3]): Type =
     if (!isCompilerUniverse) null
-    else uniqueLock.synchronized(super.findUniqueTypeRef(pre, sym, args))
+    else uniqueLock.synchronized(super.findUnique(hash, c1, c2, c3, probe))
 
   private lazy val _skolemizationLevel = mkThreadLocalStorage(0)
   override def skolemizationLevel = _skolemizationLevel.get

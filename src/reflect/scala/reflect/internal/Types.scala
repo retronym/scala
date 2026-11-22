@@ -1447,6 +1447,8 @@ trait Types
   /** A class for this-types of the form <sym>.this.type
    */
   abstract case class ThisType(sym: Symbol) extends SingletonType with ThisTypeApi {
+    //OPT specialize hashCode, as `findUniqueThisType` computes it from the components
+    override final def computeHashCode = thisTypeHashCode(sym)
     if (!sym.isClass && !sym.isFreeType) {
       // scala/bug#6640 allow StubSymbols to reveal what's missing from the classpath before we trip the assertion.
       sym.failIfStub()
@@ -1475,16 +1477,39 @@ trait Types
   final class UniqueThisType(sym: Symbol) extends ThisType(sym) { }
 
   object ThisType extends ThisTypeExtractor {
-    def apply(sym: Symbol): Type = (
-      if (!phase.erasedTypes) unique(new UniqueThisType(sym))
+    def apply(sym: Symbol): Type =
+      if (!phase.erasedTypes) {
+        val existing = findUniqueThisType(sym)
+        if (existing ne null) existing
+        else unique(new UniqueThisType(sym))
+      }
       else sym.tpe_*
-    )
+  }
+
+  /** The hash code of `ThisType(sym)`: the synthetic one of a case class, `MurmurHash3.caseClassHash`. */
+  private def thisTypeHashCode(sym: Symbol): Int = {
+    import scala.util.hashing.MurmurHash3._
+    var h = productSeed
+    h = mix(h, "ThisType".hashCode)
+    h = mix(h, sym.hashCode)
+    finalizeHash(h, 1)
+  }
+
+  /** Matches the unique types that a `ThisType(sym)` would be `equals` to. */
+  private final class ThisTypeProbe extends util.WeakHashSet.Probe[Type, Symbol, Null, Null] {
+    // As the synthetic `ThisType#equals`, with the ThisType(sym) as the receiver
+    def matches(elem: Type, sym: Symbol, unused1: Null, unused2: Null): Boolean = elem match {
+      case tt: ThisType => sym == tt.sym
+      case _ => false
+    }
   }
 
   /** A class for singleton types of the form `<prefix>.<sym.name>.type`.
    *  Cannot be created directly; one should always use `singleType` for creation.
    */
   abstract case class SingleType(pre: Type, sym: Symbol) extends SingletonType with SingleTypeApi {
+    //OPT specialize hashCode, as `findUniqueSingleType` computes it from the components
+    override final def computeHashCode = singleTypeHashCode(pre, sym)
     private[this] var trivial: ThreeValue = UNKNOWN
     override def isTrivial: Boolean = {
       if (trivial == UNKNOWN) trivial = fromBoolean(pre.isTrivial)
@@ -1547,7 +1572,28 @@ trait Types
 
   object SingleType extends SingleTypeExtractor {
     def apply(pre: Type, sym: Symbol): Type = {
-      unique(new UniqueSingleType(pre, sym))
+      val existing = findUniqueSingleType(pre, sym)
+      if (existing ne null) existing
+      else unique(new UniqueSingleType(pre, sym))
+    }
+  }
+
+  /** The hash code of `SingleType(pre, sym)`: the synthetic one of a case class, `MurmurHash3.caseClassHash`. */
+  private def singleTypeHashCode(pre: Type, sym: Symbol): Int = {
+    import scala.util.hashing.MurmurHash3._
+    var h = productSeed
+    h = mix(h, "SingleType".hashCode)
+    h = mix(h, pre.hashCode)
+    h = mix(h, sym.hashCode)
+    finalizeHash(h, 2)
+  }
+
+  /** Matches the unique types that a `SingleType(pre, sym)` would be `equals` to. */
+  private final class SingleTypeProbe extends util.WeakHashSet.Probe[Type, Type, Symbol, Null] {
+    // As the synthetic `SingleType#equals`, with the SingleType(pre, sym) as the receiver
+    def matches(elem: Type, pre: Type, sym: Symbol, unused: Null): Boolean = elem match {
+      case st: SingleType => pre == st.pre && sym == st.sym
+      case _ => false
     }
   }
 
@@ -4424,23 +4470,34 @@ trait Types
 
   final def howManyUniqueTypes: Int = if (uniques == null) 0 else uniques.size
 
-  /** The unique type equal to `TypeRef(pre, sym, args)`, or null if there is none yet. */
-  protected def findUniqueTypeRef(pre: Type, sym: Symbol, args: List[Type]): Type =
+  /** The unique type with hash code `hash` that `probe` matches with components `c1`, `c2` and `c3`, or null if
+   *  there is none yet. Lets the creators of unique types find an existing one without allocating another.
+   */
+  protected def findUnique[C1, C2, C3](hash: Int, c1: C1, c2: C2, c3: C3, probe: util.WeakHashSet.Probe[Type, C1, C2, C3]): Type =
     if (uniqueRunId != currentRunId) null
-    else {
-      var probe = typeRefProbe
-      if (probe eq null) {
-        probe = new TypeRefProbe
-        typeRefProbe = probe
-      }
-      uniques.findEntry(typeRefHashCode(pre, sym, args), pre, sym, args, probe)
-    }
-  // Stateless, so it needs no synchronization. Not an `object`, whose accessor reads a volatile field.
+    else uniques.findEntry(hash, c1, c2, c3, probe)
+
+  private def findUniqueTypeRef(pre: Type, sym: Symbol, args: List[Type]): Type =
+    findUnique(typeRefHashCode(pre, sym, args), pre, sym, args, typeRefProbe)
+  private def findUniqueSingleType(pre: Type, sym: Symbol): Type =
+    findUnique(singleTypeHashCode(pre, sym), pre, sym, null, singleTypeProbe)
+  private def findUniqueThisType(sym: Symbol): Type =
+    findUnique(thisTypeHashCode(sym), sym, null, null, thisTypeProbe)
+
+  // Stateless, so they need no synchronization. They are created with the first uniques table, before `findUnique`
+  // can search one. Not `object`s, whose accessors read a volatile field.
   private[this] var typeRefProbe: TypeRefProbe = _
+  private[this] var singleTypeProbe: SingleTypeProbe = _
+  private[this] var thisTypeProbe: ThisTypeProbe = _
 
   protected def unique[T <: Type](tp: T): T =  {
     if (uniqueRunId != currentRunId) {
       uniques = util.WeakHashSet[Type](initialUniquesCapacity)
+      if (typeRefProbe eq null) {
+        typeRefProbe = new TypeRefProbe
+        singleTypeProbe = new SingleTypeProbe
+        thisTypeProbe = new ThisTypeProbe
+      }
       // JZ: We used to register this as a perRunCache so it would be cleared eagerly at
       // the end of the compilation run. But, that facility didn't actually clear this map (scala/bug#8129)!
       // When i fixed that bug, run/tpeCache-tyconCache.scala started failing. Why was that?
