@@ -4505,13 +4505,13 @@ trait Types
   protected def findUnique[C1, C2, C3](hash: Int, c1: C1, c2: C2, c3: C3, probe: util.WeakHashSet.Probe[Type, C1, C2, C3]): Type =
     if (util.UniquesMode.MODE != util.UniquesMode.WEAK || uniqueRunId != currentRunId) null
     else {
-      val uniques = this.uniques
-      if (uniques == null) null
-      else {
-        val result = uniques.findEntry(hash, c1, c2, c3, probe)
-        if (util.UniquesMode.STATS && (result ne null)) countUnique(hit = true)
-        result
-      }
+      val chunked = chunkedUniques
+      val result =
+        if (chunked != null) chunked.find(hash, c1, c2, c3, probe)
+        else if (uniques != null) uniques.findEntry(hash, c1, c2, c3, probe)
+        else null
+      if (util.UniquesMode.STATS && (result ne null)) countUnique(hit = true)
+      result
     }
 
   private def findUniqueTypeRef(pre: Type, sym: Symbol, args: List[Type]): Type =
