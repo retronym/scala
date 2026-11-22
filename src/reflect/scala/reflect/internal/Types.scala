@@ -2464,20 +2464,7 @@ trait Types
     @volatile private[this] var normalized: Type       = _
 
     //OPT specialize hashCode
-    override final def computeHashCode = {
-      import scala.util.hashing.MurmurHash3._
-      var h = productSeed
-      h = mix(h, pre.hashCode)
-      h = mix(h, sym.hashCode)
-      var length = 2
-      var elems = args
-      while (elems ne Nil) {
-        h = mix(h, elems.head.hashCode())
-        elems = elems.tail
-        length += 1
-      }
-      finalizeHash(h, length)
-    }
+    override final def computeHashCode = typeRefHashCode(pre, sym, args)
     //OPT specialize equals
     override final def equals(other: Any): Boolean = {
       if (this eq other.asInstanceOf[AnyRef]) true
@@ -2806,7 +2793,14 @@ trait Types
   }
 
   object TypeRef extends TypeRefExtractor {
-    def apply(pre: Type, sym: Symbol, args: List[Type]): Type = unique({
+    def apply(pre: Type, sym: Symbol, args: List[Type]): Type = {
+      // Most calls ask for a TypeRef that is already unique; find it without allocating one to compare with.
+      val existing = findUniqueTypeRef(pre, sym, args)
+      if (existing ne null) existing
+      else unique(newTypeRef(pre, sym, args))
+    }
+
+    private def newTypeRef(pre: Type, sym: Symbol, args: List[Type]): TypeRef = {
       if (args ne Nil) {
         if (sym.isAliasType)              new AliasArgsTypeRef(pre, sym, args)
         else if (sym.isAbstractType)      new AbstractArgsTypeRef(pre, sym, args)
@@ -2820,7 +2814,36 @@ trait Types
         else if (sym.isModuleClass)       new ModuleTypeRef(pre, sym)
         else                              new ClassNoArgsTypeRef(pre, sym)
       }
-    })
+    }
+  }
+
+  /** The hash code of `TypeRef(pre, sym, args)`. */
+  private def typeRefHashCode(pre: Type, sym: Symbol, args: List[Type]): Int = {
+    import scala.util.hashing.MurmurHash3._
+    var h = productSeed
+    h = mix(h, pre.hashCode)
+    h = mix(h, sym.hashCode)
+    var length = 2
+    var elems = args
+    while (elems ne Nil) {
+      h = mix(h, elems.head.hashCode())
+      elems = elems.tail
+      length += 1
+    }
+    finalizeHash(h, length)
+  }
+
+  /** Matches the unique types that a `TypeRef(pre, sym, args)` would be `equals` to. */
+  private final class TypeRefProbe extends util.WeakHashSet.Probe[Type, Type, Symbol, List[Type]] {
+    // As `TypeRef#equals`, with the TypeRef(pre, sym, args) as the receiver
+    def matches(elem: Type, pre: Type, sym: Symbol, args: List[Type]): Boolean = elem match {
+      case tr: TypeRef =>
+        Objects.equals(pre, tr.pre) &&
+          sym.eq(tr.sym) &&
+          sameElementsEquals(args, tr.args) &&
+          !tr.isInstanceOf[ObjectTpeJavaRef]
+      case _ => false
+    }
   }
 
   protected def defineNormalized(tr: TypeRef): Unit = {
@@ -4400,6 +4423,20 @@ trait Types
   private[this] var uniqueRunId = NoRunId
 
   final def howManyUniqueTypes: Int = if (uniques == null) 0 else uniques.size
+
+  /** The unique type equal to `TypeRef(pre, sym, args)`, or null if there is none yet. */
+  protected def findUniqueTypeRef(pre: Type, sym: Symbol, args: List[Type]): Type =
+    if (uniqueRunId != currentRunId) null
+    else {
+      var probe = typeRefProbe
+      if (probe eq null) {
+        probe = new TypeRefProbe
+        typeRefProbe = probe
+      }
+      uniques.findEntry(typeRefHashCode(pre, sym, args), pre, sym, args, probe)
+    }
+  // Stateless, so it needs no synchronization. Not an `object`, whose accessor reads a volatile field.
+  private[this] var typeRefProbe: TypeRefProbe = _
 
   protected def unique[T <: Type](tp: T): T =  {
     if (uniqueRunId != currentRunId) {

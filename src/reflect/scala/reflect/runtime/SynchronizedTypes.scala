@@ -53,6 +53,11 @@ private[reflect] trait SynchronizedTypes extends internal.Types { self: SymbolTa
     }
   }
 
+  // `unique` keeps its own table for a runtime universe, so `findUniqueTypeRef` can only search the compiler's.
+  override protected def findUniqueTypeRef(pre: Type, sym: Symbol, args: List[Type]): Type =
+    if (!isCompilerUniverse) null
+    else uniqueLock.synchronized(super.findUniqueTypeRef(pre, sym, args))
+
   private lazy val _skolemizationLevel = mkThreadLocalStorage(0)
   override def skolemizationLevel = _skolemizationLevel.get
   override def skolemizationLevel_=(value: Int) = _skolemizationLevel.set(value)

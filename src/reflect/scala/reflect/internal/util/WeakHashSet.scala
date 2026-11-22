@@ -182,6 +182,26 @@ final class WeakHashSet[A <: AnyRef](val initialCapacity: Int, val loadFactor: D
       linkedListLoop(table(bucket))
     }
   }
+  /** The element with hash code `hash` that `probe` matches with components `c1`, `c2` and `c3`, or null if there is
+   *  none.
+   *
+   *  This finds an element from its components, where `findEntry` needs a constructed element to compare with.
+   *  `probe` must match exactly the elements that are `equals` to the element with those components, and `hash` must
+   *  be that element's hash code.
+   */
+  def findEntry[C1, C2, C3](hash: Int, c1: C1, c2: C2, c3: C3, probe: Probe[A, C1, C2, C3]): A = {
+    removeStaleEntries()
+    var entry = table(bucketFor(hash))
+    while (entry ne null) {
+      if (entry.hash == hash) {
+        val entryElem = entry.get
+        if ((entryElem ne null) && probe.matches(entryElem, c1, c2, c3)) return entryElem
+      }
+      entry = entry.tail
+    }
+    null.asInstanceOf[A]
+  }
+
   // add an element to this set unless it's already in there and return the element
   def findEntryOrUpdate(elem: A): A = elem match {
     case null => throw new NullPointerException("WeakHashSet cannot hold nulls")
@@ -420,6 +440,11 @@ object WeakHashSet {
    * a link to the next Entry in the same bucket
    */
   private class Entry[A](element: A, val hash:Int, var tail: Entry[A], queue: ReferenceQueue[A]) extends WeakReference[A](element, queue)
+
+  /** Matches an element against the components of another, for `WeakHashSet#findEntry(hash, c1, c2, c3, probe)`. */
+  trait Probe[-A, -C1, -C2, -C3] {
+    def matches(elem: A, c1: C1, c2: C2, c3: C3): Boolean
+  }
 
   val defaultInitialCapacity = 16
   val defaultLoadFactor = .75
