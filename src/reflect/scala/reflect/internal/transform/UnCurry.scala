@@ -43,7 +43,14 @@ trait UnCurry {
    *  I think that difference is not the product of sentience but of randomness.
    *  Let us figure out why it is and then change this method.
    */
-  private def expandAlias(tp: Type): Type = if (!tp.isHigherKinded) tp.normalize else tp
+  private def expandAlias(tp: Type): Type = tp match {
+    // Fast paths for the common types that `normalize` returns unchanged, without asking
+    // `isHigherKinded`, which forces a class's type parameters. A reference to a class (but not
+    // a refinement class) normalizes to itself unless it is higher-kinded, which is left as is.
+    case tr: TypeRef if tr.sym.isClass && !tr.sym.isRefinementClass && !tr.pre.isWildcardType => tp
+    case _: ThisType | _: MethodType => tp
+    case _ => if (!tp.isHigherKinded) tp.normalize else tp
+  }
 
   val uncurry: TypeMap = new TypeMap {
     @tailrec
