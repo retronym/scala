@@ -642,6 +642,10 @@ trait Infer extends Checkable {
     }
 
     private[typechecker] def followApply(tp: Type): Type = tp match {
+      // A method type has no base classes, so it has no `apply` member; neither does a
+      // polymorphic one, whose base classes are those of its result. Return early rather
+      // than ask `nonPrivateMember`, whose `findMember` first walks the whole type in `isGround`.
+      case _: MethodType | PolyType(_, _: MethodType) => tp
       case _ if tp.isError => tp // scala/bug#8228, `ErrorType nonPrivateMember nme.apply` returns an member with an erroneous type!
       case NullaryMethodType(restp) =>
         val restp1 = followApply(restp)
