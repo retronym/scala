@@ -1110,9 +1110,12 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     /** Equivalent to `!isConstructor && allOverriddenSymbols.forall(_.owner.isRefinementClass)`, but stops at the
      *  first overridden symbol that is not a member of a refinement class. */
     final def isPossibleInRefinement: Boolean =
-      !isConstructor && !(isOverridingSymbol && owner.ancestors.exists { base =>
-        val overridden = overriddenSymbol(base)
-        (overridden ne NoSymbol) && !overridden.owner.isRefinementClass
+      !isConstructor && !(isOverridingSymbol && {
+        val search = overriddenSearch
+        owner.ancestors.exists { base =>
+          val overridden = search.overridden(base)
+          (overridden ne NoSymbol) && !overridden.owner.isRefinementClass
+        }
       })
 
     /** A a member of class `base` is incomplete if
@@ -2511,28 +2514,53 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     final def matchingSymbol(site: Type, admit: Long = 0L): Symbol =
       matchingSymbolInternal(site, site.nonPrivateMemberAdmitting(name, admit))
 
-    private def matchingSymbolInternal(site: Type, candidate: Symbol): Symbol = {
-      def qualifies(sym: Symbol) = !sym.isTerm || ((site memberType this) matches (site memberType sym))
-      //OPT Fast past for NoSymbol. Cut down on #closures by special casing non-overloaded case
-      if (candidate == NoSymbol) NoSymbol
-      else if (candidate.isOverloaded) candidate filter qualifies
-      else if (qualifies(candidate)) candidate
-      else NoSymbol
+    private def matchingSymbolInternal(site: Type, candidate: Symbol): Symbol =
+      //OPT Fast past for NoSymbol
+      if (candidate == NoSymbol) NoSymbol else new MatchingSymbols(site).apply(candidate)
+
+    /** Matches candidates against this symbol's type as a member of `site`. That type is computed
+     *  once, on the first term candidate, so a search over all the base classes of the owner
+     *  computes it once rather than once per base class that declares a member of the same name.
+     */
+    private final class MatchingSymbols(site: Type) {
+      private[this] var memberTypeOfThis: Type = null
+      private def qualifies(sym: Symbol): Boolean = !sym.isTerm || {
+        if (memberTypeOfThis eq null) memberTypeOfThis = site memberType Symbol.this
+        memberTypeOfThis matches (site memberType sym)
+      }
+      def apply(candidate: Symbol): Symbol =
+        //OPT Cut down on #closures by special casing non-overloaded case
+        if (candidate == NoSymbol) NoSymbol
+        else if (candidate.isOverloaded) candidate filter (sym => qualifies(sym))
+        else if (qualifies(candidate)) candidate
+        else NoSymbol
+
+      /** The symbol, in class `baseClass`, that is overridden by this symbol. `site` is `owner.thisType`. */
+      def overridden(baseClass: Symbol): Symbol = overriddenAmong(baseClass.info nonPrivateDecl name)
+
+      /** The symbol overridden by this symbol among the non-private declarations `decl` of a base class. */
+      def overriddenAmong(decl: Symbol): Symbol = {
+        // concrete always overrides abstract, so don't let an abstract definition
+        // claim to be overriding an inherited concrete one.
+        val matching = apply(decl)
+        if (isDeferred) matching.filter(_.isDeferred) else matching
+      }
     }
+
+    /** A search for the symbols this symbol overrides, or null if it cannot override anything. */
+    private def overriddenSearch: MatchingSymbols =
+      if (canMatchInheritedSymbols) new MatchingSymbols(owner.thisType) else null
 
     /** The symbol, in class `baseClass`, that is overridden by this symbol.
      *
      *  @param baseClass is a base class of this symbol's owner.
      */
-    final def overriddenSymbol(baseClass: Symbol): Symbol = {
-      // concrete always overrides abstract, so don't let an abstract definition
-      // claim to be overriding an inherited concrete one.
-      val matching = matchingInheritedSymbolIn(baseClass)
-      if (isDeferred) matching.filter(_.isDeferred) else matching
-    }
-
-    private def matchingInheritedSymbolIn(baseClass: Symbol): Symbol =
-      if (canMatchInheritedSymbols) matchingSymbol(baseClass, owner.thisType) else NoSymbol
+    final def overriddenSymbol(baseClass: Symbol): Symbol =
+      if (canMatchInheritedSymbols) {
+        val decl = baseClass.info nonPrivateDecl name
+        if (decl == NoSymbol) NoSymbol else new MatchingSymbols(owner.thisType).overriddenAmong(decl)
+      }
+      else NoSymbol
 
     /** The symbol overriding this symbol in given subclass `ofclazz`.
      *
@@ -2565,8 +2593,9 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       if (isOverridingSymbol) {
         // performance sensitive
         val builder = List.newBuilder[Symbol]
+        val search = overriddenSearch
         for (o <- owner.ancestors) {
-          overriddenSymbol(o).andAlso(builder += _)
+          search.overridden(o).andAlso(builder += _)
         }
         builder.result()
       } else Nil
@@ -2575,10 +2604,10 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     private[this] var isOverridingSymbolCache = 0
 
     /** Equivalent to allOverriddenSymbols.nonEmpty, but more efficient. */
-    private def computeIsOverridingSymbol: Boolean = (
-         canMatchInheritedSymbols
-      && owner.ancestors.exists(base => overriddenSymbol(base) != NoSymbol)
-    )
+    private def computeIsOverridingSymbol: Boolean = {
+      val search = overriddenSearch
+      (search ne null) && owner.ancestors.exists(base => search.overridden(base) != NoSymbol)
+    }
     final def isOverridingSymbol: Boolean = {
       val curRunId = currentRunId
       // TODO this cache can lead to incorrect answers if the overrider/overridee relationship changes
@@ -2595,11 +2624,15 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
     /** Equivalent to allOverriddenSymbols.head (or NoSymbol if no overrides) but more efficient. */
     def nextOverriddenSymbol: Symbol = {
-      @tailrec def loop(bases: List[Symbol]): Symbol = bases match {
-        case Nil          => NoSymbol
-        case base :: rest =>
-          val sym = overriddenSymbol(base)
-          if (sym == NoSymbol) loop(rest) else sym
+      def loop(bases: List[Symbol]): Symbol = {
+        val search = overriddenSearch
+        @tailrec def loop1(bases: List[Symbol]): Symbol = bases match {
+          case Nil          => NoSymbol
+          case base :: rest =>
+            val sym = search.overridden(base)
+            if (sym == NoSymbol) loop1(rest) else sym
+        }
+        if (search eq null) NoSymbol else loop1(bases)
       }
       val curRunId = currentRunId
       if (isOverridingSymbolCache == -curRunId) NoSymbol
