@@ -845,9 +845,19 @@ trait Infer extends Checkable {
     private def needsFreshTypeParams(tparams: List[Symbol], undetparams: List[Symbol]): Boolean = {
       def mentionsSibling(tparam: Symbol) = tparam.info.exists { tp =>
         val sym = tp.typeSymbolDirect
-        (sym ne tparam) && tparams.contains(sym)
+        (sym ne tparam) && isOneOf(sym, tparams)
       }
-      tparams.exists(mentionsSibling) || (undetparams.nonEmpty && tparams.exists(undetparams.contains))
+      tparams.exists(mentionsSibling) || (undetparams.nonEmpty && tparams.exists(isOneOf(_, undetparams)))
+    }
+
+    /** `syms.contains(sym)`, by reference, without boxed equality. */
+    private def isOneOf(sym: Symbol, syms: List[Symbol]): Boolean = {
+      var rest = syms
+      while (!rest.isEmpty) {
+        if (rest.head eq sym) return true
+        rest = rest.tail
+      }
+      false
     }
 
     /**
