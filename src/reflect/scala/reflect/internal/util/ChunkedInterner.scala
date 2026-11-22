@@ -81,6 +81,34 @@ final class ChunkedInterner[A <: AnyRef](initialCapacity: Int, val weak: Boolean
     null.asInstanceOf[A]
   }
 
+  /** The element with hash `h` that `probe` matches with components `c1`, `c2` and `c3`, or null.
+   *
+   *  As `find`, but describes the element by its components, so that the caller need not construct it to compare
+   *  with. `probe` must match exactly the elements that are `equals` to the element with those components, and `h`
+   *  must be that element's hash code. A miss leaves the free slot for `add`, as `find` does.
+   */
+  def find[C1, C2, C3](h: Int, c1: C1, c2: C2, c3: C3, probe: WeakHashSet.Probe[A, C1, C2, C3]): A = {
+    val mask = this.mask
+    val elems = this.elems
+    val hashes = this.hashes
+    var i = spread(h) & mask
+    while (true) {
+      val e = elems(i >>> ChunkBits)(i & ChunkMask)
+      if (e == null) {
+        free = i
+        freeHash = h
+        freeStamp = stamp
+        return null.asInstanceOf[A]
+      }
+      if (hashes(i >>> ChunkBits)(i & ChunkMask) == h) {
+        val x = deref(e)
+        if (x != null && probe.matches(x, c1, c2, c3)) return x
+      }
+      i = (i + 1) & mask
+    }
+    null.asInstanceOf[A]
+  }
+
   /** Add `elem`, with hash `h`, which a `find` just failed to find. */
   def add[T <: A](elem: T, h: Int): T = {
     val e = if (weak) new WeakReference[AnyRef](elem) else elem
