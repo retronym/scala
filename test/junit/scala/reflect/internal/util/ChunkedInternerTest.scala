@@ -30,6 +30,24 @@ class ChunkedInternerTest {
     assertEquals(2, t.size)
   }
 
+  private object KeyProbe extends WeakHashSet.Probe[Key, Int, Null, Null] {
+    def matches(elem: Key, n: Int, unused1: Null, unused2: Null): Boolean = elem.n == n
+  }
+
+  @Test def findsByComponents(): Unit = {
+    val t = newInterner
+    val a = intern(t, 1, 7)
+    val b = intern(t, 2, 7)
+    assertSame(a, t.find(7, 1, null, null, KeyProbe))
+    assertSame(b, t.find(7, 2, null, null, KeyProbe))
+    assertNull(t.find(7, 3, null, null, KeyProbe))
+    // a miss leaves the free slot for `add`
+    val c = new Key(3, 7)
+    assertSame(c, t.add(c, 7))
+    assertSame(c, t.find(7, 3, null, null, KeyProbe))
+    assertEquals(3, t.size)
+  }
+
   @Test def growsAcrossChunks(): Unit = {
     val t = newInterner
     val n = ChunkedInterner.ChunkSize * 2 // needs four chunks at a load of at most 1/2

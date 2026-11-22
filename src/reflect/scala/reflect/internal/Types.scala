@@ -4491,9 +4491,10 @@ trait Types
   protected def findUnique[C1, C2, C3](hash: Int, c1: C1, c2: C2, c3: C3, probe: util.WeakHashSet.Probe[Type, C1, C2, C3]): Type =
     if (uniqueRunId != currentRunId) null
     else {
-      val uniques = this.uniques
-      if (uniques == null) null
-      else uniques.findEntry(hash, c1, c2, c3, probe)
+      val chunked = chunkedUniques
+      if (chunked != null) chunked.find(hash, c1, c2, c3, probe)
+      else if (uniques != null) uniques.findEntry(hash, c1, c2, c3, probe)
+      else null
     }
 
   private def findUniqueTypeRef(pre: Type, sym: Symbol, args: List[Type]): Type =
