@@ -1285,6 +1285,21 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
     || tp.typeSymbol.isPackageClass
   )
 
+  /** Classes that have a specialized type parameter or declare a method with one. */
+  private val declaresSpecialized = perRunCaches.newAnyRefMap[Symbol, Boolean]()
+
+  /** Can `specializeClass` or `specialOverrides` find anything in `clazz`? Only if `clazz` is
+   *  nested in a specialized class, or if it or one of its base classes has a specialized type
+   *  parameter or declares a method with one. Most classes have neither, and for them the
+   *  per-member work of both would come up empty.
+   */
+  private def mayNeedSpecialization(clazz: Symbol): Boolean =
+    typeEnv(clazz).nonEmpty || clazz.info.baseClasses.exists { bc =>
+      declaresSpecialized.getOrElseUpdate(bc,
+        bc.typeParams.exists(_.isSpecialized) ||
+          bc.info.decls.exists(m => m.isMethod && enteringTyper(m.typeParams.exists(_.isSpecialized))))
+    }
+
   /** Type transformation. It is applied to all symbols, compiled or loaded.
    *  If it is a 'no-specialization' run, it is applied only to loaded symbols.
    */
@@ -1312,7 +1327,11 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
               if (tparams.nonEmpty) "(poly) " else "", clazz, parents1)
             )
           }
-          val newScope = newScopeWith(specializeClass(clazz, typeEnv(clazz)) ++ specialOverrides(clazz): _*)
+          val newScope =
+            if (mayNeedSpecialization(clazz))
+              newScopeWith(specializeClass(clazz, typeEnv(clazz)) ++ specialOverrides(clazz): _*)
+            else
+              decls.cloneScope
           // If tparams.isEmpty, this is just the ClassInfoType.
           GenPolyType(tparams, ClassInfoType(parents1, newScope, clazz))
         }
