@@ -20,7 +20,7 @@ import scala.tools.nsc.ast.TreeDSL
  * A trait usable by transforms that need to adapt trees of one type to another type
  */
 trait TypeAdaptingTransformer { self: TreeDSL =>
-  abstract class TypeAdapter {
+  trait TypeAdapter {
     import global._
     import definitions._
 

@@ -252,7 +252,7 @@ trait Infer extends Checkable {
      * Note: pre is not refchecked -- moreover, refchecking the resulting tree may not refcheck pre,
      *       since pre may not occur in its type (callers should wrap the result in a TypeTreeWithDeferredRefCheck)
      */
-    def checkAccessible(tree: Tree, sym: Symbol, pre: Type, site: Tree, isJava: Boolean): Tree = {
+    def checkAccessible(tree: Tree, sym: Symbol, pre: Type, site: Tree, isJava: Boolean, checkAccess: Boolean = true): Tree = {
       // When filtering sym down to the accessible alternatives leaves us empty handed.
       def checkAccessibleError(tree: Tree, sym: Symbol, pre: Type, site: Tree): Tree = {
         if (settings.isDebug) {
@@ -292,7 +292,7 @@ trait Infer extends Checkable {
       if (sym.isError)
         tree.setSymbol(sym).setType(ErrorType)
       else {
-        val accessible = sym.filter(context.isAccessible(_, pre, site.isInstanceOf[Super])) match {
+        val accessible = if (!checkAccess && !sym.isOverloaded) sym else sym.filter(context.isAccessible(_, pre, site.isInstanceOf[Super])) match {
           case NoSymbol if sym.isJavaDefined && context.unit.isJava => sym  // don't try to second guess Java; see #4402
           case sym1                                                 => sym1
         }
