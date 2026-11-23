@@ -19,7 +19,7 @@ import scala.collection.mutable
 /** A base class for transforms.
  *  A transform contains a compiler phase which applies a tree transformer.
  */
-trait TypingTransformers {
+trait TypingTransformers extends TypeAssigners {
 
   val global: Global
   import global._
@@ -35,7 +35,7 @@ trait TypingTransformers {
    *  (`Context.make`, as it was eagerly) when `localTyper` is next read. Most definitions in most phases are
    *  transformed without typing anything, so most of those contexts were never used.
    */
-  abstract class TypingTransformer(initLocalTyper: global.analyzer.Typer) extends OwnerStackTransformer {
+  abstract class TypingTransformer(initLocalTyper: global.analyzer.Typer) extends TypeAssigner {
     /** A transformer whose root typer for `unit` is made when it is first needed. */
     def this(unit: CompilationUnit) = {
       this(null: analyzer.Typer)
@@ -66,6 +66,9 @@ trait TypingTransformers {
       if (materialized < frames) frameOwners(frames - 1).asInstanceOf[Symbol]
       else if (_localTyper eq null) rootMirror.RootClass
       else _localTyper.context.owner
+
+    override protected def enclosingOwner: Symbol = localTyperOwner
+    override protected def fallbackTyper(why: String): analyzer.Typer = localTyper
 
     /** The typer to start from, made when first needed if the transformer was given none. */
     protected def initialTyper(): analyzer.Typer = newRootLocalTyper(rootUnit)
@@ -107,7 +110,8 @@ trait TypingTransformers {
   }
 
   /** A transformer that keeps a stack of the trees and owners it has entered, with no typing context.
-   *  `TypingTransformer` makes contexts for its frames.
+   *  A phase that needs only its enclosing owners, and types the trees it synthesises with a
+   *  `TypeAssigner`, extends it directly; `TypingTransformer` makes contexts for its frames.
    */
   abstract class OwnerStackTransformer extends AstTransformer {
     // The frames entered by `atOwner`, and the owner before frame `i` was entered, restored when it exits.

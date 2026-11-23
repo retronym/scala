@@ -164,7 +164,7 @@ trait Infer extends Checkable {
 
   /** Is type fully defined, i.e. no embedded anytypes or wildcards in it?
    */
-  private[typechecker] def isFullyDefined(tp: Type): Boolean = tp match {
+  private[nsc] def isFullyDefined(tp: Type): Boolean = tp match {
     case _: ProtoType | NoType                       => false
     case NoPrefix | ThisType(_) | ConstantType(_)    => true
     case TypeRef(pre, _, args)                       => isFullyDefined(pre) && (args forall isFullyDefined)
