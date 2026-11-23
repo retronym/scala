@@ -2110,7 +2110,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
         else if (filtered.tail.isEmpty) filtered.head
         else owner.newOverloaded(info.prefix, filtered)
       }
-      else if (cond(this)) this
+      else if (this.isInstanceOf[NoSymbol] || cond(this)) this
       else NoSymbol
 
     def suchThat(cond: Symbol => Boolean): Symbol = {
@@ -3777,7 +3777,6 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     override def companionModule = NoSymbol
     override def companionSymbol = NoSymbol
     override def isSubClass(that: Symbol) = false
-    override def filter(cond: Symbol => Boolean) = this
     override def defString: String = toString
     override def locationString: String = ""
     override def enclClassChain = Nil
