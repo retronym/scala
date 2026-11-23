@@ -200,12 +200,16 @@ abstract class ExplicitOuter extends InfoTransform
       tp
   }
 
-  /** A base class for transformers that maintain outerParam
-   *  values for outer parameters of constructors.
-   *  The class provides methods for referencing via outer.
+  /** `OuterPaths` with a `localTyper`, for a transformer that types with one. */
+  abstract class OuterPathTransformer(initLocalTyper: analyzer.Typer) extends TypingTransformer(initLocalTyper) with OuterPaths {
+    def this(unit: CompilationUnit) = { this(null: analyzer.Typer); rootUnit = unit }
+  }
+
+  /** For transformers that maintain outerParam values for outer parameters of constructors: methods
+   *  for referencing via outer. It types what it synthesises with the assigner, so a transformer that
+   *  needs no `localTyper` mixes it into a `TypeAssigner`.
    */
-  abstract class OuterPathTransformer(initLocalTyper: analyzer.Typer) extends TypingTransformer(initLocalTyper) {
-    def this(unit: CompilationUnit) = this(newRootLocalTyper(unit))
+  trait OuterPaths extends TypeAssigner {
     /** The directly enclosing outer parameter, if we are in a constructor */
     protected var outerParam: Symbol = NoSymbol
 
@@ -255,7 +259,7 @@ abstract class ExplicitOuter extends InfoTransform
           if (outerFld != NoSymbol) Select(base, outerFld)
           else Apply(Select(base, outerAcc), Nil)
 
-        localTyper typed path
+        typed(path, WildcardType)
       }
     }
 
@@ -341,7 +345,7 @@ abstract class ExplicitOuter extends InfoTransform
     *       so there's also less need to make trait members non-private
     *       (they still may need to be implemented in subclasses, though we could make those protected...).
     */
-  class ExplicitOuterTransformer(unit: CompilationUnit) extends OuterPathTransformer(unit) {
+  class ExplicitOuterTransformer(unit: CompilationUnit) extends TypeAssigner with OuterPaths {
     transformer =>
 
     /** The definition tree of the outer accessor of current class
@@ -350,10 +354,14 @@ abstract class ExplicitOuter extends InfoTransform
 
     /** The definition tree of the outer accessor of current class
      */
-    def outerAccessorDef: Tree = localTyper typed {
+    def outerAccessorDef: Tree = {
       val acc = outerAccessor(currentClass)
-      val rhs = if (acc.isDeferred) EmptyTree else Select(This(currentClass), outerField(currentClass))
-      DefDef(acc, rhs)
+      val rhs = if (acc.isDeferred) EmptyTree else {
+        // A non-final class's own field overloads its parent's: select it, as the typer would.
+        val fld = outerField(currentClass)
+        Select(This(currentClass), if (fld.isOverloaded) fld.suchThat(_.owner == currentClass) else fld)
+      }
+      typed(DefDef(acc, rhs), WildcardType)
     }
 
     /** The definition tree of the outer accessor for class mixinClass.
@@ -375,7 +383,7 @@ abstract class ExplicitOuter extends InfoTransform
         else gen.mkAttributedQualifier(mixinPrefix)
       )
       // Need to cast for nested outer refs in presence of self-types. See ticket #3274.
-      localTyper typed DefDef(outerAcc, gen.mkCast(transformer.transform(path), outerAcc.info.resultType))
+      typed(DefDef(outerAcc, gen.mkCast(transformer.transform(path), outerAcc.info.resultType)), WildcardType)
     }
 
     /** The main transformation method */
@@ -480,7 +488,7 @@ abstract class ExplicitOuter extends InfoTransform
             transform(TRUE) // urgh... drop condition if there's no accessor (or if it may disappear after constructors)
           } else {
             // println("(base, acc)= "+(base, acc))
-            val outerSelect = localTyper typed Apply(Select(base, acc), Nil)
+            val outerSelect = typed(Apply(Select(base, acc), Nil), WildcardType)
             // achieves the same as: localTyper typed atPos(tree.pos)(outerPath(base, base.tpe.typeSymbol, outerFor.outerClass))
             // println("(b, tpsym, outerForI, outerFor, outerClass)= "+ (base, base.tpe.typeSymbol, outerFor, sel.symbol.owner, outerFor.outerClass))
             // println("outerSelect = "+ outerSelect)
