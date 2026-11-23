@@ -193,9 +193,18 @@ trait BaseTypeSeqs {
     val parents = tp.parents
     val head = tp.typeSymbol.tpe_*
     val elems =
-      if (parents.isEmpty) { val a = new Array[Type](1); a(0) = head; a } // not Array(head): that uses TypeTagg
+      if (parents.isEmpty) singletonArray(head)
       else mergeBaseTypeSeqs(head, parents)
     newBaseTypeSeq(parents, elems)
+  }
+
+  /** A one-element array. Not `Array(tp)`: that wraps `tp` in a varargs `ArraySeq` and allocates through the
+   *  `TypeTagg` `ClassTag`.
+   */
+  private def singletonArray(tp: Type): Array[Type] = {
+    val a = new Array[Type](1)
+    a(0) = tp
+    a
   }
 
   /** The base type sequence of a compound type with first element `head`: the parents' base type sequences merged in
@@ -209,7 +218,7 @@ trait BaseTypeSeqs {
     val nparents = parents.length
     val pbtss = new Array[BaseTypeSeq](nparents)
     val index = new Array[Int](nparents)
-    // Each round but the last advances a parent past one of its elements; the last appends the `Any` element.
+    // Each round but the last advances at least one parent past one of its elements; the last appends the `Any` element.
     var capacity = 2
     var i = 0
     var ps = parents
