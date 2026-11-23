@@ -186,7 +186,7 @@ trait BaseTypeSeqs {
   lazy val undetBaseTypeSeq: BaseTypeSeq = newBaseTypeSeq(List(), Array())
 
   /** Create a base type sequence consisting of a single type */
-  def baseTypeSingletonSeq(tp: Type): BaseTypeSeq = newBaseTypeSeq(List(), Array(tp))
+  def baseTypeSingletonSeq(tp: Type): BaseTypeSeq = newBaseTypeSeq(List(), singletonArray(tp))
 
   /** Create the base type sequence of a compound type with given tp.parents */
   def compoundBaseTypeSeq(tp: Type): BaseTypeSeq = {
