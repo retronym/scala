@@ -24,10 +24,16 @@ import scala.util.chaining._
  *
  *  @author Iulian Dragos
  */
-abstract class TailCalls extends Transform {
+abstract class TailCalls extends Transform with TypingTransformers {
   import global._                     // the global environment
   import definitions._                // standard classes and methods
-  import typer.typedPos               // methods to type trees
+
+  // Types the trees this phase synthesises as `typer` would, without its contexts.
+  private object assigner extends TypeAssigner {
+    override protected def enclosingOwner: Symbol = typer.context.owner
+    override protected def fallbackTyper(why: String): analyzer.Typer = typer
+  }
+  private def typedPos(pos: Position)(tree: Tree): Tree = assigner.typed(atPos(pos)(tree), WildcardType)
 
   val phaseName: String = "tailcalls"
 
