@@ -104,7 +104,8 @@ trait TypeAdaptingTransformer { self: TreeDSL =>
               case ArrayClass => assert(pt.typeSymbol != ArrayClass, "array") ; tree
               case _          =>
                 val unboxer = currentRun.runDefinitions.unboxMethod(pt.typeSymbol)
-                if (settings.isDeveloper) assert(boxedClass(pt.typeSymbol).tpe <:< tree.tpe, s"${tree.tpe} is not a boxed ${pt}")
+                // `null.asInstanceOf[Int]` unboxes `null`, to the zero of the primitive type.
+                if (settings.isDeveloper) assert(tree.tpe <:< NullTpe || boxedClass(pt.typeSymbol).tpe <:< tree.tpe, s"${tree.tpe} is not a boxed ${pt}")
                 Apply(unboxer, tree)  // don't `setType pt` the Apply tree, as the Apply's fun won't be typechecked if the Apply tree already has a type
             }
         }
