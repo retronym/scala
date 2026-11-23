@@ -684,7 +684,7 @@ abstract class Erasure extends InfoTransform
     val typeAdapter = new TypeAdapter { def typedPos(pos: Position)(tree: Tree): Tree = Eraser.this.typedPos(pos)(tree) }
     import typeAdapter._
 
-    override protected def stabilize(tree: Tree, pre: Type, mode: Mode, pt: Type): Tree = tree
+    override private[nsc] def stabilize(tree: Tree, pre: Type, mode: Mode, pt: Type): Tree = tree
 
     /**  Replace member references as follows:
      *
