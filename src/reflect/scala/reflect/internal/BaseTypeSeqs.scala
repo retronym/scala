@@ -224,65 +224,67 @@ trait BaseTypeSeqs {
     var ps = parents
     while (i < nparents) {
       val parentBts = ps.head.dealias.baseTypeSeq // dealias need for scala/bug#8046.
-      val pbts = if (parentBts eq undetBaseTypeSeq) AnyClass.info.baseTypeSeq else parentBts
-      pbtss(i) = pbts
-      capacity += pbts.length
+      pbtss(i) =
+        if (parentBts eq undetBaseTypeSeq) AnyClass.info.baseTypeSeq
+        else parentBts
+      index(i) = 0
+      capacity += pbtss(i).length
       ps = ps.tail
       i += 1
     }
+    def nextTypeSymbol(i: Int): Symbol = {
+      val j = index(i)
+      val pbts = pbtss(i)
+      if (j < pbts.length) pbts.typeSymbol(j) else AnyClass
+    }
+    def nextRawElem(i: Int): Type = {
+      val j = index(i)
+      val pbts = pbtss(i)
+      if (j < pbts.length) pbts.rawElem(j) else AnyTpe
+    }
     val elems = new Array[Type](capacity)
     elems(0) = head
-    var size = 1
+    var btsSize = 1
     var minSym: Symbol = NoSymbol
-    while (minSym ne AnyClass) {
-      minSym = nextTypeSymbol(pbtss, index, 0)
+    while (minSym != AnyClass) {
+      minSym = nextTypeSymbol(0)
       i = 1
       while (i < nparents) {
-        val nextSym = nextTypeSymbol(pbtss, index, i)
+        val nextSym = nextTypeSymbol(i)
         if (nextSym isLess minSym)
           minSym = nextSym
         i += 1
       }
-      var minTypes: List[Type] = Nil
+      var minTypes: List[Type] = List()
+      def updateInMinTypes(minTypes: List[Type], tp: Type): List[Type] = {
+        def loop(tps: List[Type]): Boolean = tps match {
+          case x :: tps => (tp =:= x) || loop(tps)
+          case _        => false
+        }
+        if (loop(minTypes)) minTypes
+        else tp :: minTypes
+      }
+
       i = 0
       while (i < nparents) {
-        if (nextTypeSymbol(pbtss, index, i) eq minSym) {
-          nextRawElem(pbtss, index, i) match {
+        if (nextTypeSymbol(i) == minSym) {
+          nextRawElem(i) match {
             case rt: RefinedType =>
               var variants = rt.parents
               while (!variants.isEmpty) {
-                minTypes = addMinType(minTypes, variants.head)
+                minTypes = updateInMinTypes(minTypes, variants.head)
                 variants = variants.tail
               }
-            case ntp => minTypes = addMinType(minTypes, ntp)
+            case ntp => minTypes = updateInMinTypes(minTypes, ntp)
           }
-          index(i) += 1
+          index(i) = index(i) + 1
         }
         i += 1
       }
-      elems(size) = intersectionTypeForLazyBaseType(minTypes) // TODO this reverses the order. Does this matter? Or should this be minTypes.reverse?
-      size += 1
+      elems(btsSize) = intersectionTypeForLazyBaseType(minTypes) // TODO this reverses the order. Does this matter? Or should this be minTypes.reverse?
+      btsSize += 1
     }
-    if (size == capacity) elems else java.util.Arrays.copyOf(elems, size)
-  }
-  private def nextTypeSymbol(pbtss: Array[BaseTypeSeq], index: Array[Int], i: Int): Symbol = {
-    val j = index(i)
-    val pbts = pbtss(i)
-    if (j < pbts.length) pbts.typeSymbol(j) else AnyClass
-  }
-  private def nextRawElem(pbtss: Array[BaseTypeSeq], index: Array[Int], i: Int): Type = {
-    val j = index(i)
-    val pbts = pbtss(i)
-    if (j < pbts.length) pbts.rawElem(j) else AnyTpe
-  }
-  /** `tp :: minTypes`, unless `minTypes` has a type `=:=` to `tp`. */
-  private def addMinType(minTypes: List[Type], tp: Type): List[Type] = {
-    var tps = minTypes
-    while (!tps.isEmpty) {
-      if (tp =:= tps.head) return minTypes
-      tps = tps.tail
-    }
-    tp :: minTypes
+    if (btsSize == capacity) elems else java.util.Arrays.copyOf(elems, btsSize)
   }
 
   class MappedBaseTypeSeq(orig: BaseTypeSeq, f: Type => Type) extends BaseTypeSeq(orig.parents map f, orig.elems) {
