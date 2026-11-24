@@ -38,7 +38,7 @@ if [ -z "${JAVA_HOME:-}" ]; then
   echo "environment variable JAVA_HOME is undefined."
   exit
 elif $cygwin; then
-  echo "Cygwin not supported (use 'mkLibNatives.bat')."
+  echo "Cygwin not supported (use 'natives-mkLib.bat')."
   exit
 fi
 
