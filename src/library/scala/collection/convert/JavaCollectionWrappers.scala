@@ -271,12 +271,13 @@ private[collection] object JavaCollectionWrappers extends Serializable {
         def hasNext = ui.hasNext
 
         def next(): ju.Map.Entry[K, V] = {
-          val (k, v) = ui.next()
+          val (k, v0) = ui.next()
           prev = Some(k)
           new ju.Map.Entry[K, V] {
+            private[this] var v = v0
             def getKey = k
             def getValue = v
-            def setValue(v1 : V) = self.put(k, v1)
+            def setValue(v1 : V) = { val old = self.put(k, v1); v = v1; old }
 
             // It's important that this implementation conform to the contract
             // specified in the javadocs of java.util.Map.Entry.hashCode
