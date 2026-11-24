@@ -457,6 +457,16 @@ abstract class UnCurry extends InfoTransform
           }
         }
 
+      // Erasure leaves `x.isInstanceOf[C]` as an instance test of `x` where `C` is a class or an abstract type.
+      // A test against any other type may evaluate something else first, for instance `ScalaRunTime.isArray(x, 1)`
+      // for an array of unknown element type and `p eq x` for `p.type`.
+      @tailrec def isInstanceTest(tp: Type): Boolean = tp.dealias match {
+        case TypeRef(_, _, _)               => erasure.unboundedGenericArrayLevel(tp) == 0
+        case ExistentialType(_, underlying) => isInstanceTest(underlying)
+        case AnnotatedType(_, underlying)   => isInstanceTest(underlying)
+        case _                              => false
+      }
+
       val result =
         if (checkIsElidable(sym))
           replaceElidableTree(tree)
@@ -500,6 +510,15 @@ abstract class UnCurry extends InfoTransform
           case sel: Select if sel.qualifier.tpe.typeSymbol.isDerivedValueClass =>
             // `c.f` where `c` is a value class is translated to `C.f$extension(c)` (value class member) or
             // `new C(c).f()` (universal trait member). In both cases, `try` within `c` needs a lift.
+            withNeedLift(needLift = true) { super.transform(tree) }
+
+          case sel: Select if erasure.isRuntimeCallReceiver(sel) =>
+            // `xs.length` is translated to `ScalaRunTime.array_length(xs)` (likewise `apply`, `update` and `clone`) where
+            // the array might be primitive, and `1.getClass` to `ScalaRunTime.anyValClass(1, ..)`. The module is loaded
+            // before the receiver is evaluated, so a `try` within the receiver needs a lift.
+            withNeedLift(needLift = true) { super.transform(tree) }
+
+          case TypeApply(fun: Select, arg :: Nil) if isTypeTestSymbol(fun.symbol) && !isInstanceTest(arg.tpe) =>
             withNeedLift(needLift = true) { super.transform(tree) }
 
           case Apply(fn, args) =>

@@ -478,6 +478,24 @@ abstract class Erasure extends InfoTransform
   // is a primitive and what arrived boxed.
   private lazy val interceptedMethods = poundPoundMethods ++ primitiveGetClassMethods
 
+  /** Is a member of `Array` selected from a qualifier of this type translated to a call of `ScalaRunTime.array_xxx`?
+   *  That is so where the array might be primitive, which includes an abstract type bounded by `Array`.
+   */
+  def isGenericArrayOp(qualTpe: Type): Boolean =
+    unboundedGenericArrayLevel(qualTpe.widen) == 1 || qualTpe.typeSymbol.isAbstractType
+
+  /** Is `qual.sym` a `getClass` on a primitive, which is translated to a call of `ScalaRunTime.anyValClass`? */
+  def isPrimitiveGetClass(sym: Symbol, qualTpe: Type): Boolean =
+    primitiveGetClassMethods(sym) && isPrimitiveValueClass(qualTpe.typeSymbol)
+
+  /** Does `preErase` translate the selection to a call of a method of the `ScalaRunTime` module that takes the
+   *  receiver as an argument? The module is then loaded before the receiver is evaluated, which uncurry has to know
+   *  when it decides whether a `try` in the receiver is evaluated on an empty stack.
+   */
+  def isRuntimeCallReceiver(sel: Select): Boolean =
+    if (sel.symbol.owner == ArrayClass) isGenericArrayOp(sel.qualifier.tpe)
+    else isPrimitiveGetClass(sel.symbol, sel.qualifier.tpe)
+
 // -------- erasure on trees ------------------------------------------
 
   /** Re-typechecks trees after erasure, using `Eraser` as its typer. */
@@ -1156,7 +1174,7 @@ abstract class Erasure extends InfoTransform
             val args = tree.args
             if (fn.symbol.owner == ArrayClass) {
               // Have to also catch calls to abstract types which are bounded by Array.
-              if (unboundedGenericArrayLevel(qual.tpe.widen) == 1 || qual.tpe.typeSymbol.isAbstractType) {
+              if (isGenericArrayOp(qual.tpe)) {
                 // convert calls to apply/update/length on generic arrays to
                 // calls of ScalaRunTime.array_xxx method calls
                 global.typer.typedPos(tree.pos) {
@@ -1200,7 +1218,7 @@ abstract class Erasure extends InfoTransform
                   case DoubleClass                                   => staticsCall(nme.doubleHash)
                   case _                                             => staticsCall(nme.anyHash)
                 }
-              } else if (isPrimitiveValueClass(qual.tpe.typeSymbol)) {
+              } else if (isPrimitiveGetClass(fn.symbol, qual.tpe)) {
                 // Rewrite 5.getClass to ScalaRunTime.anyValClass(5)
                 global.typer.typed(gen.mkRuntimeCall(nme.anyValClass, List(qual, typer.resolveClassTag(tree.pos, qual.tpe.widen))))
               } else if (primitiveGetClassMethods.contains(fn.symbol)) {
