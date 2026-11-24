@@ -1,0 +1,8 @@
+A1[Int]: 2
+A1[Unit]: ()
+A1[VI]: VI(1)
+A2[Int]: 2
+A2[String]: ab
+A3[Int]: abab
+A4[Int]: VT(2)
+anon class: 2
