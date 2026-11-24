@@ -156,6 +156,11 @@ lazy val commonSettings = instanceSettings ++ clearSourceAndResourceDirectories 
   cleanFiles += (Compile / doc / target).value,
   run / fork := true,
   run / connectInput := true,
+  // TODO scala/scala review G7: javac gets `-source 1.8 -target 1.8` above, but scalac gets no
+  // `-release 8`, so on a newer JDK it links against that JDK's API: built on JDK 17, reflect and
+  // compiler call `ByteBuffer.flip()Ljava/nio/ByteBuffer;` (JDK 9+ only; NoSuchMethodError on 8).
+  // Releases are safe only because publish.yml pins JDK 8. Adding `-release 8` for library,
+  // reflect and compiler compiles cleanly on JDK 17 and emits `Buffer` descriptors instead.
   Compile / scalacOptions ++= Seq("-feature", "-Xlint",
     //"-Wunused:patvars",
     //"-Wunused:params",
