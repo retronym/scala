@@ -13,6 +13,7 @@
 package scala.tools.nsc.transform.async
 
 import scala.collection.mutable
+import scala.reflect.internal.Flags
 import scala.tools.nsc.transform.{Transform, TypingTransformers}
 import scala.reflect.internal.util.{NoSourceFile, ReplBatchSourceFile, SourceFile}
 
@@ -115,13 +116,14 @@ abstract class AsyncPhase extends Transform with TypingTransformers with AnfTran
         case cd: ClassDef if liftableMap.contains(cd.symbol) =>
           val (applySym, liftedTrees) = liftableMap.remove(cd.symbol).get
           val liftedSyms = liftedTrees.iterator.map(_.symbol).toSet
+          val liftedVals = liftedValSyms(liftedTrees)
           val cd1 = atOwner(cd.symbol) {
             deriveClassDef(cd)(impl => {
               deriveTemplate(impl)(liftedTrees ::: _)
             })
           }
           assert(localTyper.context.owner == cd.symbol.owner, "local typer context's owner must be ClassDef symbol's owner")
-          val withFields = new UseFields(localTyper, cd.symbol, applySym, liftedSyms, NoSymbol).transform(cd1)
+          val withFields = new UseFields(localTyper, cd.symbol, applySym, liftedSyms, liftedVals, NoSymbol).transform(cd1)
           withFields
 
         case dd: DefDef if dd.hasAttachment[AsyncAttachment] =>
@@ -148,7 +150,7 @@ abstract class AsyncPhase extends Transform with TypingTransformers with AnfTran
               val (newRhs, liftedTrees) = asyncTransform(asyncBody)
               liftableMap(currentTransformState.stateMachineClass) = (dd.symbol, liftedTrees)
               val liftedSyms = liftedTrees.iterator.map(_.symbol).toSet
-              val withFields = new UseFields(localTyper, currentTransformState.stateMachineClass, dd.symbol, liftedSyms, selfSym).transform(newRhs)
+              val withFields = new UseFields(localTyper, currentTransformState.stateMachineClass, dd.symbol, liftedSyms, liftedValSyms(liftedTrees), selfSym).transform(newRhs)
               deriveDefDef(dd)(_ => withFields)
             } finally {
               currentTransformState = saved
@@ -156,6 +158,9 @@ abstract class AsyncPhase extends Transform with TypingTransformers with AnfTran
           }
         case transformed => transformed
       }
+
+    private def liftedValSyms(liftedTrees: List[Tree]): Set[Symbol] =
+      liftedTrees.iterator.collect { case vd: ValDef if vd.hasAttachment[LiftedVal.type] => vd.symbol }.toSet
 
     private def asyncTransform(asyncBody: Tree): (Tree, List[Tree]) = {
       val transformState = currentTransformState
@@ -209,8 +214,9 @@ abstract class AsyncPhase extends Transform with TypingTransformers with AnfTran
     //   - lifted local variables are entered into the scope of the state machine class
     //   - references to them are rewritten as referencs to the fields.
     //   - the rhs of ValDefs that initialize such fields is turned into an assignment to the field
+    //   - a function that refers to a lifted `val` captures the value the field has when the function is created
     private class UseFields(initLocalTyper: analyzer.Typer, stateMachineClass: Symbol,
-                            applySym: Symbol, liftedSyms: Set[Symbol], selfSym: Symbol) extends explicitOuter.OuterPathTransformer(initLocalTyper) {
+                            applySym: Symbol, liftedSyms: Set[Symbol], liftedVals: Set[Symbol], selfSym: Symbol) extends explicitOuter.OuterPathTransformer(initLocalTyper) {
       private def fieldSel(tree: Tree) = {
         assert(currentOwner != NoSymbol, "currentOwner cannot be NoSymbol")
         val outerOrThis =
@@ -247,6 +253,23 @@ abstract class AsyncPhase extends Transform with TypingTransformers with AnfTran
           treeCopy.Assign(tree, fieldSel(i), adapt(transform(rhs), i.symbol.tpe))
         case Ident(name) if liftedSyms(tree.symbol) =>
           fieldSel(tree).setType(tree.tpe)
+        case Block((body: DefDef) :: Nil, Function(_, Apply(target, _))) if target.symbol == body.symbol && liftedVals.nonEmpty =>
+          // A function, in the form uncurry leaves it: `{ def $anonfun(...) = body; (...) => $anonfun(...) }`.
+          //
+          // A `val` in the body of a loop is a new variable in each iteration, but all iterations share the field
+          // that it is lifted to. A function that read the field when it is called would see the value of the
+          // latest iteration, so read the field into a local val when the function is created and let lambdalift
+          // capture that.
+          val captured = body.collect { case i: Ident if liftedVals(i.symbol) => i.symbol }.distinct
+          if (captured.isEmpty) super.transform(tree)
+          else {
+            val snapshots = captured.map { sym =>
+              val snapshot = currentOwner.newTermSymbol(unit.freshTermName(sym.name.toStringWithSuffix("$")), tree.pos, Flags.SYNTHETIC).setInfo(sym.info)
+              atPos(tree.pos)(ValDef(snapshot, fieldSel(Ident(sym).setPos(tree.pos))).setType(NoType))
+            }
+            val Block(stats, expr) = super.transform(tree.substituteSymbols(captured, snapshots.map(_.symbol))): @unchecked
+            treeCopy.Block(tree, snapshots ::: stats, expr)
+          }
         case _: TypeTree =>
           tree
         case _ =>
