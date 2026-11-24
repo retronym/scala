@@ -1,0 +1,4 @@
+isInstanceOf[O.type]: false [arg, init O]
+match P.type        : false [arg, init P]
+isInstanceOf[lz.type]: true [arg, force snapshot]
+match lz.type        : true [arg, force snapshot]

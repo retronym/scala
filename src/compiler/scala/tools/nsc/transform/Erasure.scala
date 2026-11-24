@@ -1085,7 +1085,17 @@ abstract class Erasure extends InfoTransform
                   List()) setPos tree.pos
               targ.tpe match {
                 case SingletonInstanceCheck(cmpOp, cmpArg) =>
-                  atPos(tree.pos) { Apply(Select(cmpArg, cmpOp), List(qual)) }
+                  // The path is the receiver of the comparison. Evaluating it can run an object initializer
+                  // or force a lazy val, so the receiver of the type test is evaluated first.
+                  val isPurePath = cmpArg match {
+                    case This(_) | Literal(_) => true
+                    case Ident(_)             => !cmpArg.symbol.isModule && !cmpArg.symbol.isLazy
+                    case _                    => false
+                  }
+                  if (isPurePath) atPos(tree.pos) { Apply(Select(cmpArg, cmpOp), List(qual)) }
+                  else gen.evalOnce(qual, currentOwner, localTyper.fresh) { q =>
+                    atPos(tree.pos) { Apply(Select(cmpArg, cmpOp), List(q())) }
+                  }
                 case RefinedType(parents, decls) if (parents.lengthIs >= 2) =>
                   gen.evalOnce(qual, currentOwner, localTyper.fresh) { q =>
                     // Optimization: don't generate isInstanceOf tests if the static type
