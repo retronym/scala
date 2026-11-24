@@ -300,6 +300,28 @@ class FutureTest {
     assertEquals(1000, numTransforms(p))
   }
 
+  // `linkRootOf` sets `inner` to a Link before it moves inner's callbacks to the root. Removing a callback of `inner`
+  // in between follows the Link to the root, which does not have it yet; the root's own callbacks must stay.
+  @Test def t13197UnregisterWhileLinking(): Unit = {
+    val gate = Promise[Unit]()
+    val inner = Promise[Int]()
+    val outer = gate.future.flatMap(_ => inner.future)(ExecutionContext.parasitic)
+    val ran = new java.util.concurrent.atomic.AtomicInteger
+    for (_ <- 1 to 3) outer.onComplete(_ => ran.incrementAndGet())(ExecutionContext.parasitic)
+
+    val other = Promise[Int]()
+    val first = Future.firstCompletedOf(List(inner.future, other.future))(ExecutionContext.parasitic)
+    val innerP = inner.asInstanceOf[DefaultPromise[Int]]
+    assertTrue(innerP.compareAndSet(innerP.get(), new impl.Promise.Link(outer.asInstanceOf[DefaultPromise[Int]]))) // first step of linkRootOf
+
+    other.success(1) // unregisters firstCompletedOf's handler from `inner`
+    assertEquals(1, Await.result(first, Inf))
+    assertEquals(3, numTransforms(outer))
+
+    inner.success(2)
+    assertEquals(3, ran.get)
+  }
+
   @Test def completedWaitUndefined(): Unit = {
     assertThrows[IllegalArgumentException](Await.result(Future.successful(1), Undefined))
     assertThrows[IllegalArgumentException](Await.ready(Future.successful(1), Undefined))
