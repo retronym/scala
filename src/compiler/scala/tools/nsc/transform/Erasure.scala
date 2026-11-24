@@ -1103,10 +1103,11 @@ abstract class Erasure extends InfoTransform
                   }
                 case TypeRef(_, SingletonClass, _) =>
                   atPos(tree.pos) {
-                    if(qual.tpe <:< AnyRefTpe)
-                      Apply(Select(qual, Object_ne), List(Literal(Constant(null)) setType NullTpe))
+                    if (qual.tpe <:< AnyValTpe)
+                      if (treeInfo.isExprSafeToInline(qual)) Literal(Constant(true))
+                      else Block(qual :: Nil, Literal(Constant(true)))
                     else
-                      Literal(Constant(true))
+                      Apply(Select(qual, Object_ne), List(Literal(Constant(null)) setType NullTpe))
                   }
                 case _ => tree
               }
