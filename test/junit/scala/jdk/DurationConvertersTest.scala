@@ -104,6 +104,16 @@ class DurationConvertersTest {
   }
 
   @Test
+  def javaNanosNearBoundsToScalaDuration(): Unit = {
+    // a negative java Duration has a more negative seconds field and a positive nanos adjustment
+    Seq[Long](-Long.MaxValue, -9223372036000000001L, -9223372036000000000L, Long.MaxValue).foreach { n =>
+      assertEquals(n, conv.toScala(JavaDuration.ofNanos(n)).toNanos)
+    }
+    val res = Try { conv.toScala(JavaDuration.ofNanos(Long.MinValue)) }
+    assertTrue(s"Expected exception for Long.MinValue nanos but got $res", res.isFailure)
+  }
+
+  @Test
   def unsupportedJavaDurationThrows(): Unit = {
     Seq(JavaDuration.ofSeconds(-9223372037L), JavaDuration.ofSeconds(9223372037L)).foreach { d =>
       val res = Try { conv.toScala(d) }
