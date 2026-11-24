@@ -711,11 +711,30 @@ abstract class TreeInfo {
 
   private def isSimpleThrowable(tp: Type): Boolean = tp match {
     case TypeRef(pre, sym, args) =>
-      (pre == NoPrefix || pre.widen.typeSymbol.isStatic) &&
+      (sym.isJavaDefined || isStaticPrefix(pre) || hasNoOuterTest(sym)) &&
       (sym isNonBottomSubClass ThrowableClass) &&  /* bq */ !sym.isTrait
     case _ =>
       false
   }
+
+  /** Does this prefix denote a single value, so that a type test for a class selected from it
+   *  needs no outer test? True for packages and for objects reached through such a prefix, as in
+   *  `TypeTestTreeMaker.treeCondStrategy.withOuterTest`. A class is not such a prefix, even if it
+   *  is static: `Outer.this.Inner` is a different class for each instance of `Outer`.
+   */
+  @tailrec
+  private def isStaticPrefix(pre: Type): Boolean = pre == NoPrefix || {
+    val wide = pre.widen
+    val sym  = wide.typeSymbol
+    sym.isPackageClass || nme.isReplWrapperName(sym.name) || (sym.isModuleClass && isStaticPrefix(wide.prefix))
+  }
+
+  /** The pattern matcher emits an outer test for a type test against an inner class, but `explicitouter`
+   *  drops it (with an "outer reference cannot be checked" warning) if the class is effectively final, as
+   *  the outer pointer of such a class may be elided by `constructors`. A catch for such a class tests no
+   *  more than the exception table does.
+   */
+  private def hasNoOuterTest(sym: Symbol): Boolean = sym.isEffectivelyFinal
 
   /* If we have run-time types, and these are used for pattern matching,
      we should replace this  by something like:
