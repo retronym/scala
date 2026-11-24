@@ -258,9 +258,15 @@ abstract class LambdaLift extends InfoTransform {
 
       def newName(sym: Symbol): Name = {
         val originalName = sym.name
-        def freshen(prefix: String): Name =
-          if (originalName.isTypeName) unit.freshTypeName(prefix)
-          else unit.freshTermName(prefix)
+        // The fresh name can be taken by a member of the class that the symbol is lifted to, as `$` is
+        // allowed in source identifiers: `class A { def f = { class B }; class B$1 }`.
+        @tailrec def freshen(prefix: String): Name = {
+          val name: Name =
+            if (originalName.isTypeName) unit.freshTypeName(prefix)
+            else unit.freshTermName(prefix)
+          if (sym.owner.enclClass.info.decls.containsName(name)) freshen(prefix)
+          else name
+        }
 
         val join = nme.NAME_JOIN_STRING
         if (sym.isAnonymousFunction && sym.owner.isMethod) {
