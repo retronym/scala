@@ -169,4 +169,18 @@ class BitSetTest {
     assertThrows[NoSuchElementException](BitSet.empty.iteratorFrom(0).next())
   }
 
+  @Test def `stepper with elements beyond 2^30`(): Unit = {
+    import scala.jdk.StreamConverters._
+    // 2^25 words is the smallest bit mask whose length in bits overflows Int
+    val words = new Array[Long](1 << 25)
+    val elems = List(1, 1 << 30, Int.MaxValue - 64, Int.MaxValue)
+    for (e <- elems) words(e >> 6) |= 1L << (e & 63)
+    for (bs <- List[collection.BitSet](BitSet.fromBitMaskNoCopy(words), collection.immutable.BitSet.fromBitMaskNoCopy(words))) {
+      assertEquals(elems, bs.toList)
+      assertEquals(elems, bs.stepper.iterator.toList)
+      assertEquals(elems, bs.asJavaSeqStream.toArray.toList)
+      assertEquals(elems.size.toLong, bs.asJavaParStream.count())
+    }
+  }
+
 }
