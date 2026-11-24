@@ -1253,14 +1253,15 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
             }
             bc.genIndyStringConcat(recipe.toString, argTypes.result(), constVals.result())
 
-            // If we spilled, generate one final concat
-            if (countConcats > 1) {
-              bc.genIndyStringConcat(
-                TagArg.toString * countConcats,
-                Seq.fill(countConcats)(StringRef.toASMType),
-                Seq.empty
-              )
+            // If we spilled, concatenate the partial strings that are on the stack. One call takes at most
+            // `MaxIndySlots` of them, so with more than that, first join the topmost ones.
+            def joinPartialStrings(count: Int): Unit =
+              bc.genIndyStringConcat(TagArg.toString * count, Seq.fill(count)(StringRef.toASMType), Seq.empty)
+            while (countConcats > MaxIndySlots) {
+              joinPartialStrings(MaxIndySlots)
+              countConcats -= MaxIndySlots - 1
             }
+            if (countConcats > 1) joinPartialStrings(countConcats)
           }
       }
       StringRef
