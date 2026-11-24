@@ -347,4 +347,37 @@ class ListBufferTest {
     b(2) = 42
     assertThrows[java.util.ConcurrentModificationException](it.hasNext)
   }
+
+  @Test def `prependToList does not add the list to the buffer`: Unit = {
+    def check(mutate: ListBuffer[Int] => Unit, expected: List[Int]): Unit = {
+      val b = ListBuffer(1, 2)
+      assertEquals(List(1, 2, 3, 4), b.prependToList(List(3, 4)))
+      mutate(b)
+      assertEquals(expected, b.toList)
+      assertEquals(expected.length, b.length)
+      assertEquals(expected.last, b.last)
+    }
+    check(_ += 5, List(1, 2, 5))
+    check(_(0) = 9, List(9, 2))
+    check(_.remove(0), List(2))
+    check(_.insert(1, 7), List(1, 7, 2))
+    check(_.mapInPlace(_ * 10), List(10, 20))
+    check(_.flatMapInPlace(x => List(x, x)), List(1, 1, 2, 2))
+    check(_.filterInPlace(_ > 1), List(2))
+    check(_.patchInPlace(1, List(8), 1), List(1, 8))
+    check(b => b.insertAll(0, b), List(1, 2, 1, 2))
+    check(b => b ++= b, List(1, 2, 1, 2))
+    check(_ => (), List(1, 2))
+  }
+
+  @Test def `reads after prependToList stop at the buffer's own elements`: Unit = {
+    val b = ListBuffer(1, 2)
+    val xs = b.prependToList(List(3, 4))
+    assertEquals(List(1, 2), b.iterator.toList)
+    assertEquals("ListBuffer(1, 2)", b.toString)
+    assertEquals(ListBuffer(1, 2), b)
+    assertThrows[IndexOutOfBoundsException](b(2))
+    assertEquals(List(1, 2), b.toList)
+    assertEquals(List(1, 2, 3, 4), xs)
+  }
 }

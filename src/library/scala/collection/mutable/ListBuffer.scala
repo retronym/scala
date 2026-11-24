@@ -53,12 +53,22 @@ class ListBuffer[A]
 
   private type Predecessor = ::[A] /*| Null*/
 
-  def iterator: Iterator[A] = new MutationTracker.CheckedIterator(first.iterator, mutationCount)
+  // After `prependToList`, the list it was given hangs off `last0` until the next mutation
+  // copies the buffer's own cells, so reads must stop after `len` elements.
+  private def hasTail: Boolean = (last0 ne null) && !last0.next.isEmpty
+
+  def iterator: Iterator[A] = {
+    val it = if (hasTail) first.iterator.take(len) else first.iterator
+    new MutationTracker.CheckedIterator(it, mutationCount)
+  }
 
   override def iterableFactory: SeqFactory[ListBuffer] = ListBuffer
 
   @throws[IndexOutOfBoundsException]
-  def apply(i: Int) = first.apply(i)
+  def apply(i: Int) = {
+    if (i < 0 || i >= len) throw CommonErrors.indexOutOfBounds(index = i, max = len - 1)
+    first.apply(i)
+  }
 
   def length = len
   override def knownSize = len
@@ -66,7 +76,7 @@ class ListBuffer[A]
   override def isEmpty: Boolean = len == 0
 
   private def copyElems(): Unit = {
-    val buf = new ListBuffer[A].freshFrom(this)
+    val buf = new ListBuffer[A].freshFrom(first.iterator.take(len))
     first = buf.first
     last0 = buf.last0
     aliased = false
@@ -81,6 +91,11 @@ class ListBuffer[A]
 
   // Avoids copying where possible.
   override def toList: List[A] = {
+    if (hasTail) copyElems()
+    exportFirst()
+  }
+
+  private def exportFirst(): List[A] = {
     aliased = nonEmpty
     // We've accumulated a number of mutations to `List.tail` by this stage.
     // Make sure they are visible to threads that the client of this ListBuffer might be about
@@ -100,7 +115,7 @@ class ListBuffer[A]
     else {
       ensureUnaliased()
       last0.next = xs
-      toList
+      exportFirst()
     }
   }
 
@@ -321,10 +336,12 @@ class ListBuffer[A]
   def flatMapInPlace(f: A => IterableOnce[A]): this.type = {
     mutationCount += 1
     var src = first
+    var remaining = len
     var dst: List[A] = null
     last0 = null
     len = 0
-    while(!src.isEmpty) {
+    while(remaining > 0) {
+      remaining -= 1
       val it = f(src.head).iterator
       while(it.hasNext) {
         val v = new ::(it.next(), Nil)
