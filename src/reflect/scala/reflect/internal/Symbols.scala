@@ -1258,7 +1258,11 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     /**
      * The initial owner of this symbol.
      */
-    def originalOwner: Symbol = originalOwnerMap.getOrElse(this, rawowner)
+    def originalOwner: Symbol = {
+      // `getOrNull`, not `getOrElse`: its by-name default is a closure per call (`isStrictFP` calls this for every method)
+      val owner = originalOwnerMap.getOrNull(this)
+      if (owner eq null) rawowner else owner
+    }
 
     // TODO - don't allow the owner to be changed without checking invariants, at least
     // when under some flag. Define per-phase invariants for owner/owned relationships,
