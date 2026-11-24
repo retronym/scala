@@ -2313,6 +2313,11 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
         case _                          => Nil
       }
       def resultType = meth.tpe_*.finalResultType
+      // A type parameter of the method erases to its bound: `def m[A <: V](a: A)` takes the underlying value of `V`.
+      @tailrec def isValueClass(tp: Type): Boolean = {
+        val sym = tp.typeSymbol
+        sym.isDerivedValueClass || sym.isAbstractType && sym.owner == meth && isValueClass(sym.info.upperBound)
+      }
       def nthParamPos(n1: Int, n2: Int) =
         try ddef.vparamss(n1)(n2).pos catch { case _: IndexOutOfBoundsException => meth.pos }
 
@@ -2349,13 +2354,13 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
           }
           checkAbstract(paramType, "Parameter type")
 
-          if (sym.isDerivedValueClass)
+          if (isValueClass(paramType))
             failStruct(paramPos, member="Parameter type", referTo="a user-defined value class")
           if (paramType.isInstanceOf[ThisType] && sym == meth.owner)
             failStruct(paramPos, member="Parameter type", referTo="the type of that refinement (self type)")
         }
       }
-      if (resultType.typeSymbol.isDerivedValueClass)
+      if (isValueClass(resultType))
         failStruct(ddef.tpt.pos, member="Result type", referTo="a user-defined value class")
     }
 

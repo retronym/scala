@@ -1,0 +1,13 @@
+structural-value-class-bound.scala:9: error: Parameter type in structural refinement may not refer to a user-defined value class
+  val k: { def p[A <: V](a: A): Int } = new K
+                         ^
+structural-value-class-bound.scala:10: error: Parameter type in structural refinement may not refer to a user-defined value class
+  val l: { def r[A <: V](a: A): A } = new K
+                         ^
+structural-value-class-bound.scala:10: error: Result type in structural refinement may not refer to a user-defined value class
+  val l: { def r[A <: V](a: A): A } = new K
+                                ^
+structural-value-class-bound.scala:11: error: Type bound in structural refinement may not refer to an abstract type defined outside that refinement
+  def q[B <: V]: { def p[A <: B](a: A): Int } = new K // only the error for an abstract type defined outside
+                                 ^
+4 errors
