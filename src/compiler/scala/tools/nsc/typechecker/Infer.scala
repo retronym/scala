@@ -329,12 +329,13 @@ trait Infer extends Checkable {
      *  `isAsSpecific` no longer prefers A by testing applicability to A for both m(A) and m(=> A)
      *  since that induces a tie between m(=> A) and m(=> A, B*) [scala/bug#3761]
      */
-    private def isCompatible(tp: Type, pt: Type): Boolean = {
-      def isCompatibleByName(tp: Type, pt: Type): Boolean = (
-           isByNameParamType(pt)
-        && !isByNameParamType(tp)
-        && isCompatible(tp, dropByName(pt))
-      )
+    private def isCompatible(tp: Type, pt: Type): Boolean =
+      // Compare a by-value argument only with the underlying type of a by-name parameter.
+      // Comparing with `=> T` itself would admit `Null` for any `T`, as `<byname>` is not a value class.
+      if (isByNameParamType(pt) && !isByNameParamType(tp)) isCompatible(tp, dropByName(pt))
+      else isCompatibleNotByName(tp, pt)
+
+    private def isCompatibleNotByName(tp: Type, pt: Type): Boolean = {
       def isCompatibleSam(tp: Type, pt: Type): Boolean = (definitions.isFunctionType(tp) || definitions.isPartialFunctionType(tp) || tp.isInstanceOf[MethodType] || tp.isInstanceOf[PolyType]) &&  {
         val samFun = samToFunctionType(pt)
         !samFun.isNoType && isCompatible(tp, samFun)
@@ -346,7 +347,6 @@ trait Infer extends Checkable {
 
         ((tp1 weak_<:< pt)
          || isCoercible(tp1, pt)
-         || isCompatibleByName(tp, pt)
          || isCompatibleSam(tp, pt)
         )
       }
