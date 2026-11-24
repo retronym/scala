@@ -32,7 +32,10 @@ trait StandardScalaSettings { _: MutableSettings =>
   val javaextdirs =       PathSetting ("-javaextdirs", "Override java extdirs classpath.", Defaults.javaExtDirs) withAbbreviation "--java-extension-directories"
   val sourcepath =        PathSetting ("-sourcepath", "Specify location(s) of source files.", "") withAbbreviation "--source-path" // Defaults.scalaSourcePath
   val rootdir =           PathSetting ("-rootdir", "The absolute path of the project root directory, usually the git/scm checkout. Used by -Wconf.", "") withAbbreviation "--root-directory"
-  val systemPath =        PathSetting ("-system", "Override location of Java system modules", "") withAbbreviation "--system"
+  val systemPath =        PathSetting ("-system", "Override location of Java system modules", "").withAbbreviation("--system").withPostSetHook { s =>
+    // the jrt file system provider fails with an IOException otherwise
+    if (!new java.io.File(s.value, "lib/jrt-fs.jar").isFile) errorFn(s"illegal argument for -system: ${s.value} (lib/jrt-fs.jar not found)")
+  }
 
   /** Other settings.
    */
