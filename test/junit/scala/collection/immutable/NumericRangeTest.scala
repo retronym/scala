@@ -69,6 +69,30 @@ class NumericRangeTest {
     }
   }
 
+  // `x - start` overflows when the range spans more than T's MaxValue
+  @Test
+  def containsAndIndexOfAcrossOverflowingSpan(): Unit = {
+    def check[T](r: NumericRange[T]): Unit = {
+      val xs = r.toList
+      for ((x, i) <- xs.zipWithIndex) {
+        assertTrue(s"$r contains $x", r.contains(x))
+        assertEquals(s"$r indexOf $x", i, r.indexOf(x))
+        assertEquals(s"$r lastIndexOf $x", i, r.lastIndexOf(x))
+      }
+    }
+    check(NumericRange.inclusive(Long.MinValue, Long.MaxValue, Long.MaxValue))
+    check(NumericRange.inclusive(Long.MaxValue, Long.MinValue, -Long.MaxValue))
+    check(NumericRange.inclusive(-6000000000000000000L, 6000000000000000000L, 4000000000000000000L))
+    check(NumericRange.inclusive(Int.MinValue, Int.MaxValue, Int.MaxValue))
+    check(NumericRange.inclusive(Int.MaxValue, Int.MinValue, Int.MinValue))
+    check(NumericRange.inclusive[Byte](Byte.MinValue, Byte.MaxValue, 100))
+    val r = NumericRange.inclusive(-6000000000000000000L, 6000000000000000000L, 4000000000000000000L)
+    for (x <- List(-5999999999999999999L, 1L, 5999999999999999999L, Long.MaxValue, Long.MinValue)) {
+      assertFalse(s"$r contains $x", r.contains(x))
+      assertEquals(-1, r.indexOf(x))
+    }
+  }
+
   @Test
   def numericRangeIsEmpty(): Unit = {
     //Test Positive Step

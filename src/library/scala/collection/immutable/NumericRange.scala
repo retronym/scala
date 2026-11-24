@@ -294,7 +294,16 @@ sealed class NumericRange[T](
 
   // a well-typed contains method.
   def containsTyped(x: T): Boolean =
-    isWithinBoundaries(x) && (((x - start) % step) == zero)
+    isWithinBoundaries(x) && {
+      if (sign(x) == sign(start)) ((x - start) % step) == zero // subtraction is safe
+      else {
+        // `x - start` may overflow. The remainders of `x` and `start` by `step` have opposite signs and
+        // magnitudes below `step`, so `x` and `start` are congruent iff the remainders differ by 0 or `step`.
+        val rx = x % step
+        val rs = start % step
+        rx == rs || (if (sign(rx) == sign(step)) rx - step else rx + step) == rs
+      }
+    }
 
   override def contains[A1 >: T](x: A1): Boolean =
     try containsTyped(x.asInstanceOf[T])
