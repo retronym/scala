@@ -544,6 +544,9 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       // x.getClass().newInstance() are typed with the type of x.
       // For non-public classes, this aligns with Scala 3 under -Xsource:3: a private class
       // can then escape into the inferred type of a non-private member (neg/t12974-escape).
+      // TODO scala/scala review Y1: that escape error is new under plain -Xsource:3 for code that
+      // 2.13.18 accepts (`private object P; def a() = P.getClass`). Decide whether this belongs
+      // behind a -Xsource-features choice, as other Scala 3 semantics changes do.
       def isGetClassCall = isGetClass(sym) && (pre.typeSymbol.isPublic || currentRun.isScala3)
 
       if (tree.isErrorTyped)
