@@ -1,0 +1,5 @@
+iterate: List(1, 2, 3)
+continually: List(Box(1), Box(1), Box(1))
+map: List(Box(1), Box(2), Box(3))
+Holder(iterate): List(1, 2, 3)
+Holder(continually): List(Box(1), Box(1), Box(1))

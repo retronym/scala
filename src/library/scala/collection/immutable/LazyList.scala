@@ -14,7 +14,7 @@ package scala
 package collection
 package immutable
 
-import java.io.{ObjectInputStream, ObjectOutputStream}
+import java.io.{InvalidObjectException, ObjectInputStream, ObjectOutputStream}
 import java.lang.{StringBuilder => JStringBuilder}
 import scala.annotation.tailrec
 import scala.collection.generic.SerializeEnd
@@ -262,7 +262,7 @@ import scala.runtime.Statics
   *                        on the result (e.g. calling `head` or `tail`, or checking if it is empty).
   *  @define evaluatesAllElements This method evaluates all elements of the collection.
   */
-@SerialVersionUID(4L)
+@SerialVersionUID(5L)
 final class LazyList[+A] private (lazyState: AnyRef /* EmptyMarker.type | () => LazyList[A] */)
   extends LazyListBase[A](if (lazyState eq LazyList.EmptyMarker) null else lazyState)
     with LinearSeq[A]
@@ -467,6 +467,22 @@ final class LazyList[+A] private (lazyState: AnyRef /* EmptyMarker.type | () => 
   // LazyList.Empty doesn't use the SerializationProxy
   protected[this] def writeReplace(): AnyRef =
     if (knownNonEmpty) new SerializationProxy[A](this) else this
+
+  // Reject a state that `initState` would wait on forever, such as `_head eq Uninitialized` with an evaluated `_tail`.
+  // Outside deserialization that combination is only seen transiently, while another thread finishes evaluation.
+  // `_tail`, which holds the user's closures, is read before this method runs, in the slot of `LazyListBase`, which
+  // has no `readObject`; here only `_head` is read, which `writeReplace` leaves `Uninitialized` or `null`. So this
+  // frame is not on the stack while user classes are resolved, where `ObjectInputStream.resolveClass` would use the
+  // library's class loader (test/files/run/lazylist-serialization-classloader.scala).
+  private[this] def readObject(in: ObjectInputStream): Unit = {
+    in.defaultReadObject()
+    val consistent = rawTail match {
+      case _: Function0[_]       => !isEvaluated
+      case null | _: LazyList[_] => isEvaluated
+      case _                     => false
+    }
+    if (!consistent) throw new InvalidObjectException("Inconsistent LazyList state")
+  }
 
   override protected[this] def className = "LazyList"
 
