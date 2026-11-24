@@ -544,7 +544,10 @@ abstract class BCodeHelpers extends BCodeIdiomatic {
                 assert(const.value != null, const) // TODO this invariant isn't documented in `case class Constant`
                 av.visit(name, const.stringValue)  // `stringValue` special-cases null, but that execution path isn't exercised for a const with StringTag
               case ClazzTag   =>
-                av.visit(name, typeToBType(erasedType(const.typeValue)).toASMType)
+                // `classOf[Unit]` is `void.class`, as in an expression. Erasure would give BoxedUnit.
+                val tp = const.typeValue
+                val isUnit = enteringErasure(tp.typeSymbol) == UnitClass
+                av.visit(name, (if (isUnit) UNIT else typeToBType(erasedType(tp))).toASMType)
               case EnumTag =>
                 val edesc  = descriptorForErasedType(const.tpe) // the class descriptor of the enumeration class.
                 val evalue = const.symbolValue.name.toString // value the actual enumeration value.
