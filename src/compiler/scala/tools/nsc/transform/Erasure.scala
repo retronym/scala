@@ -1193,7 +1193,8 @@ abstract class Erasure extends InfoTransform
 
                 qual.tpe.typeSymbol match {
                   case UnitClass | NullClass                         => LIT(0)
-                  case IntClass | ShortClass | ByteClass | CharClass => qual
+                  case IntClass                                      => qual
+                  case ShortClass | ByteClass | CharClass            => numericConversion(qual, IntClass)
                   case BooleanClass                                  => If(qual, LIT(true.##), LIT(false.##))
                   case LongClass                                     => staticsCall(nme.longHash)
                   case FloatClass                                    => staticsCall(nme.floatHash)
