@@ -199,19 +199,22 @@ abstract class Delambdafy extends Transform with TypingTransformers with ast.Tre
         val forwarderCall = localTyper.typedPos(pos) {
           val capturedArgRefs = bridgeCapturedParams map gen.mkAttributedRef
           val functionArgRefs =
-            map3(bridgeFunctionParams, functionParamTypes, targetParams.drop(numCaptures)) { (bridgeParam, functionParamTp, targetParam) =>
+            map3(bridgeFunctionParams, functionParamTypes zip samParamTypes, targetParams.drop(numCaptures)) { (bridgeParam, functionAndSamParamTp, targetParam) =>
               val bridgeParamRef = gen.mkAttributedRef(bridgeParam)
               val targetParamTp  = targetParam.tpe
 
               // TODO: can we simplify this to something like `adaptToType(adaptToType(bridgeParamRef, functionParamTp), targetParamTp)`?
               val unboxed =
-                functionParamTp match {
-                  case ErasedValueType(clazz, underlying) =>
+                functionAndSamParamTp match {
+                  case (ErasedValueType(clazz, underlying), samParamTp) if !samParamTp.isInstanceOf[ErasedValueType] =>
                     // when the original function expected an argument of value class type,
                     // the original target will expect the unboxed underlying value,
                     // whereas the bridge will receive the boxed value (since the sam's argument type did not match and we had to adapt)
                     localTyper.typed(unboxValueClass(bridgeParamRef, clazz, underlying), targetParamTp)
-                  case _ => bridgeParamRef
+                  case _ =>
+                    // if the sam's parameter is a value class too, the bridge is here for another parameter or for the result,
+                    // and this parameter already has the underlying type (see bridgeParamTypes)
+                    bridgeParamRef
                 }
 
               adaptToType(unboxed, targetParamTp)
