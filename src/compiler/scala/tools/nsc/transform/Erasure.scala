@@ -108,13 +108,22 @@ abstract class Erasure extends InfoTransform
   // * higher-order type parameters
   // * type parameters appearing in method parameters
   // * type members not visible in an enclosing template
+  // * type parameters of the classes around a specialized class (see `classFileEnclosingClasses`)
   private def isTypeParameterInSig(sym: Symbol, initialSymbol: Symbol) = (
     !sym.isHigherOrderTypeParameter &&
     sym.isTypeParameterOrSkolem && (
       (initialSymbol.isMethod && initialSymbol.typeParams.contains(sym)) ||
-      (initialSymbol.ownersIterator.exists(encl => encl.isClass && !encl.hasPackageFlag && sym.isNestedIn(encl)))
+      classFileEnclosingClasses(initialSymbol).exists(sym.isNestedIn)
     )
   )
+
+  // The classes around `sym` whose type parameters a reader of the class file can find. The specialized
+  // variant of a nested class is not an inner class of the classes around it in the class file (see
+  // `considerAsTopLevelImplementationArtifact` in the backend), so the list ends there.
+  private def classFileEnclosingClasses(sym: Symbol): Iterator[Symbol] = {
+    val (nested, rest) = sym.ownersIterator.filter(encl => encl.isClass && !encl.hasPackageFlag).span(!_.isSpecialized)
+    nested ++ rest.take(1)
+  }
 
   /** This object is only used for confidence checking when -check:genjvm is set.
    *  In that case we make sure that the erasure of the `normalized` type
