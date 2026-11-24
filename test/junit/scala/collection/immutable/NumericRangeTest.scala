@@ -69,6 +69,16 @@ class NumericRangeTest {
     }
   }
 
+  // A range with step Long.MinValue can hold two elements; `-step` overflows, and the reverse needs a step of 2^63
+  @Test
+  def reverseWithMinValueStep(): Unit = {
+    assertEquals(List(5L), NumericRange.inclusive(5L, 5L, Long.MinValue).reverse.toList)
+    val r = NumericRange.inclusive(1L, Long.MinValue + 1, Long.MinValue)
+    assertEquals(List(1L, Long.MinValue + 1), r.toList)
+    assertEquals(List(Long.MinValue + 1, 1L), r.reverse.toList)
+    assertEquals(List(Int.MinValue + 1, 1), NumericRange.inclusive(1, Int.MinValue + 1, Int.MinValue).reverse.toList)
+  }
+
   @Test
   def numericRangeIsEmpty(): Unit = {
     //Test Positive Step
