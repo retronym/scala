@@ -844,6 +844,9 @@ trait Namers extends MethodSynthesis {
         case TypeBounds(lo, _) =>
           // check that lower bound is not an F-bound
           // but carefully: class Foo[T <: Bar[_ >: T]] should be allowed
+          // TODO scala/scala review X22: for the Java class `Foo<T extends Comparable<? super T>>` in a
+          // mixed compilation, `sym.initialize` below hits the cycle and reports an illegal cyclic
+          // reference (scala/bug#4744, pos/t4744b); only -Ybreak-cycles takes the `maybeInitialize` path.
           for (TypeRef(_, sym, _) <- lo) {
             if (settings.breakCycles.value) {
               if (!sym.maybeInitialize) {
