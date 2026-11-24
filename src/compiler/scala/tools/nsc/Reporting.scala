@@ -146,14 +146,19 @@ trait Reporting extends internal.Reporting { self: ast.Positions with Compilatio
       suspendedMessages.clear()
     }
 
-    private def nowarnAction(warning: Message): Action =
-      suppressions.getOrElse(repSrc(warning.pos.source), Nil).find(_.matches(warning)) match {
+    // Warnings about a deprecated definition itself, see `deprecatedDefinitionWarning`.
+    private val definitionDeprecations = mutable.Set.empty[Message]
+
+    private def nowarnAction(warning: Message): Action = {
+      val ofDefinition = definitionDeprecations.remove(warning)
+      suppressions.getOrElse(repSrc(warning.pos.source), Nil).find(s => s.matches(warning) && !(s.synthetic && ofDefinition)) match {
         case Some(s) =>
           s.markUsed()
           if (s.verbose) Action.WarningVerbose else Action.Silent
         case _ =>
           Action.Warning
       }
+    }
 
     def clearSuppressionsComplete(sourceFile: SourceFile): Unit = suppressionsComplete -= repSrc(sourceFile)
 
@@ -321,6 +326,16 @@ trait Reporting extends internal.Reporting { self: ast.Positions with Compilatio
       deprecationWarning(pos, msg, since, siteName(site), siteName(origin), actions)
     def deprecationWarning(pos: Position, origin: Symbol, site: Symbol, msg: String, since: String): Unit =
       deprecationWarning(pos, msg, since, siteName(site), siteName(origin), actions = Nil)
+
+    /** A warning in the deprecation category about the definition of the deprecated symbol `origin`.
+     *  Unlike a reference to a deprecated symbol, it is reported although it is positioned in a deprecated definition:
+     *  the synthetic suppression that the definition's `@deprecated` annotation implies does not apply to it.
+     */
+    def deprecatedDefinitionWarning(pos: Position, origin: Symbol, site: Symbol, msg: String): Unit = {
+      val warning = Message.Deprecation(pos, msg, siteName(site), siteName(origin), Version.fromString(""), Nil)
+      definitionDeprecations += warning
+      issueIfNotSuppressed(warning)
+    }
 
     def deprecationWarning(pos: Position, origin: Symbol, site: Symbol): Unit = {
       val version = origin.deprecationVersion.getOrElse("")
