@@ -62,7 +62,7 @@ trait StrictOptimizedSeqOps [+A, +CC[_], +C]
     val b = iterableFactory.newBuilder[B]
     val L = size
     b.sizeHint(math.max(L, len))
-    var diff = len - L
+    var diff = if (len > L) len - L else 0
     b ++= this
     while (diff > 0) {
       b += elem
