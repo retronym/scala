@@ -1,0 +1,8 @@
+val x: Int = l.asInstanceOf[Int] = java.lang.ClassCastException
+val a: Any = (l: Any).asInstanceOf[Int] = java.lang.ClassCastException
+val a: Any = l.asInstanceOf[Int] = java.lang.ClassCastException
+List[Any](c.asInstanceOf[Int]).head = java.lang.ClassCastException
+val a: Any = b.asInstanceOf[Double] = java.lang.ClassCastException
+"" + l.asInstanceOf[Boolean] = java.lang.ClassCastException
+l.asInstanceOf[Int].isInstanceOf[Int] (through Any) = java.lang.ClassCastException
+[T <: Int] l.asInstanceOf[T].toString = java.lang.ClassCastException
