@@ -100,7 +100,7 @@ abstract class CleanUp extends Statics with Transform with ast.TreeDSL {
           methSym
         }
 
-        def reflectiveMethodCache(method: String, paramTypes: List[Type]): Symbol = {
+        def reflectiveMethodCache(method: String, paramTypes: List[Type], genericParamTypes: List[Type]): Symbol = {
           /* Implementation of the cache is as follows for method "def xyz(a: A, b: B)"
              (SoftReference so that it does not interfere with classloader garbage collection,
              see ticket #2365 for details):
@@ -125,6 +125,20 @@ abstract class CleanUp extends Statics with Transform with ast.TreeDSL {
               }
             }
 
+            If `xyz` has parameters of primitive type, the receiver might only have a method in which they are
+            `Object`: a class or a functional interface declares the parameter with a type parameter, or a lambda
+            implements a specialized or a boxing variant of the function's `apply` (scala/bug#10334). The lookup
+            is then:
+
+              method =
+                try forReceiver.getMethod("xyz", methodCache.parameterTypes())
+                catch {
+                  case e: NoSuchMethodException =>
+                    try forReceiver.getMethod("xyz", Array[JClass](classOf[Object], classOf[B]))
+                    catch { case _: NoSuchMethodException => throw e }
+                }
+              method = ScalaRunTime.ensureAccessible(method)
+
             invokedynamic is used rather than a static field for the cache to support emitting bodies of methods
             in Java 8 interfaces, which don't support private static fields.
           */
@@ -140,16 +154,40 @@ abstract class CleanUp extends Statics with Transform with ast.TreeDSL {
               IF (REF(methodSym) OBJ_NE NULL) .
                 THEN (Return(REF(methodSym)))
               ELSE {
-                def methodSymRHS  = ((REF(forReceiverSym) DOT Class_getMethod)(LIT(method), (REF(methodCache) DOT StructuralCallSite_getParameterTypes)()))
+                def getMethod(paramClasses: Tree) = (REF(forReceiverSym) DOT Class_getMethod)(LIT(method), paramClasses)
+                def methodSymRHS  = getMethod((REF(methodCache) DOT StructuralCallSite_getParameterTypes)())
+                def ensureAccessible(method: Tree) = REF(currentRun.runDefinitions.ensureAccessibleMethod) APPLY method
                 def cacheAdd      = ((REF(methodCache) DOT StructuralCallSite_add)(REF(forReceiverSym), REF(methodSym)))
-                BLOCK(
-                  REF(methodSym)        === (REF(currentRun.runDefinitions.ensureAccessibleMethod) APPLY (methodSymRHS)),
-                  cacheAdd,
-                  Return(REF(methodSym))
-                )
+                def catchNoSuchMethod(body: Symbol => Tree) = {
+                  val NoSuchMethodExceptionClass = rootMirror.requiredClass[NoSuchMethodException]
+                  val exc = reflMethodSym.newValue(mkTerm("ex"), ad.pos) setInfo NoSuchMethodExceptionClass.tpe
+                  CASE (Bind(exc, Typed(Ident(nme.WILDCARD), TypeTree(NoSuchMethodExceptionClass.tpe)))) ==> body(exc)
+                }
+                val lookup =
+                  if (genericParamTypes == paramTypes) List(REF(methodSym) === ensureAccessible(methodSymRHS))
+                  else {
+                    val genericLookup = getMethod(ArrayValue(TypeTree(ClassClass.tpe), genericParamTypes.map(LIT(_))))
+                    List(
+                      REF(methodSym) === (TRY (methodSymRHS) CATCH catchNoSuchMethod { notFound =>
+                        TRY (genericLookup) CATCH catchNoSuchMethod(_ => Throw(REF(notFound))) FINALLY END
+                      } FINALLY END),
+                      REF(methodSym) === ensureAccessible(REF(methodSym))
+                    )
+                  }
+                Block(lookup ::: cacheAdd :: Nil, Return(REF(methodSym)))
               }
             )
           })
+        }
+
+        // The parameter types of the method to look for if the receiver has no method with the erased parameter
+        // types of the structural member: `Object` for a parameter of primitive type, in case it is declared with
+        // a type parameter. A parameter of a value class type is not included, as the argument would need boxing.
+        def genericParamTypes(mparams: List[Symbol]): List[Type] = {
+          val uncurried = exitingUncurry(ad.symbol.info.paramTypes)
+          val erased    = mparams.map(_.tpe)
+          if (!sameLength(uncurried, erased)) erased
+          else map2(uncurried, erased)((tp, erasedTp) => if (isJavaValueType(tp)) ObjectTpe else erasedTp)
         }
 
         /* ### HANDLING METHODS NORMALLY COMPILED TO OPERATORS ### */
@@ -193,7 +231,7 @@ abstract class CleanUp extends Statics with Transform with ast.TreeDSL {
          *   a dynamic call will box them as a side-effect. */
 
         /* ### CALLING THE APPLY ### */
-        def callAsReflective(paramTypes: List[Type], resType: Type): Tree = {
+        def callAsReflective(paramTypes: List[Type], genericParamTypes: List[Type], resType: Type): Tree = {
           val runDefinitions = currentRun.runDefinitions
           import runDefinitions._
 
@@ -255,7 +293,7 @@ abstract class CleanUp extends Statics with Transform with ast.TreeDSL {
             def genDefaultCall = {
               // reflective method call machinery
               val invokeName  = MethodClass.tpe member nme.invoke_                                  // scala.reflect.Method.invoke(...)
-              def cache       = REF(reflectiveMethodCache(ad.symbol.name.toString, paramTypes))     // cache Symbol
+              def cache       = REF(reflectiveMethodCache(ad.symbol.name.toString, paramTypes, genericParamTypes)) // cache Symbol
               def lookup      = Apply(cache, List(qual1().GETCLASS()))                                // get Method object from cache
               def invokeArgs  = ArrayValue(TypeTree(ObjectTpe), params)                       // args for invocation
               def invocation  = (lookup DOT invokeName)(qual1(), invokeArgs)                        // .invoke(qual1, ...)
@@ -361,7 +399,7 @@ abstract class CleanUp extends Statics with Transform with ast.TreeDSL {
 
             BLOCK(
               ValDef(sym, qual0),
-              callAsReflective(mparams map (_.tpe), resType)
+              callAsReflective(mparams.map(_.tpe), genericParamTypes(mparams), resType)
             )
           }
         }
