@@ -426,6 +426,9 @@ trait TypeAssigners { self: TypingTransformers =>
 
     /** `ta` with its typed function: instantiates the polymorphic type. */
     protected final def typedTypeApply(ta: TypeApply, pt: Type): Tree = ta.fun.tpe match {
+      case _ if ta.args.exists(_.tpe eq null) =>
+        // A type argument other than a `TypeTree` (`preErase` leaves those untyped): the typer types it.
+        fallback(ta, pt, "TypeApply-untyped-arg")
       case PolyType(tparams, restpe) if tparams.nonEmpty && sameLength(tparams, ta.args) =>
         ta setType restpe.instantiateTypeParams(tparams, ta.args.map(_.tpe))
       case _ =>
