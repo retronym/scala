@@ -1326,6 +1326,10 @@ abstract class Erasure extends InfoTransform
             val typeValue = ct.typeValue.dealiasWiden
             val erased = erasure(typeValue.typeSymbol) applyInArray typeValue
             treeCopy.Literal(cleanLiteral, Constant(erased))
+          } else if (ct.tag == ClazzTag && (ct.typeValue.dealias ne ct.typeValue)) {
+            // `classOf[U]` for `type U = Unit`. After erasure, `U` dealiases to BoxedUnit, and cleanup
+            // would not translate the literal to `BoxedUnit.TYPE`.
+            treeCopy.Literal(cleanLiteral, Constant(ct.typeValue.dealias))
           } else cleanLiteral
 
         case ClassDef(_,_,_,_) =>
