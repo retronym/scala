@@ -124,6 +124,7 @@ _    :    =    =>    <-    <:    <%     >:    #    @
 
 The Unicode operators `\u21D2` ‘´\Rightarrow´’ and `\u2190` ‘´\leftarrow´’, which have the ASCII
 equivalents `=>` and `<-`, are also reserved.
+(The use of these Unicode operators is deprecated since Scala 2.13.0.)
 
 > Here are examples of identifiers:
 > ```scala
@@ -365,7 +366,9 @@ However, if the expected type [_pt_](06-expressions.html#expression-typing) of a
 in an expression is either `Byte`, `Short`, or `Char`
 and the integer number fits in the numeric range defined by the type,
 then the number is converted to type _pt_ and the literal's type
-is _pt_. The numeric ranges given by these types are:
+is _pt_. The same [conversion](06-expressions.html#numeric-literal-narrowing)
+applies to other constant expressions of type `Int` or `Char`.
+The numeric ranges given by these types are:
 
 |                |                          |
 |----------------|--------------------------|
@@ -632,11 +635,12 @@ foo(
 In order to allow literal inclusion of XML fragments, lexical analysis
 switches from Scala mode to XML mode when encountering an opening
 angle bracket ‘<’ in the following circumstance: The ‘<’ must be
-preceded either by whitespace, an opening parenthesis or an opening
-brace and immediately followed by a character starting an XML name.
+preceded either by whitespace, an opening parenthesis, an opening
+brace or a closing angle bracket ‘>’, and immediately followed by a
+character starting an XML name, or by ‘!’ or ‘?’.
 
 ```ebnf
- ( whitespace | ‘(’ | ‘{’ ) ‘<’ (XNameStart | ‘!’ | ‘?’)
+ ( whitespace | ‘(’ | ‘{’ | ‘>’ ) ‘<’ (XNameStart | ‘!’ | ‘?’)
 
   XNameStart ::= ‘_’ | BaseChar | Ideographic // as in W3C XML, but without ‘:’
 ```
