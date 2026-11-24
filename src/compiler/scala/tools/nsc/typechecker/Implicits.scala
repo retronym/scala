@@ -1632,13 +1632,24 @@ trait Implicits extends splain.SplainData {
           if (tree == EmptyTree) SearchFailure else new SearchResult(tree, if (from.isEmpty) EmptyTreeTypeSubstituter else new TreeTypeSubstituter(from, to), Nil)
 
         val tp1 = tp0.dealias
+
+        // A manifest cannot represent a literal type or a singleton type of a value that is not an AnyRef:
+        // use the manifest of the widened type, as `classTag` does, cast to the requested type.
+        // (`deconst` is the identity on a literal type, so it must not be used here.)
+        def widenedManifest: SearchResult =
+          manifestOfType(tp1.widen, FullManifestClass) match {
+            case res if res.isFailure => res
+            case res => new SearchResult(typedPos(tree.pos.focus)(gen.mkCast(res.tree, appliedType(FullManifestClass, tp))), res.subst, res.undetparams)
+          }
+
         tp1 match {
           case ThisType(_) | SingleType(_, _) =>
             // can't generate a reference to a value that's abstracted over by an existential
             if (containsExistential(tp1)) EmptyTree
+            else if (!(tp1.widen <:< AnyRefTpe)) widenedManifest
             else manifestFactoryCall("singleType", tp, gen.mkAttributedQualifier(tp1))
           case ConstantType(_) =>
-            manifestOfType(tp1.deconst, FullManifestClass)
+            widenedManifest
           case TypeRef(pre, sym, args) =>
             if (isPrimitiveValueClass(sym) || isPhantomClass(sym)) {
               findSingletonManifest(sym.name.toString)
