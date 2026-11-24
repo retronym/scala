@@ -349,19 +349,29 @@ abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis {
       // For all members of a trait's interface do:
       for (mixinMember <- mixinClass.info.decls) {
         if (mixinMember.hasFlag(SUPERACCESSOR)) { // mixin super accessors
-          val superAccessor = addMember(clazz, mixinMember.cloneSymbol(clazz)) setPos clazz.pos
-          assert(superAccessor.alias != NoSymbol, superAccessor)
+          val rebound = rebindSuper(clazz, mixinMember.alias, mixinClass)
+          // Specialization copies a super accessor of a trait into the specialized variants of the trait, under the
+          // same name and with the same alias, and a class that extends a variant mixes in both. The two have the
+          // same erased type if the specialized type parameter only occurs as a type argument, as in
+          // `def super$f: () => T`. One implementation serves both.
+          def isImplemented = rebound != NoSymbol && clazz.info.decl(mixinMember.name).alternatives.exists(sym =>
+            sym.isSuperAccessor && sym.alias == rebound && (sym.tpe =:= mixinMember.tpe))
 
-          rebindSuper(clazz, mixinMember.alias, mixinClass) match {
-            case NoSymbol =>
-              reporter.error(clazz.pos, "Member %s of mixin %s is missing a concrete super implementation.".format(
-                mixinMember.alias, mixinClass))
-            case alias1 =>
-              registerRequiredDirectInterface(alias1, clazz, parent =>
-                s"Unable to implement a super accessor required by trait ${mixinClass.name} unless $parent is directly extended by $clazz.")
-              if (alias1.isValue && !alias1.isMethod || alias1.isAccessor)
-                reporter.error(clazz.pos, s"parent $mixinClass has a super call to method ${mixinMember.alias.fullNameString}, which binds to the value ${alias1.fullNameString}. Super calls can only target methods.")
-              superAccessor.asInstanceOf[TermSymbol] setAlias alias1
+          if (!isImplemented) {
+            val superAccessor = addMember(clazz, mixinMember.cloneSymbol(clazz)) setPos clazz.pos
+            assert(superAccessor.alias != NoSymbol, superAccessor)
+
+            rebound match {
+              case NoSymbol =>
+                reporter.error(clazz.pos, "Member %s of mixin %s is missing a concrete super implementation.".format(
+                  mixinMember.alias, mixinClass))
+              case alias1 =>
+                registerRequiredDirectInterface(alias1, clazz, parent =>
+                  s"Unable to implement a super accessor required by trait ${mixinClass.name} unless $parent is directly extended by $clazz.")
+                if (alias1.isValue && !alias1.isMethod || alias1.isAccessor)
+                  reporter.error(clazz.pos, s"parent $mixinClass has a super call to method ${mixinMember.alias.fullNameString}, which binds to the value ${alias1.fullNameString}. Super calls can only target methods.")
+                superAccessor.asInstanceOf[TermSymbol] setAlias alias1
+            }
           }
         }
         else if (mixinMember.hasFlag(ACCESSOR) && notDeferred(mixinMember)
