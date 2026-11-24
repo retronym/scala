@@ -402,7 +402,8 @@ extends ScalaNumber with ScalaNumericConversions with Serializable with Ordered[
   override def equals (that: Any): Boolean = that match {
     case that: BigDecimal     => this equals that
     case that: BigInt         =>
-      that.bitLength > (precision-scale-2)*BigDecimal.deci2binary &&
+      // The magnitude estimate assumes a non-zero value, so a zero with negative scale needs its own case
+      (this.signum == 0 || that.bitLength > (precision-scale-2)*BigDecimal.deci2binary) &&
       this.toBigIntExact.exists(that equals _)
     case that: Double         =>
       !that.isInfinity && {

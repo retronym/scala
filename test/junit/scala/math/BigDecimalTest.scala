@@ -319,4 +319,16 @@ class BigDecimalTest {
     val bdValue: BigDecimal = (BD.ONE: java.math.BigDecimal): BigDecimal
     assertEquals(BD.ONE, bdValue.bigDecimal)
   }
+
+  // A zero with negative scale is whole and equal to BigInt(0); the bitLength pre-check in equals assumed a non-zero value.
+  @Test def `zero with negative scale equals BigInt zero`: Unit = {
+    val zeros = List(BigDecimal(0) * BigDecimal("1E+3"), BigDecimal("0E+1"), BigDecimal("0E+3"), BigDecimal("0E+1000"), BigDecimal("0E-1"), BigDecimal(0))
+    for (z <- zeros) {
+      assertEqualsAny(s"$z == BigInt(0)", z, BigInt(0))
+      assertEqualsAny(s"BigInt(0) == $z", BigInt(0), z)
+      assertEquals(s"$z.## == BigInt(0).##", BigInt(0).##, z.##)
+    }
+    assertNotEqualsAny(BigDecimal("1E+3"), BigInt(0))
+    assertNotEqualsAny(BigDecimal("0E+3"), BigInt(1000))
+  }
 }
