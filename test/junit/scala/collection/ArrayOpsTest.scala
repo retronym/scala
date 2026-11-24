@@ -192,4 +192,16 @@ class ArrayOpsTest {
     val res = vs.collectFirst { case n if n > 4 => 10*n }
     assertEquals(Some(50), res)
   }
+
+  @Test def transposeRagged(): Unit = {
+    def check(rows: List[List[Int]]): Unit = {
+      assertThrows[IllegalArgumentException](rows.transpose)
+      assertThrows[IllegalArgumentException](rows.map(_.toArray).toArray.transpose, _ == "transpose requires all collections have the same size")
+    }
+    check(List(List(1, 2), List(3)))
+    check(List(List(1, 2), List(3, 4, 5)))
+    check(List(List(1, 2), List(3, 4), Nil))
+    check(List(Nil, List(1)))
+    assertEquals(0, Array(Array[Int](), Array[Int]()).transpose.length)
+  }
 }
