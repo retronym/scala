@@ -682,7 +682,8 @@ abstract class LocalOpt {
    * Since this optimization runs a type analysis, we use it to rewrite some intrinsic method calls
    *   - `java.lang.reflect.Arrays.getLength(x)` when `x` is statically known to be an array:
    *     rewrite to `ARRAYLENGTH`
-   *   - `x.getClass` when `x` is statically known to be a primitive array. Rewrite to `LDC`.
+   *   - `x.getClass` when `x` is statically known to be a primitive array. Rewrite to `LDC`,
+   *     preceded by an `ARRAYLENGTH` as null check unless `x` is known to be non-null.
    *
    * The type of the tested object is determined using a NonLubbingTypeFlowAnalyzer. Note that this
    * analysis collapses LUBs of non-equal references types to Object for simplicity. Example:
@@ -790,7 +791,13 @@ abstract class LocalOpt {
           // x.getClass where x is statically known to be a primitive array
           val getClassTp = BackendUtils.getClassOnStaticallyKnownPrimitiveArray(mi, typeAnalyzer)
           if (getClassTp != null) {
-            toReplace(mi) = List(getPop(1), new LdcInsnNode(getClassTp))
+            val receiverNotNull = {
+              val frame = nullnessAnalyzer.frameAt(mi)
+              frame.getValue(frame.stackTop) == NotNullValue
+            }
+            // `getClass` throws a NullPointerException if the array is null, `ARRAYLENGTH` preserves that
+            val dropReceiver = if (receiverNotNull) List(getPop(1)) else List(new InsnNode(ARRAYLENGTH), getPop(1))
+            toReplace(mi) = dropReceiver :+ new LdcInsnNode(getClassTp)
           }
         }
 

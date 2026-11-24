@@ -600,4 +600,19 @@ class MethodLevelOptsTest extends BytecodeTesting {
     assertSameSummary(getMethod(c, "t1"), List(ILOAD, "$anonfun$t1$1$adapted", "unboxToInt", IRETURN))
     assertSameSummary(getMethod(c, "t2"), List(ILOAD, "$anonfun$t2$1", IRETURN))
   }
+
+  @Test
+  def getClassOnPrimitiveArrayKeepsNullCheck(): Unit = {
+    val code =
+      """class C {
+        |  def t1(a: Array[Int]) = a.getClass
+        |  def t2(a: Array[Int]) = { a(0) = 1; a.getClass }
+        |}
+      """.stripMargin
+    val c = compileClass(code)
+    // `a` may be null, the ARRAYLENGTH keeps the NullPointerException that `getClass` would throw
+    assertSameSummary(getMethod(c, "t1"), List(ALOAD, ARRAYLENGTH, POP, LDC, ARETURN))
+    // `a` is known to be non-null after the array store
+    assertSameSummary(getMethod(c, "t2"), List(ALOAD, ICONST_0, ICONST_1, IASTORE, LDC, ARETURN))
+  }
 }
