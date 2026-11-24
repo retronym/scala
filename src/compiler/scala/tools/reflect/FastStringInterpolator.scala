@@ -88,12 +88,14 @@ trait FastStringInterpolator extends FormatInterpolator {
       else concatenate(treated, args)
 
     // Fallback -- inline the original implementation of the `s` or `raw` interpolator.
+    // The args are passed as `List[Any]`: an inferred element type would be their weak LUB,
+    // widening `1` to `1.0` next to a `Double`.
     case Apply(Select(someStringContext, _interpol@_), args) =>
       q"""{
         val sc = $someStringContext
         _root_.scala.StringContext.standardInterpolator(
           ${if(isRaw) q"_root_.scala.Predef.identity" else q"_root_.scala.StringContext.processEscapes"},
-          $args,
+          _root_.scala.collection.immutable.List[_root_.scala.Any](..$args),
           sc.parts)
       }"""
     case x => throw new MatchError(x)
