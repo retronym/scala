@@ -30,4 +30,23 @@ class UnrolledBufferTestTest {
     assert(b == (1 :: 3 :: Nil))
     assert(b.size == 2)
   }
+
+  @Test
+  def insertAllSelf(): Unit = {
+    import org.junit.Assert.assertEquals
+    // sizes within one node: insertion at a node boundary is a separate bug
+    for (n <- List(0, 1, 2, 3, 15); idx <- 0 to n) {
+      val expected = ArrayBuffer.range(0, n)
+      expected.insertAll(idx, expected)
+      val b = UnrolledBuffer.range(0, n)
+      b.insertAll(idx, b)
+      assertEquals(s"insertAll($idx, self) on $n elements", expected, b)
+    }
+    val b = UnrolledBuffer(1, 2, 3)
+    b.prependAll(b)
+    assertEquals(List(1, 2, 3, 1, 2, 3), b.toList)
+    val c = UnrolledBuffer(1, 2, 3)
+    c.patchInPlace(1, c, 1)
+    assertEquals(List(1, 1, 2, 3, 3), c.toList)
+  }
 }
