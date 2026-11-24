@@ -114,6 +114,13 @@ abstract class SymbolPairs {
       */
     protected def skipOwnerPair(lowClass: Symbol, highClass: Symbol): Boolean = false
 
+    /** Should `high`, which has matched the current `low`, still be visited as `low` later on?
+     *
+     *  Not visiting it is sound if `matches` is transitive, as it is for overriding pairs: every pair
+     *  of the skipped symbol and a higher one is then implied by the pairs of the symbol it matched.
+     */
+    protected def visitAsLowAfterMatch(high: Symbol): Boolean = false
+
     protected def bases: List[Symbol] = base.info.baseClasses
 
     /** The scope entries that have already been visited as highSymbol
@@ -178,7 +185,7 @@ abstract class SymbolPairs {
         nextEntry = decls lookupNextEntry nextEntry
         if (nextEntry ne null) {
           val high    = nextEntry.sym
-          val isMatch = matches(high) && { visited addEntry nextEntry ; true } // side-effect visited on all matches
+          val isMatch = matches(high) && { if (!visitAsLowAfterMatch(high)) visited addEntry nextEntry ; true } // side-effect visited on all matches
 
           // Advance if no match, or if the particular cursor is not interested in this pair
           if (!isMatch || skipOwnerPair(low.owner, high.owner)) advanceNextEntry()

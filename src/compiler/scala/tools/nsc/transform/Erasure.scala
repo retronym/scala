@@ -948,6 +948,11 @@ abstract class Erasure extends InfoTransform
         || !sym.hasTypeAt(currentRun.refchecksPhase.id)
       )
       override def matches(high: Symbol) = !high.isPrivate
+      // `matches` pairs every two members of a name, whatever their types, so a member that was paired with a lower
+      // one need not clash with the same higher ones. Every member of the class itself is paired with all members of
+      // its name. Inherited members are left as they were: a clash between two of them that a lower member hides is
+      // not always an error (a Java method may override both), or it is reported for the bridge.
+      override def visitAsLowAfterMatch(high: Symbol) = high.owner == base
     }
 
     /** Emit an error if there is a double definition. This can happen if:
@@ -963,7 +968,7 @@ abstract class Erasure extends InfoTransform
       def isErasureDoubleDef(pair: SymbolPair) = {
         import pair._
         log(s"Considering for erasure clash:\n$pair")
-        !exitingRefchecks(lowType matches highType) && sameTypeAfterErasure(low, high)
+        sameTypeAfterErasure(low, high) && !exitingRefchecks(lowType matches highType)
       }
       (new DoubleDefsCursor(root)).iterator filter isErasureDoubleDef foreach doubleDefError
     }
