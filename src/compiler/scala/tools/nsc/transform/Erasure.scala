@@ -1023,13 +1023,15 @@ abstract class Erasure extends InfoTransform
       // which makes this fiddly to do now.
       object SingletonInstanceCheck {
         def unapply(pt: Type): Option[(TermSymbol, Tree)] = {
-          def containsSingleton(tp: Type): Boolean =
+          // A compound type with several parents is not handled here: comparing with the path of one singleton
+          // parent says nothing about the other parents. `preEraseIsInstanceOf` tests each parent.
+          def isSingleton(tp: Type): Boolean =
             tp.dealias match {
               case SingleType(_, _) | ConstantType(_) | ThisType(_) | SuperType(_, _) => true
-              case RefinedType(parents, _) => parents.exists(containsSingleton)
+              case RefinedType(parent :: Nil, _) => isSingleton(parent)
               case _ => false
             }
-          if(containsSingleton(pt)) {
+          if (isSingleton(pt)) {
             val cmpOp  = if (pt.typeSymbol.isSubClass(AnyValClass)) Any_equals else Object_eq
             val cmpArg = gen.mkAttributedQualifier(pt)
             Some((cmpOp, cmpArg))
@@ -1083,6 +1085,17 @@ abstract class Erasure extends InfoTransform
                     Select(q(), Object_isInstanceOf) setPos sel.pos,
                     List(TypeTree(tp) setPos targ.pos)) setPos fn.pos,
                   List()) setPos tree.pos
+              // a singleton parent of a compound type is compared with its path, like a singleton type on its own
+              def mkParentTest(q: () => Tree)(tp: Type): Tree = tp.dealias match {
+                case SingletonInstanceCheck(cmpOp, cmpArg)       => Apply(Select(cmpArg, cmpOp), List(q()))
+                case RefinedType(parents, _) if parents.lengthIs >= 2 => parents map mkParentTest(q) reduceRight gen.mkAnd
+                case _                                           => mkIsInstanceOf(q)(tp)
+              }
+              def hasSingletonParent(tp: Type): Boolean = tp.dealias match {
+                case SingletonInstanceCheck(_, _)                     => true
+                case RefinedType(parents, _) if parents.lengthIs >= 2 => parents.exists(hasSingletonParent)
+                case _                                                => false
+              }
               targ.tpe match {
                 case SingletonInstanceCheck(cmpOp, cmpArg) =>
                   atPos(tree.pos) { Apply(Select(cmpArg, cmpOp), List(qual)) }
@@ -1094,11 +1107,14 @@ abstract class Erasure extends InfoTransform
                     // involving intersections where at least one parent is statically known true.
                     // That needs fixing, but filtering the parents here adds an additional
                     // level of robustness (in addition to the short term fix.)
-                    val parentTests = parents filterNot (qual.tpe <:< _)
+                    // The static type says nothing about null. Where the receiver conforms to every parent, a singleton
+                    // parent is compared all the same, so that a null receiver is not an instance of `x.type with A`.
+                    val untested = parents filterNot (qual.tpe <:< _)
+                    val parentTests = if (untested.isEmpty) parents.find(hasSingletonParent).toList else untested
 
                     if (parentTests.isEmpty) Literal(Constant(true))
                     else atPos(tree.pos) {
-                      parentTests map mkIsInstanceOf(q) reduceRight gen.mkAnd
+                      parentTests map mkParentTest(q) reduceRight gen.mkAnd
                     }
                   }
                 case TypeRef(_, SingletonClass, _) =>

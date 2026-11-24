@@ -1,0 +1,14 @@
+any.isInstanceOf[Q.type with Marker] = false
+any.isInstanceOf[Marker with Q.type] = false
+any.isInstanceOf[Q.type with P.type] = false
+any match { case _: Q.type with Marker } = no match
+any.isInstanceOf[Q.type with AnyRef] = true
+(P: Any).isInstanceOf[Q.type with AnyRef] = false
+any.isInstanceOf[Marker with QA] = false
+any.isInstanceOf[QA] = true
+nul.isInstanceOf[Q.type with AnyRef] = false
+nul.isInstanceOf[QA with AnyRef] = false
+q.isInstanceOf[Q.type with AnyRef] = true
+q.isInstanceOf[P.type] = false
+q match { case _: P.type } = other
+q match { case p: P.type => p.name } = other
