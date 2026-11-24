@@ -70,6 +70,25 @@ class NumericRangeTest {
   }
 
   @Test
+  def bigDecimalRangeStaysWithinEnd(): Unit = {
+    // `end - start` rounds to exactly 1E+30 in the default 34-digit MathContext, which `count` then
+    // divides evenly by the step. Either refusing the range or stopping at the last step <= end
+    // is acceptable; including 0, which is past the end, is not.
+    def check(start: String, end: String, step: String): Unit = {
+      try {
+        val r = BigDecimal(start) to BigDecimal(end) by BigDecimal(step)
+        val pastEnd = (x: BigDecimal) => if (r.step > 0) x > r.end else x < r.end
+        assertEquals(s"$r", Nil, r.toList.filter(pastEnd))
+        assertFalse(s"$r", pastEnd(r.last))
+        assertFalse(s"$r", r.contains(BigDecimal(0)))
+        assertEquals(s"$r", Iterator.iterate(r.start)(_ + r.step).takeWhile(!pastEnd(_)).length, r.length)
+      } catch { case _: IllegalArgumentException => () }
+    }
+    check("-1E+30", "-1E-20", "1E+29")
+    check("1E+30", "1E-20", "-1E+29")
+  }
+
+  @Test
   def numericRangeIsEmpty(): Unit = {
     //Test Positive Step
     assertFalse((1 to 9).isEmpty)
