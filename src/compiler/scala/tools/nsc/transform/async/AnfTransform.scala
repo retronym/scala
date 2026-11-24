@@ -66,27 +66,10 @@ private[async] trait AnfTransform extends TransformUtils {
           val simpleFun                = transform(fun)
           var i                        = 0
           val argExprss                = map2(args, fun.symbol.paramss.head) { (arg: Tree, param: Symbol) =>
-            transform(arg) match {
-              case expr1 =>
-                val argName  = param.name.toTermName
-                // No need to extract the argument into a val if is non-side-effecting or if we are beyond the final
-                // argument containing an `await` calls.
-                val elideVal = treeInfo.isExprSafeToInline(expr1) || lastAwaitArgIndex < 0 || i > lastAwaitArgIndex || !treeContainsAwait
-                val result   = if (elideVal) {
-                  localTyper.typed(expr1, arg.tpe) // Adapt () to BoxedUnit
-                } else {
-                  if (isUnitType(expr1.tpe)) {
-                    currentStats += expr1
-                    literalBoxedUnit
-                  } else {
-                    val valDef = defineVal(transformState.name.freshen(argName), expr1, expr1.pos)
-                    currentStats += valDef
-                    gen.mkAttributedIdent(valDef.symbol)
-                  }
-                }
-                i += 1
-                result
-            }
+            // No need to extract the argument into a val if we are beyond the final argument containing an `await` call.
+            val result = transformArg(arg, param.name.toTermName, elideVal = lastAwaitArgIndex < 0 || i > lastAwaitArgIndex || !treeContainsAwait)
+            i += 1
+            result
           }
           val simpleApply              = treeCopy.Apply(tree, simpleFun, argExprss)
           simpleApply.attachments.remove[ContainsAwait.type]
@@ -179,6 +162,16 @@ private[async] trait AnfTransform extends TransformUtils {
 
         case LabelDef(name, params, rhs) =>
           treeCopy.LabelDef(tree, name, params, transformNewControlFlowBlock(rhs))
+        case ArrayValue(elemtpt, elems) =>
+          // The elements of a repeated argument, which are evaluated in order like any other arguments.
+          val lastAwaitElemIndex = elems.lastIndexWhere(containsAwait)
+          var i                  = 0
+          val elemExprs          = elems.map { elem =>
+            val result = transformArg(elem, nme.elem, elideVal = i > lastAwaitElemIndex)
+            i += 1
+            result
+          }
+          treeCopy.ArrayValue(tree, elemtpt, elemExprs)
         case t@Typed(expr, tpt)             =>
           transform(expr).setType(t.tpe)
         case Try(body, catches, finalizer)  =>
@@ -243,6 +236,23 @@ private[async] trait AnfTransform extends TransformUtils {
         (currentStats.toList, result)
       } finally {
         this.currentStats = savedStats
+      }
+    }
+
+    // Transform an argument of an application, or an element of an array. Unless `elideVal`, or the argument is
+    // non-side-effecting, it is extracted into a val to keep it ahead of the statements that a later argument
+    // containing an `await` is expanded into.
+    private def transformArg(arg: Tree, name: TermName, elideVal: Boolean): Tree = {
+      val expr1 = transform(arg)
+      if (elideVal || treeInfo.isExprSafeToInline(expr1)) {
+        localTyper.typed(expr1, arg.tpe) // Adapt () to BoxedUnit
+      } else if (isUnitType(expr1.tpe)) {
+        currentStats += expr1
+        literalBoxedUnit
+      } else {
+        val valDef = defineVal(transformState.name.freshen(name), expr1, expr1.pos)
+        currentStats += valDef
+        gen.mkAttributedIdent(valDef.symbol)
       }
     }
 
