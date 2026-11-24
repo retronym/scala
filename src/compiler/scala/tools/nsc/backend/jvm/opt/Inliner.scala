@@ -874,6 +874,10 @@ abstract class Inliner {
     // of the values on the stack.
     // We don't need to worry about the method being too large for running an analysis. Callsites of
     // large methods are not added to the call graph.
+    // TODO scala/scala review O11: the callee is analysed afresh for every callsite inlined from it: 8,105
+    // analyses (145,676 instructions) of 1,605 distinct callees (38,130 instructions) compiling the typechecker
+    // sources with `-opt:inline:scala/**`. A cache keyed on the callee would have to be dropped when something is
+    // inlined into the callee; a cache of all analyses was removed in c5c28ebf30 for its memory cost.
     val analyzer = new BasicAnalyzer(callee, calleeDeclarationClass.internalName)
 
     for (originalReturn <- callee.instructions.iterator.asScala if isReturn(originalReturn)) {
