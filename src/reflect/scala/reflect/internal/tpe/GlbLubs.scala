@@ -392,8 +392,9 @@ final class GlbLubs[U <: SymbolTable with Singleton](val self: U) {
    */
   private def lubRefinableNames(lubBase: Type, ts: List[Type]): mutable.Set[Name] = {
     val lubBaseClasses = lubBase.baseClasses
-    val lubBaseTypeSeq = lubBase.baseTypeSeq
-    def inLubBase(bc: Symbol) = lubBaseTypeSeq.baseTypeIndex(bc) >= 0
+    // `baseTypeIndex` scans the sequence, and this asks about every base class of each of `ts`
+    val lubBaseTypeSymbols = lubBase.baseTypeSeq.typeSymbolSet
+    def inLubBase(bc: Symbol) = lubBaseTypeSymbols.contains(bc)
     val lubBaseDecls = lubBaseClasses.foldLeft(0)((n, bc) => n + bc.info.decls.size)
     // The number of declarations in the base classes of `t` that are not base classes of `lubBase`,
     // or `Int.MaxValue` if that exceeds `lubBaseDecls`.
@@ -431,7 +432,7 @@ final class GlbLubs[U <: SymbolTable with Singleton](val self: U) {
       def implementsSharedVal = stableNames.exists(name =>
         tBaseClasses.exists(bc => inLubBase(bc) && bc.info.decls.lookupAll(name).exists(_.isStable)))
       val multiplyDeclaredMatters = mayCollapse || declaresType || implementsSharedVal ||
-        !tBaseClasses.filter(inLubBase).corresponds(lubBaseClasses.filter(t.baseTypeIndex(_) >= 0))(_ eq _)
+        !tBaseClasses.filter(inLubBase).corresponds(lubBaseClasses.filter(t.baseTypeSeq.typeSymbolSet.contains))(_ eq _)
       if (multiplyDeclaredMatters) {
         val sharedNames = mutable.HashSet.empty[Name]
         tBaseClasses foreach { bc =>
