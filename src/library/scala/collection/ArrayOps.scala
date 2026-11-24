@@ -1309,9 +1309,17 @@ final class ArrayOps[A](private val xs: Array[A]) extends AnyVal {
       val bb = ArrayBuilder.make(using ClassTag[A](aClass))
       bb.result().asInstanceOf[Array[Array[B]]] // cast may be invalid, see Scaladoc
     } else {
-      val first = asArray(xs(0))
-      val bb = new ArrayBuilder.ofRef[Array[B]]()(ClassTag[Array[B]](first.getClass))
-      def mkRowBuilder() = ArrayBuilder.make[B](using ClassTag[B](first.getClass.getComponentType))
+      val x0 = xs(0)
+      val first = asArray(x0)
+      val aClass = xs.getClass.getComponentType
+      // If `asArray` returned the element itself, `A` is `Array[B]` and `aClass` is its erasure. The first row's
+      // runtime class may be narrower (a `String[]` in an `Array[Array[AnyRef]]`) and must not be used for the result.
+      // Otherwise `asArray` converts, and the class of the row it produced is the best available evidence for `B`.
+      val rowClass: Class[_] =
+        if (aClass.isArray && (first.asInstanceOf[AnyRef] eq x0.asInstanceOf[AnyRef])) aClass
+        else first.getClass
+      val bb = new ArrayBuilder.ofRef[Array[B]]()(ClassTag[Array[B]](rowClass))
+      def mkRowBuilder() = ArrayBuilder.make[B](using ClassTag[B](rowClass.getComponentType))
       val bs = new ArrayOps(first).map((x: B) => mkRowBuilder())
       var isFirst = true
       for (xs <- this) {

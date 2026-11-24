@@ -151,6 +151,26 @@ class ArrayOpsTest {
   }
 
   @Test
+  def `transpose rows whose runtime class is narrower than the element type`(): Unit = {
+    // The first row is a String[], a valid Array[AnyRef]; the result rows must still accept the Integers of the second row
+    val xs: Array[Array[AnyRef]] = Array(Array[String]("a", "b").asInstanceOf[Array[AnyRef]], Array[AnyRef](Integer.valueOf(1), Integer.valueOf(2)))
+    val t = xs.transpose
+    assertEquals(classOf[Array[Array[AnyRef]]], t.getClass)
+    assertArrayEquals(Array[AnyRef]("a", Integer.valueOf(1)), t(0))
+    assertArrayEquals(Array[AnyRef]("b", Integer.valueOf(2)), t(1))
+
+    val ns: Array[Array[Number]] = Array(Array[Integer](1, 2).asInstanceOf[Array[Number]], Array[java.lang.Double](3.0, 4.0).asInstanceOf[Array[Number]])
+    val tn = ns.transpose
+    assertEquals(classOf[Array[Array[Number]]], tn.getClass)
+    assertArrayEquals(Array[AnyRef](Integer.valueOf(1), java.lang.Double.valueOf(3.0)), tn(0).asInstanceOf[Array[AnyRef]])
+
+    // A converting asArray still takes the row class from the rows it produces (scala/bug#13178)
+    val ts: Array[Array[String]] = Array(Array[AnyRef]("a", "b"), Array[AnyRef]("c", "d")).transpose(_.map(_.toString))
+    assertEquals(classOf[Array[Array[String]]], ts.getClass)
+    assertArrayEquals(Array[AnyRef]("a", "c"), ts(0).asInstanceOf[Array[AnyRef]])
+  }
+
+  @Test
   def `empty intersection has correct component type for array`(): Unit = {
     val something = Array(3.14)
     val nothing   = Array[Double]()
