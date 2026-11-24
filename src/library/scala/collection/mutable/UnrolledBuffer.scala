@@ -197,7 +197,7 @@ sealed class UnrolledBuffer[T](implicit val tag: ClassTag[T])
 
   def insertAll(idx: Int, elems: IterableOnce[T]): Unit =
     if (idx >= 0 && idx <= sz) {
-      sz += headptr.insertAll(idx, elems, this)
+      sz += headptr.insertAll(idx, unaliased(elems), this)
     } else throw CommonErrors.indexOutOfBounds(index = idx, max = sz - 1)
 
   override def subtractOne(elem: T): this.type = {
@@ -208,10 +208,15 @@ sealed class UnrolledBuffer[T](implicit val tag: ClassTag[T])
   }
 
   def patchInPlace(from: Int, patch: collection.IterableOnce[T], replaced: Int): this.type = {
+    val patch0 = unaliased(patch)
     remove(from, replaced)
-    insertAll(from, patch)
+    insertAll(from, patch0)
     this
   }
+
+  // Inserting splits and relinks the nodes while the elements are read, so read this buffer from a copy.
+  private def unaliased(elems: IterableOnce[T]): IterableOnce[T] =
+    if (elems.asInstanceOf[AnyRef] eq this) clone() else elems
 
   private def writeObject(out: java.io.ObjectOutputStream): Unit = {
     out.defaultWriteObject
