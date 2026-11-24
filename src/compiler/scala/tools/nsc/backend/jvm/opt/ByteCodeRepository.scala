@@ -97,6 +97,55 @@ abstract class ByteCodeRepository extends PerRunInit {
   }
 
   /**
+   * Cache for `isInNonExportedSystemPackage`, keyed by package. A package belongs to a single module
+   * in the boot layer.
+   */
+  private val nonExportedSystemPackage: concurrent.Map[InternalName, Boolean] = recordPerRunCache(concurrent.TrieMap.empty)
+
+  /** The packages that the system module in directory `moduleDir` of the `jrt` file system exports to all modules. */
+  private val systemModuleExports: concurrent.Map[String, Option[Set[InternalName]]] = recordPerRunCache(concurrent.TrieMap.empty)
+
+  /**
+   * Is the class `internalName` in a package that a module of the JDK's run-time image does not
+   * export to all modules? Such a class is not accessible from code in the unnamed module, even if
+   * it is public (JVMS 5.4.4). Classes that are compiled in this run, or found on the class path,
+   * are in the unnamed module at run time.
+   *
+   * With `-release`, the JDK classes come from `ct.sym`, which only contains exported packages.
+   */
+  def isInNonExportedSystemPackage(internalName: InternalName): Boolean = {
+    val pkg = internalName.lastIndexOf('/') match {
+      case -1 => ""
+      case i  => internalName.substring(0, i)
+    }
+    def compute: Boolean = backendClassPath.findClassFile(internalName.replace('/', '.')) match {
+      case Some(f: scala.reflect.io.PlainNioFile) if f.nioPath.getFileSystem.provider.getScheme == "jrt" =>
+        // /modules/<module>/<package>/<class>.class
+        val path = f.nioPath
+        (path.getNameCount > 2 && path.getName(0).toString == "modules") && {
+          val moduleDir = path.getRoot.resolve(path.subpath(0, 2))
+          // If the module descriptor cannot be read, keep the behavior from before module exports were checked.
+          !systemModuleExports.getOrElseUpdate(moduleDir.toString, unqualifiedExports(moduleDir.resolve("module-info.class"))).forall(_.contains(pkg))
+        }
+      case _ => false
+    }
+    if (pkg.isEmpty || compilingClasses.contains(internalName)) false
+    else nonExportedSystemPackage.getOrElseUpdate(pkg, compute)
+  }
+
+  /** `None` if the module descriptor cannot be read, for example if ASM does not support its classfile version. */
+  private def unqualifiedExports(moduleInfo: java.nio.file.Path): Option[Set[InternalName]] =
+    try {
+      val classNode = new ClassNode1
+      new asm.ClassReader(java.nio.file.Files.readAllBytes(moduleInfo)).accept(classNode, asm.ClassReader.SKIP_CODE)
+      Option(classNode.module).map(module =>
+        if (module.exports == null) Set.empty
+        else module.exports.asScala.iterator.filter(e => e.modules == null || e.modules.isEmpty).map(_.packaze).toSet)
+    } catch {
+      case scala.util.control.NonFatal(_) => None
+    }
+
+  /**
    * The field node for a field matching `name` and `descriptor`, accessed in class `classInternalName`.
    * The declaration of the field may be in one of the superclasses.
    *
