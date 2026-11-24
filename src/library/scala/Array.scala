@@ -162,7 +162,7 @@ object Array {
         }
       } else {
         val dest = new Array[A](newLength)
-        Array.copy(original, 0, dest, 0, original.length)
+        Array.copy(original, 0, dest, 0, java.lang.Math.min(original.length, newLength))
         dest
       }
     }
