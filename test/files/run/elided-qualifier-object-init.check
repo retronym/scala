@@ -1,0 +1,13 @@
+init Conn
+Conn(1).ok          = true
+init Lib0
+Lib0.V(1, 2)        = Vector(1, 2)
+init Lib1
+Lib1.A(1, 2).length = 2
+init Lib2
+Lib2.S("a")         = Symbol(a)
+init Lib3
+Lib3.SC(..).s(x)    = a1b
+init Lib6
+Lib6.P.int2Integer  = 1
+List(Conn, Lib0, Lib1, Lib2, Lib3, Lib6)
