@@ -26,4 +26,36 @@ class EnumerationTest {
     }
     assertSame(Ordering[MyEnum.Value], MyEnum.ValueOrdering)
   }
+
+  @Test def valueSetKeepsElementsWhenLowerIdIsDefinedLater(): Unit = {
+    object Level extends Enumeration {
+      val Low = Value(2, "Low")
+      val High = Value(5, "High")
+      val Alerting = ValueSet(High)
+      val Debug = Value(-3, "Debug")
+    }
+    assertEquals(List(Level.High), Level.Alerting.toList)
+    assertTrue(Level.Alerting.contains(Level.High))
+    assertFalse(Level.Alerting.contains(Level.Low))
+    assertEquals(Level.ValueSet(Level.High), Level.Alerting)
+    assertEquals(Level.ValueSet(Level.Low, Level.High), Level.Alerting + Level.Low)
+    assertEquals(Level.Alerting, Level.ValueSet.fromBitMask(Level.Alerting.toBitMask))
+  }
+
+  @Test def valueSetSerializedAfterLowerIdIsDefined(): Unit = {
+    import java.io._
+    val bos = new ByteArrayOutputStream
+    val oos = new ObjectOutputStream(bos)
+    oos.writeObject(LevelWithSet.Alerting)
+    oos.close()
+    val read = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray)).readObject()
+    assertEquals(LevelWithSet.ValueSet(LevelWithSet.High), read)
+  }
+}
+
+object LevelWithSet extends Enumeration {
+  val Low = Value(2, "Low")
+  val High = Value(5, "High")
+  val Alerting = ValueSet(High)
+  val Debug = Value(-3, "Debug")
 }

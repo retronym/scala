@@ -287,22 +287,47 @@ abstract class Enumeration (initial: Int) extends Serializable {
       with StrictOptimizedIterableOps[Value, immutable.Set, ValueSet]
       with Serializable {
 
+    // `1 - b`, where `b` is the `bottomId` that `nnIds` is relative to. A value with a lower id may be
+    // defined after this set is created, so `b` may be above the current `bottomId`. `bottomId` is never
+    // positive, so this is never 0 once set; it is 0 in a deserialized set, whose `nnIds` is relative to
+    // the current `bottomId` (see `writeReplace`). It is set lazily rather than in a `readObject`, because
+    // a `readObject` frame on the stack makes `ObjectInputStream.resolveClass` use the library's class
+    // loader for the classes nested in this set, such as the enumeration's own module class.
+    @transient private[this] var nnBase: Int = 1 - bottomId
+
+    // `nnIds` relative to the current `bottomId`
+    private[this] def ids: immutable.BitSet = {
+      var base = nnBase
+      if (base == 0) {
+        base = 1 - bottomId
+        nnBase = base
+      }
+      val shift = (1 - base) - bottomId
+      if (shift == 0) nnIds else nnIds.map(_ + shift)
+    }
+
     implicit def ordering: Ordering[Value] = ValueOrdering
     def rangeImpl(from: Option[Value], until: Option[Value]): ValueSet =
-      new ValueSet(nnIds.rangeImpl(from.map(_.id - bottomId), until.map(_.id - bottomId)))
+      new ValueSet(ids.rangeImpl(from.map(_.id - bottomId), until.map(_.id - bottomId)))
 
     override def empty: ValueSet = ValueSet.empty
     override def knownSize: Int = nnIds.size
     override def isEmpty: Boolean = nnIds.isEmpty
-    def contains(v: Value): Boolean = nnIds contains (v.id - bottomId)
-    def incl (value: Value): ValueSet = new ValueSet(nnIds + (value.id - bottomId))
-    def excl (value: Value): ValueSet = new ValueSet(nnIds - (value.id - bottomId))
-    def iterator: Iterator[Value] = nnIds.iterator map (id => thisenum.apply(bottomId + id))
-    override def iteratorFrom(start: Value): Iterator[Value] = nnIds iteratorFrom start.id  map (id => thisenum.apply(bottomId + id))
+    def contains(v: Value): Boolean = ids contains (v.id - bottomId)
+    def incl (value: Value): ValueSet = new ValueSet(ids + (value.id - bottomId))
+    def excl (value: Value): ValueSet = new ValueSet(ids - (value.id - bottomId))
+    def iterator: Iterator[Value] = ids.iterator map (id => thisenum.apply(bottomId + id))
+    override def iteratorFrom(start: Value): Iterator[Value] = ids iteratorFrom start.id  map (id => thisenum.apply(bottomId + id))
     override def className: String = s"$thisenum.ValueSet"
     /** Creates a bit mask for the zero-adjusted ids in this set as a
      *  new array of longs. */
-    def toBitMask: Array[Long] = nnIds.toBitMask
+    def toBitMask: Array[Long] = ids.toBitMask
+
+    // Serialize `nnIds` relative to the current `bottomId`, which is what a deserialized set assumes.
+    private def writeReplace(): AnyRef = {
+      val current = ids
+      if (current eq nnIds) this else new ValueSet(current)
+    }
 
     override protected def fromSpecific(coll: IterableOnce[Value]): ValueSet = ValueSet.fromSpecific(coll)
     override protected def newSpecificBuilder = ValueSet.newBuilder
