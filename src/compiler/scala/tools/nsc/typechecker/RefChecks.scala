@@ -1136,7 +1136,10 @@ abstract class RefChecks extends Transform {
       // equals method inherited from Object or a case class synthetic equals (for
       // which we know the logic.)
       def isWarnable           = isReferenceOp || (isUsingDefaultScalaOp && isUsingWarnableEquals)
-      def isEitherNullable     = (NullTpe <:< receiver.info) || (NullTpe <:< actual.info)
+      // `null` is a value of both types, in which case the operands can be equal although the types are unrelated.
+      // The reference to an object is taken to be non-null.
+      def isNullable(s: Symbol) = !s.isModuleClass && (NullTpe <:< s.tpe_*)
+      def isBothNullable       = isNullable(receiver) && isNullable(actual)
       def isEitherValueClass   = actual.isDerivedValueClass || receiver.isDerivedValueClass
       def isBoolean(s: Symbol) = unboxedValueClass(s) == BooleanClass
       def isUnit(s: Symbol)    = unboxedValueClass(s) == UnitClass
@@ -1231,7 +1234,8 @@ abstract class RefChecks extends Transform {
         if (rBase != NoSymbol) {
           if (aBase != NoSymbol && rBase != aBase)
             nonSensiblyNeq()
-          else if (!isCollection(actual) && !haveSubclassRelationship)
+          // a collection can implement an unrelated trait, as List implements Product and Serializable
+          else if (!isCollection(actual) && !haveSubclassRelationship && (isEffectivelyFinalDeep(actual) || !actual.isTrait))
             nonSensiblyNeq()
         }
       }
@@ -1241,7 +1245,7 @@ abstract class RefChecks extends Transform {
         else if (isNew(other) && (isEffectivelyFinalDeep(receiver) || isReferenceOp))   // object X ; X == new Y
           nonSensiblyNew()
         else if (isEffectivelyFinalDeep(actual) && isEffectivelyFinalDeep(receiver) && !haveSubclassRelationship) {  // object X, Y; X == Y
-          if (isEitherNullable)
+          if (isBothNullable)
             nonSensible("non-null ", alwaysEqual = false)
           else
             nonSensiblyNeq()
