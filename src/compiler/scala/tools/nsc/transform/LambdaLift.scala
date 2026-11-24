@@ -192,8 +192,35 @@ abstract class LambdaLift extends InfoTransform {
     private def markCalled(sym: Symbol, owner: Symbol): Unit = {
 //      println(s"mark called: $sym of ${sym.owner} is called by $owner")
       symSet(called, owner) += sym
-      if (sym.enclClass != owner.enclClass) calledFromInner += sym
+      if (sym.enclClass != owner.enclClass) {
+        calledFromInner += sym
+        if (sym.isMethod && !sym.isConstructor) markOuterFree(owner)
+      }
     }
+
+    /** The outer parameters of the constructors of inner classes, as they appear in the trees. */
+    private val outerParams = mutable.HashMap[Symbol, Symbol]()
+
+    /** Called when code in `enclosure` refers to a member of an enclosing class: the field that holds a
+     *  captured variable (`markFree` found a class between `enclosure` and the variable), or a method
+     *  lifted to that class. Such a reference starts from the outer instance.
+     *
+     *  If `enclosure` is a method nested in a constructor, the reference is built from the outer
+     *  parameter of that constructor (see `OuterPathTransformer.outerValue`). That parameter is not
+     *  in scope once `enclosure` is lifted, so mark it as free in `enclosure`, like any other
+     *  captured local.
+     */
+    private def markOuterFree(enclosure: Symbol): Unit = {
+      @tailrec def enclConstructor(sym: Symbol): Symbol =
+        if (sym == NoSymbol || sym.isClass || sym.isLocalDummy) NoSymbol
+        else if (sym.isClassConstructor) sym
+        else enclConstructor(sym.owner)
+      if (enclosure.isMethod && !enclosure.isConstructor)
+        outerParams.get(enclConstructor(enclosure.owner)).foreach(markFree(_, enclosure))
+    }
+
+    private def markFreeOrOuter(sym: Symbol, enclosure: Symbol): Unit =
+      if (!markFree(sym, enclosure)) markOuterFree(enclosure)
 
     /** The traverse function */
     private val freeVarTraverser = new InternalTraverser {
@@ -206,19 +233,23 @@ abstract class LambdaLift extends InfoTransform {
             if (sym.isLocalToBlock) {
               renamable += sym
             }
-          case DefDef(_, _, _, _, _, _) =>
+          case DefDef(_, _, _, vparamss, _, _) =>
             if (sym.isLocalToBlock) {
               renamable += sym
               sym setFlag (PrivateLocal | FINAL)
             } else if (sym.isPrimaryConstructor) {
               symSet(called, sym) += sym.owner
             }
+            if (sym.isClassConstructor) vparamss match {
+              case (param :: _) :: _ if param.name == nme.OUTER && param.symbol.isArtifact => outerParams(sym) = param.symbol
+              case _ =>
+            }
           case Ident(name) =>
             if (sym == NoSymbol) {
               assert(name == nme.WILDCARD, name)
             } else if (sym.isLocalToBlock) {
               val owner = logicallyEnclosingMember(currentOwner)
-              if (sym.isTerm && !sym.isMethod) markFree(sym, owner)
+              if (sym.isTerm && !sym.isMethod) markFreeOrOuter(sym, owner)
               else if (sym.isMethod) markCalled(sym, owner)
                 //symSet(called, owner) += sym
             }
@@ -247,7 +278,7 @@ abstract class LambdaLift extends InfoTransform {
       do {
         changedFreeVars = false
         for ((caller, callees) <- called ; callee <- callees ; fvs <- free get callee ; fv <- fvs)
-          markFree(fv, caller)
+          markFreeOrOuter(fv, caller)
       } while (changedFreeVars)
 
       def renameSym(sym: Symbol): Unit = {
@@ -358,7 +389,11 @@ abstract class LambdaLift extends InfoTransform {
           else outerValue match {
             case EmptyTree => prematureSelfReference()
             case o         =>
-              val path = outerPath(o, currentClass.outerClass, clazz)
+              // a method nested in a constructor has captured the outer parameter of the constructor (see `markOuterFree`)
+              val capturedOuter = outerParam != NoSymbol && o.symbol == outerParam &&
+                free.get(logicallyEnclosingMember(currentOwner)).exists(_.contains(outerParam))
+              val base = if (capturedOuter) proxyRef(outerParam) else o
+              val path = outerPath(base, currentClass.outerClass, clazz)
               if (path.tpe <:< clazz.tpeHK) path
               else {
                 // scala/bug#9920 The outer accessor might have an erased type of the self type of a trait,
