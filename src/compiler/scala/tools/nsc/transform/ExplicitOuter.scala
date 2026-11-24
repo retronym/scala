@@ -370,7 +370,8 @@ abstract class ExplicitOuter extends InfoTransform
       // I added the mixinPrefix.typeArgs.nonEmpty condition to address the
       // crash in scala/bug#4970.  I feel quite sure this can be improved.
       val path = (
-        if (mixinClass.owner.isTerm) gen.mkAttributedThis(mixinClass.owner.enclClass)
+        // `outerClass`, not `owner.enclClass`: they differ for a trait local to a constructor
+        if (mixinClass.owner.isTerm) gen.mkAttributedThis(mixinClass.outerClass)
         else if (mixinPrefix.typeArgs.nonEmpty) gen.mkAttributedThis(mixinPrefix.typeSymbol)
         else gen.mkAttributedQualifier(mixinPrefix)
       )
