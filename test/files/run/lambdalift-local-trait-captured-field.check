@@ -1,15 +1,15 @@
-7
-14 14 14 s!?
-21 20
-4j 3j
-15
-7 7 3
-9
-7
-15
-KK
-6
-4
-4
-3
-6
+capturedVal: anon(x=1, k=3) T(k=3)
+capturedVar: anon(k=14, s=s!?) T(k=14, s=s!?) method(k=14, s=s!?)
+capturedLazyByNameAndDef: anon(x=1, l=6, d(k=3, l=6), n=5) T(l=6, d(k=3, l=6), n=5)
+twoCaptured: anon(x=1, k=3, j=j) T(k=3, j=j)
+nestedTraits: anon(k=3, T1(k=3), T2(k=3), T3(k=3))
+namedClass: C(x=1, k=3, T(k=3)) D(k=3, C(x=1, k=3, T(k=3)))
+abstractClassWithTrait: anon(k=3, A(k=3), T(k=3))
+samLiteral: sam(x=1, k=3) T(k=3)
+extendedTwice: anon1(k=3, T(k=3)) anon2(k=3, T(k=3))
+generic: anon(f(k)=K, f(kk)=K, T(k=k))
+localObject: O(k=3, T(k=3))
+caseClass: C(k=3, T(k=4), k=4)
+onlyInTrait: anon(T(k=3))
+onlyInClass: anon(k=3)
+serialized: anon(k=3, T(k=3)) -> anon(k=3, T(k=3))
