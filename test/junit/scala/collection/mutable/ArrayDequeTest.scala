@@ -142,6 +142,16 @@ class ArrayDequeTest {
     sut.addOne(100)
     assertThrows[java.util.ConcurrentModificationException](it.hasNext)
   }
+
+  // Buffer.remove(idx, count) throws IndexOutOfBoundsException unless 0 <= idx <= length - count, as ArrayBuffer does
+  @Test def `remove(idx, count) past the end throws and leaves the deque unchanged`: Unit = {
+    for (sut <- List[Buffer[Int]](ArrayDeque(1, 2, 3, 4), Queue(1, 2, 3, 4), Stack(1, 2, 3, 4), ArrayBuffer(1, 2, 3, 4))) {
+      assertThrows[IndexOutOfBoundsException](sut.remove(3, 2))
+      assertEquals(sut.getClass.getSimpleName, List(1, 2, 3, 4), sut.toList)
+      assertThrows[IndexOutOfBoundsException](sut.remove(-1, 2))
+      assertEquals(sut.getClass.getSimpleName, List(1, 2, 3, 4), sut.toList)
+    }
+  }
 }
 
 object ArrayDequeTest {
