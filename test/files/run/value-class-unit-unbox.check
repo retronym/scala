@@ -1,0 +1,10 @@
+str.asInstanceOf[VI]: threw java.lang.ClassCastException
+List[VI].head: threw java.lang.ClassCastException
+str.asInstanceOf[VU]: threw java.lang.ClassCastException
+List[VU].head: threw java.lang.ClassCastException
+id[VI](str): threw java.lang.ClassCastException
+id[VU](str): threw java.lang.ClassCastException
+init HI
+HI.x: VI(1)
+init HU
+HU.x: VU(())
