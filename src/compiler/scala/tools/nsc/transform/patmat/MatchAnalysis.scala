@@ -44,6 +44,9 @@ trait TreeAndTypeAnalysis extends Debugging {
       case _ if pat.tpe <:< BooleanTpe || pat.tpe <:< UnitTpe || pat.tpe <:< StringTpe
                                                               => pat.tpe
       case Ident(_) | Select(_, _) | Literal(_)               => pt
+      // TODO scala/scala review X11: `pt` is needed when the scrutinee may be a box of another class
+      // (`(1L: Any) match { case y: 1 => }` matches), but for a scrutinee of the literal's own primitive
+      // type the literal type is sound, and Scala 3 uses it (pos/literal-type-pattern-binder).
       case Typed(_, _) if pat.tpe.isInstanceOf[ConstantType]  => pt
       case _                                                  => pat.tpe
     }

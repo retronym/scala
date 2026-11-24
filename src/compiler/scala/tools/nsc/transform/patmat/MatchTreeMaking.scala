@@ -358,6 +358,11 @@ trait MatchTreeMaking extends MatchCodeGen with Debugging {
         override def withOuterTest(orig: Tree)(testedBinder: Symbol, expectedTp: Type): Tree = {
           // Check if a type is defined in a static location. Unlike `tp.isStatic` before `flatten`,
           // this also includes methods and (possibly nested) objects inside of methods.
+          // TODO scala/scala review X11: for `y.P` where `val y = c.O` and O is an object in class C,
+          // `isStatic` sees that `y.type`'s symbol is a module class and continues with the prefix of
+          // the val `y` (NoPrefix for a local), not with O's owner, so the outer test is dropped and
+          // `case y.P(_)` matches a `P` of another C (run/patmat-outer-module-val). `case c.O.P(_)` is
+          // tested correctly. Following the module class's owner chain instead would fix it.
           def definedInStaticLocation(tp: Type): Boolean = {
             @tailrec
             def isStatic(tp: Type): Boolean =
