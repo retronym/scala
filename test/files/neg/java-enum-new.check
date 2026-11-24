@@ -1,0 +1,7 @@
+Test.scala:3: error: constructor Color in Java enum Color cannot be accessed in object Test from object Test
+  def color = new Color()
+              ^
+Test.scala:4: error: constructor Num in Java enum Num cannot be accessed in object Test from object Test
+  def num = new Num(5)
+            ^
+2 errors
