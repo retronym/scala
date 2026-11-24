@@ -86,7 +86,8 @@ private[process] trait ProcessBuilderImpl {
 
       // spawn threads that process the input, output, and error streams using the functions defined in `io`
       val inThread =
-        if (inherit || (writeInput eq BasicIO.connectNoOp)) null
+        if (inherit) null
+        else if (writeInput eq BasicIO.connectNoOp) { writeInput(process.getOutputStream); null }
         else Spawn("Simple-input", daemon = true)(writeInput(process.getOutputStream))
       val outThread = Spawn("Simple-output", daemonizeThreads)(processOutput(process.getInputStream()))
       val errorThread =

@@ -62,6 +62,18 @@ class ProcessTest {
     assertEquals(0, res)
   }
 
+  // with no input connected, the child sees end of input and does not wait forever
+  @Test def noInputClosesChildStdin(): Unit = noWin() {
+    import scala.concurrent.{Await, Future}, scala.concurrent.duration._
+    import scala.concurrent.ExecutionContext.Implicits.global
+    def within[A](body: => A): A = Await.result(Future(body), 10.seconds)
+    val p = Process("cat").run(connectInput = false)
+    try assertEquals(0, within(p.exitValue()))
+    finally p.destroy()
+    assertEquals(0, within(Process("cat").!))
+    assertEquals("", within(Process("cat").!!))
+  }
+
   @Test def t10953(): Unit =
     Using.resources(File.createTempFile("foo", "tmp"), File.createTempFile("bar", "tmp")) {
       (foo, bar) => assertEquals(0, Process.cat(Seq(foo, bar)).!)
