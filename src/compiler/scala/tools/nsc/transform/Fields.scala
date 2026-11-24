@@ -151,7 +151,8 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
       bcs.nonEmpty && bcs.head != member.owner && (matchingAccessor(pre, member, bcs.head) != NoSymbol || loop(bcs.tail))
     }
 
-    member.exists && loop(site.info.baseClasses)
+    // a private member (a private module; private accessors in traits have been made not-private by now) is not overridden
+    member.exists && !member.isPrivate && loop(site.info.baseClasses)
   }
 
 
