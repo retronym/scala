@@ -64,6 +64,21 @@ class RangeTest {
     assertEquals(10, it.drop(0).next())
   }
 
+  @Test
+  def indexOfWideRange(): Unit = {
+    val r = Int.MinValue to Int.MaxValue by (1 << 30)
+    assertEquals(2, r.indexOf(0))
+    assertEquals(2, r.lastIndexOf(0))
+    val s = Int.MinValue to Int.MaxValue by Int.MaxValue
+    assertEquals(2, s.indexOf(Int.MaxValue - 1))
+    assertEquals(2, s.lastIndexOf(Int.MaxValue - 1))
+    val t = -2000000000 to 2000000000 by 1000000000
+    assertEquals(4, t.indexOf(2000000000))
+    val u = Int.MaxValue to Int.MinValue by -(1 << 30)
+    assertEquals(2, u.indexOf(-1))
+    assertEquals(3, u.lastIndexOf(-1073741825))
+  }
+
   @Test(expected = classOf[IllegalArgumentException])
   def largeRangeMap(): Unit = {
     Int.MinValue to Int.MaxValue map identity
