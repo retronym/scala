@@ -22,6 +22,13 @@ import scala.reflect.internal.SymbolPairs
  *  Most of the logic is in SymbolPairs, which contains generic
  *  pair-oriented traversal logic.
  */
+// TODO scala/scala review H27: the "unless" above holds only for `BridgesCursor` (erasure), whose
+// `skipOwnerPair` skips the pairs whose owners the non-trait parent already contains. For the
+// `PairsCursor` that RefChecks uses it is stale: its only skip is for two Java-defined owners (javac
+// checks them), so every class re-validates all pairs of its ancestors, e.g. 135 inherited pairs for
+// `class MyBuf extends ArrayBuffer[Int]`. Skipping, in RefChecks, the pairs whose members both come
+// from the superclass would be unsound: a type argument or a later mixin can make two such members a
+// pair only in the subclass (neg/overriding-pairs-inherited).
 abstract class OverridingPairs extends SymbolPairs {
   import global._
 
