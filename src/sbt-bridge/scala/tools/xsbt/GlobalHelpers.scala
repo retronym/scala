@@ -65,6 +65,25 @@ trait GlobalHelpers { self: Compat =>
       }
     }
 
+    /**
+     * Add the class of an annotation of a type, and the symbols and types in its arguments.
+     *
+     * `mapOver` only maps the prefix and the type arguments of the annotation's type and
+     * the types of its argument trees, so it sees neither `MyAnn` nor `Consts` in
+     * `T @MyAnn(Consts.I)`.
+     */
+    private def addAnnotationDependency(annot: AnnotationInfo): Unit = {
+      def traverseTree(tree: Tree): Unit = tree.foreach { t =>
+        if (t.hasSymbolField && !ignoredSymbol(t.symbol) && !t.symbol.hasPackageFlag) addDependency(t.symbol)
+        if (!ignoredType(t.tpe)) traverse(t.tpe)
+        // A constant that the typer folded, such as `Consts.I`
+        if (t.isInstanceOf[Literal]) processOriginalTreeAttachment(t)(traverseTree)
+      }
+      traverse(annot.atp)
+      if (annot.original != EmptyTree) traverseTree(annot.original)
+      else annot.args.foreach(traverseTree)
+    }
+
     // Define cache and populate it with known types at initialization time
     protected var visited = new HashSet[Type]()
 
@@ -124,6 +143,10 @@ trait GlobalHelpers { self: Compat =>
 
           case ThisType(_) | ConstantType(_) =>
             traverse(tpe.underlying)
+
+          case AnnotatedType(annotations, underlying) =>
+            annotations.foreach(addAnnotationDependency)
+            traverse(underlying)
 
           case _ =>
             mapOver(tpe)
