@@ -1,0 +1,10 @@
+early-lazy-val.scala:2: error: lazy vals are not allowed in early object initialization section
+class C(p: Int) extends { lazy val le = p } with Base { def nm = "" }
+                                   ^
+early-lazy-val.scala:3: error: lazy vals are not allowed in early object initialization section
+class D(p: Int) extends { val e: Int = p; lazy val le: Int = e + 1 } with Base { def nm = "x" * le }
+                                                   ^
+early-lazy-val.scala:4: error: lazy vals are not allowed in early object initialization section
+object O extends { private lazy val x = 1; val y = 2 } with Base { def nm = "" }
+                                    ^
+3 errors

@@ -3360,6 +3360,9 @@ self =>
     }
 
     def ensureEarlyDef(tree: Tree): Tree = tree match {
+      case vdef @ ValDef(mods, _, _, _) if mods.isLazy =>
+        syntaxError(vdef.pos, "lazy vals are not allowed in early object initialization section", skipIt = false)
+        EmptyTree
       case vdef @ ValDef(mods, _, _, _) if !mods.isDeferred =>
         copyValDef(vdef)(mods = mods | Flags.PRESUPER)
       case tdef @ TypeDef(mods, name, tparams, rhs) =>
