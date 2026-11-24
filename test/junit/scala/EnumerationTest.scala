@@ -26,4 +26,41 @@ class EnumerationTest {
     }
     assertSame(Ordering[MyEnum.Value], MyEnum.ValueOrdering)
   }
+
+  private def roundTrip[A](a: A): A = {
+    import java.io._
+    val bo = new ByteArrayOutputStream
+    val oo = new ObjectOutputStream(bo)
+    oo.writeObject(a)
+    oo.close()
+    new ObjectInputStream(new ByteArrayInputStream(bo.toByteArray)).readObject().asInstanceOf[A]
+  }
+
+  @Test def deserializeTopLevelEnumeration(): Unit = {
+    assertSame(EnumerationTest.TopLevel, roundTrip(EnumerationTest.TopLevel))
+    assertSame(EnumerationTest.TopLevel.B, roundTrip(EnumerationTest.TopLevel.B))
+  }
+
+  @Test def deserializeNonStaticEnumeration(): Unit = {
+    import EnumerationTest._
+    val sizes = new Sizes
+    assertEquals("M", roundTrip(sizes.M).toString)
+    assertEquals(List("S", "M", "L"), roundTrip(sizes.values).toList.map(_.toString))
+    assertEquals(List("S", "M", "L"), roundTrip(sizes).values.toList.map(_.toString))
+    val (sizes1, m1) = roundTrip((sizes, sizes.M))
+    assertSame(sizes1.withName("M"), m1)
+
+    val holder = new Holder
+    assertEquals("Green", roundTrip(holder.Colours.Green).toString)
+    assertEquals("Green", roundTrip(holder).Colours.Green.toString)
+
+    assertEquals("Q", roundTrip(anon(1)).toString)
+  }
+}
+
+object EnumerationTest {
+  object TopLevel extends Enumeration { val A, B = Value }
+  class Sizes extends Enumeration { val S, M, L = Value }
+  class Holder extends Serializable { object Colours extends Enumeration { val Red, Green = Value } }
+  @annotation.nowarn("msg=inferred structural type") val anon = new Enumeration { val P, Q = Value }
 }

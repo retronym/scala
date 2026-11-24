@@ -91,8 +91,11 @@ abstract class Enumeration (initial: Int) extends Serializable {
   def this() = this(0)
 
   /* Note that `readResolve` cannot be private, since otherwise
-     the JVM does not invoke it when deserializing subclasses. */
-  protected def readResolve(): AnyRef = thisenum.getClass.getField(MODULE_INSTANCE_NAME).get(null)
+     the JVM does not invoke it when deserializing subclasses.
+     Only a top-level object has a `MODULE$` field; any other enumeration resolves to itself. */
+  protected def readResolve(): AnyRef =
+    try thisenum.getClass.getField(MODULE_INSTANCE_NAME).get(null)
+    catch { case _: NoSuchFieldException => this }
 
   /** The name of this enumeration. */
   override def toString: String =
