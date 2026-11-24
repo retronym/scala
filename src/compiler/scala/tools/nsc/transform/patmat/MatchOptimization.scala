@@ -465,7 +465,10 @@ trait MatchOptimization extends MatchTreeMaking with MatchApproximation {
           // a switch with duplicate cases yields a verify error,
           // and a switch with duplicate cases and guards cannot soundly be rewritten to an unguarded switch
           // (even though the verify error would disappear, the behaviour would change)
-          val allReachable = unreachableCase(caseDefsWithGuards).map(cd => reportUnreachable(cd.body.pos)).isEmpty
+          // (so the check is needed for correctness, and `-Xno-patmat-analysis` only silences the warning)
+          val unreachable  = unreachableCase(caseDefsWithGuards)
+          val allReachable = unreachable.isEmpty
+          if (!settings.XnoPatmatAnalysis.value) unreachable.foreach(cd => reportUnreachable(cd.body.pos))
 
           if (!allReachable) Nil
           else if (noGuards(caseDefsWithGuards)) {
