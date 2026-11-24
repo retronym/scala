@@ -151,12 +151,13 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
       bcs.nonEmpty && bcs.head != member.owner && (matchingAccessor(pre, member, bcs.head) != NoSymbol || loop(bcs.tail))
     }
 
-    member.exists && loop(site.info.baseClasses)
+    // a private member (a private module; private accessors in traits have been made not-private by now) is not overridden
+    member.exists && !member.isPrivate && loop(site.info.baseClasses)
   }
 
 
   def matchingAccessor(pre: Type, member: Symbol, clazz: Symbol) = {
-    val res = member.matchingSymbol(clazz, pre) filter (sym => (sym hasFlag ACCESSOR) && notDeferredOrSynthImpl(sym))
+    val res = member.matchingSymbol(clazz, pre) filter (sym => (sym hasFlag ACCESSOR | MODULE) && notDeferredOrSynthImpl(sym))
     //    if (res != NoSymbol) println(s"matching accessor for $member in $clazz = $res (under $pre)")
     //    else println(s"no matching accessor for $member in $clazz (under $pre) among ${clazz.info.decls}")
     res
