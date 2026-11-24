@@ -362,7 +362,20 @@ abstract class Erasure extends InfoTransform
           else if (sym.isDerivedValueClass) {
             if (unboxedVCs) {
               val unboxedSeen = (tp memberType sym.derivedValueClassUnbox).finalResultType
-              jsig(unboxedSeen, existentiallyBound, toplevel, unboxedVCs = true)
+              // The signature must erase to the descriptor, which is given by `erasedValueClassArg`.
+              if (valueClassIsParametric(sym)) {
+                // The underlying type is a type parameter of the value class. Its instantiation is erased
+                // with `boxingErasure`: a primitive is boxed and a value class is not unboxed again.
+                val seenSym = unboxedSeen.dealiasWiden.typeSymbol
+                if (isPrimitiveValueClass(seenSym) && seenSym != UnitClass) jsig1(boxedClass(seenSym).tpe)
+                else jsig(unboxedSeen, existentiallyBound, toplevel, unboxedVCs = false)
+              } else {
+                // The descriptor has the erasure of the underlying type as declared in the value class.
+                // Where the instantiation erases differently (`Array[A]` at `A = Int`), use the declared type.
+                val underlying = underlyingOfValueClass(sym)
+                val precise = sym.typeParams.isEmpty || erasure(sym0)(unboxedSeen) =:= erasure(sym0)(underlying)
+                jsig(if (precise) unboxedSeen else underlying, existentiallyBound, toplevel, unboxedVCs = true)
+              }
             } else classSig()
           }
           else if (sym.isClass)

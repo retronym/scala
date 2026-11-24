@@ -54,11 +54,11 @@ public scala.collection.immutable.List<ValA<A>> C3.v2()
 
 C4
 public java.lang.Integer C4.v1(java.lang.Integer)
-public int C4.v1(int)
+public java.lang.Integer C4.v1(java.lang.Integer)
 public java.lang.Integer C4.v3()
-public int C4.v3()
+public java.lang.Integer C4.v3()
 public java.lang.Integer C4.v4(java.lang.Integer,scala.collection.immutable.List)
-public int C4.v4(int,scala.collection.immutable.List<ValA<java.lang.Object>>)
+public java.lang.Integer C4.v4(java.lang.Integer,scala.collection.immutable.List<ValA<java.lang.Object>>)
 public scala.collection.immutable.List C4.v2()
 public scala.collection.immutable.List<ValA<java.lang.Object>> C4.v2()
 
@@ -76,11 +76,11 @@ C5
 public double C5.f2(int,java.lang.Object,java.lang.String,double)
 public double C5.f2(int,java.lang.Object,java.lang.String,double)
 public int C5.f3(java.lang.Integer)
-public int C5.f3(int)
+public int C5.f3(java.lang.Integer)
 public int C5.f4(java.lang.Integer)
-public int C5.f4(int)
+public int C5.f4(java.lang.Integer)
 public int C5.f5(java.lang.Integer)
-public int C5.f5(int)
+public int C5.f5(java.lang.Integer)
 public java.lang.Object C5.f1(int,java.lang.Object,java.lang.String,java.lang.Object)
 public <A> A C5.f1(int,java.lang.Object,java.lang.String,A)
 
@@ -90,7 +90,7 @@ public A C6.f1(int,java.lang.Object,java.lang.String,A)
 
 C7
 public java.lang.Integer C7.f1(int,java.lang.Object,java.lang.String,java.lang.Integer)
-public int C7.f1(int,java.lang.Object,java.lang.String,int)
+public java.lang.Integer C7.f1(int,java.lang.Object,java.lang.String,java.lang.Integer)
 public java.lang.Object C7.f1(int,java.lang.Object,java.lang.String,java.lang.Object)
 public java.lang.Object C7.f1(int,java.lang.Object,java.lang.String,java.lang.Object)
 
