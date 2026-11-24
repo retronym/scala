@@ -160,8 +160,10 @@ private[collection] object JavaCollectionWrappers extends Serializable {
     // expose clone methods.  Generically, they're protected.
     override def clone(): JListWrapper[A] = new JListWrapper(new ju.ArrayList[A](underlying))
     def patchInPlace(from: Int, patch: scala.collection.IterableOnce[A], replaced: Int): this.type = {
-      remove(from, replaced)
-      insertAll(from, patch)
+      val len = underlying.size
+      val from0 = math.min(math.max(from, 0), len)
+      remove(from0, math.min(math.max(replaced, 0), len - from0))
+      insertAll(from0, patch)
       this
     }
     def remove(from: Int, n: Int): Unit = underlying.subList(from, from+n).clear()
