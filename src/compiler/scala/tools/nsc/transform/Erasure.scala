@@ -603,9 +603,15 @@ abstract class Erasure extends InfoTransform
         val shouldAdd = {
           val sigContainsValueClass = member.tpe.exists(_.typeSymbol.isDerivedValueClass)
           def bridgeMayClash = other.paramss.exists(_.exists(_.tpe match { case TypeRef(_, r, _) => r.isTypeParameter case _ => false }))
+          // Renaming the member of an anonymous class leaves the name to the bridge. That is wrong if the member also
+          // overrides a method with the JVM signature of the bridge that is not called like `other`, with boxed value
+          // classes: `trait IdV extends Id[V] { def ap(v: V): V }` for a `V` with an underlying type that erases to
+          // `Object`. The member implements `IdV.ap` by name, without a bridge, and the bridge would take its place.
+          def bridgeUsurpsOverridden = enteringErasure(member.allOverriddenSymbols).exists(overridden =>
+            exitingPostErasure(overridden.tpe =:= bridge.tpe) && !exitingErasure(overridden.tpe =:= bridge.tpe))
           def bridgeIsAOK = checkBridgeOverrides(member, other, bridge) match {
             case Nil => true
-            case _ if member.owner.isAnonymousClass => resolveAnonymousBridgeClash(member, bridge); true
+            case _ if member.owner.isAnonymousClass && !bridgeUsurpsOverridden => resolveAnonymousBridgeClash(member, bridge); true
             case es => for ((pos, msg) <- es) reporter.error(pos, msg); false
           }
           !sigContainsValueClass && !bridgeMayClash || bridgeIsAOK

@@ -1,0 +1,19 @@
+t6260-inherited.scala:12: error: bridge generated for member method ap: (v: V): V in <$anon: IdV>
+which overrides method ap: (a: A): A in trait Id
+clashes with definition of the member itself;
+both have erased type (a: Object): Object
+  val anon: IdV = new IdV { def ap(v: V) = v }
+                                ^
+t6260-inherited.scala:13: error: bridge generated for member method ap: (v: V): V in <$anon: IdV>
+which overrides method ap: (a: A): A in trait Id
+clashes with definition of the member itself;
+both have erased type (a: Object): Object
+  val sam: IdV = v => v
+                   ^
+t6260-inherited.scala:14: error: bridge generated for member method ap: (v: V): V in class Named
+which overrides method ap: (a: A): A in trait Id
+clashes with definition of the member itself;
+both have erased type (a: Object): Object
+  class Named extends IdV { def ap(v: V) = v }
+                                ^
+3 errors
