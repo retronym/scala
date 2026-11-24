@@ -98,25 +98,42 @@ object Utility {
     val hex  = (ch() == 'x') && { nextch(); true }
     val base = if (hex) 16 else 10
     var i = 0
+    var seenDigit = false
+    // Only the first problem is reported, and only once the reference has been read up to the ';'.
+    var error: String = null
+    def fail(msg: String): Unit = if (error eq null) error = msg
+    def digit(): Unit = {
+      seenDigit = true
+      // Stop accumulating beyond the largest code point, so that `i` cannot wrap around to a valid one.
+      if (i <= Character.MAX_CODE_POINT) i = i * base + ch().asDigit
+    }
     while (ch() != ';') {
       ch() match {
         case '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' =>
-          i = i * base + ch().asDigit
+          digit()
         case 'a' | 'b' | 'c' | 'd' | 'e' | 'f'
            | 'A' | 'B' | 'C' | 'D' | 'E' | 'F' =>
           if (! hex)
-            reportSyntaxError("hex char not allowed in decimal char ref\n" +
-                              "Did you mean to write &#x ?")
+            fail("hex char not allowed in decimal char ref\n" +
+                 "Did you mean to write &#x ?")
           else
-            i = i * base + ch().asDigit
+            digit()
         case SU =>
           reportTruncatedError("")
         case _ =>
-          reportSyntaxError("character '" + ch() + "' not allowed in char ref\n")
+          fail("character '" + ch() + "' not allowed in char ref\n")
       }
       nextch()
     }
-    new String(Array(i), 0, 1)
+    if (error eq null) {
+      if (!seenDigit) fail("char ref must have at least one digit")
+      else if (!Character.isValidCodePoint(i)) fail("char ref is not a valid code point, the largest is &#x10FFFF;")
+    }
+    if (error eq null) new String(Array(i), 0, 1)
+    else {
+      reportSyntaxError(error)
+      ""
+    }
   }
 
   /** {{{
