@@ -72,6 +72,30 @@ class SimplifyJumpsTest {
   }
 
   @Test
+  def gotoThrowTargetInTry(): Unit = {
+    val handler = List(ExceptionHandler(Label(2), Label(3), Label(4), Some("java/lang/Throwable")))
+    val initialInstrs = List(
+      Op(ACONST_NULL),
+      Jump(GOTO, Label(2)), // not replaced by ATHROW (would move the ATHROW out of the try block)
+      Label(1),
+      Op(ACONST_NULL),
+      Label(2),
+      Op(ATHROW),
+      Label(3),
+      Label(4),
+      Op(POP),
+      Op(RETURN)
+    )
+    val method = genMethod(handlers = handler)(initialInstrs: _*)
+    assertFalse(LocalOptImpls.simplifyJumps(method))
+    assertSameCode(instructionsFromMethod(method), initialInstrs)
+
+    val optMethod = genMethod()(initialInstrs: _*) // no handler
+    assertTrue(LocalOptImpls.simplifyJumps(optMethod))
+    assertSameCode(instructionsFromMethod(optMethod).take(2), List(Op(ACONST_NULL), Op(ATHROW)))
+  }
+
+  @Test
   def simplifyBranchOverGoto(): Unit = {
     val begin = List(
       VarOp(ILOAD, 1),

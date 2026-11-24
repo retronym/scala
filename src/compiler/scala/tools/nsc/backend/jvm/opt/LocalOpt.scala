@@ -1022,6 +1022,9 @@ object LocalOptImpls {
 
     val jumpInsns = mutable.LinkedHashMap.empty[JumpInsnNode, Boolean]
 
+    // The xRETURN and ATHROW instructions that are guarded by an exception handler, required for simplifyGotoReturn
+    val returnOrThrowInTryBlock = mutable.Set.empty[AbstractInsnNode]
+
     for (insn <- method.instructions.iterator.asScala) insn match {
       case l: LabelNode =>
         activeHandlers ++= allHandlers.filter(_.start == l)
@@ -1029,6 +1032,9 @@ object LocalOptImpls {
 
       case ji: JumpInsnNode =>
         jumpInsns(ji) = activeHandlers.nonEmpty
+
+      case i if activeHandlers.nonEmpty && (isReturn(i) || i.getOpcode == ATHROW) =>
+        returnOrThrowInTryBlock += i
 
       case _ =>
     }
@@ -1151,16 +1157,17 @@ object LocalOptImpls {
      *   => xRETURN/ATHROW;    [any ops];  l: xRETURN/ATHROW
      * }}}
      *
-     * inlining is only done if the GOTO instruction is not part of a try block, otherwise the
-     * rewrite might change the behavior. For xRETURN, the reason is that return instructions may throw
-     * an IllegalMonitorStateException, as described here:
+     * inlining is only done if neither the GOTO instruction nor the target xRETURN/ATHROW is part
+     * of a try block, otherwise the rewrite might change the behavior: the copy of the instruction
+     * would be guarded by different handlers than the original. For xRETURN, the reason is that
+     * return instructions may throw an IllegalMonitorStateException, as described here:
      *   https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-6.html#jvms-6.5.return
      */
     def simplifyGotoReturn(instruction: AbstractInsnNode, inTryBlock: Boolean): Boolean = !inTryBlock && (instruction match {
       case Goto(jump) =>
         nextExecutableInstruction(jump.label) match {
           case Some(target) =>
-            if (isReturn(target) || target.getOpcode == ATHROW) {
+            if ((isReturn(target) || target.getOpcode == ATHROW) && !returnOrThrowInTryBlock(target)) {
               method.instructions.set(jump, target.clone(null))
               removeJumpFromMap(jump)
               true
