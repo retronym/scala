@@ -1,0 +1,16 @@
+foo1
+foo2
+foo3
+foo4
+foo5
+foo6
+foo7
+foo8
+foo1[T <: One]
+foo2[T <: One & Two]
+foo3[T <: Sub & One]
+foo4[T <: KT]
+foo5[T <: K & Two]
+foo6[T <: L & One]
+foo7[T <: java.lang.Object]
+foo8[T <: One]

@@ -248,13 +248,22 @@ abstract class Erasure extends InfoTransform
     def boxedSig(tp: Type): Unit = jsig(tp, unboxedVCs = false)
     def boundsSig(bounds: List[Type]): Unit = {
       val (isTrait, isClass) = partitionConserve(bounds)(_.typeSymbol.isTrait)
-      isClass match {
+      // Java erases a type variable to its leftmost bound, so the bound that the intersection erases to in the
+      // descriptor comes first. If that is a trait (`Object with T`, or `C with T` for a `trait T extends C`),
+      // the class bound stays empty: the class is a parent of the trait.
+      val dominator = if (bounds.isEmpty || bounds.tail.isEmpty) NoType else intersectionDominator(bounds)
+      if (isTrait.exists(_ eq dominator)) {
+        builder.append(':').append(':')
+        boxedSig(dominator)
+      } else isClass match {
         case Nil    => builder.append(':') // + boxedSig(ObjectTpe)
-        case x :: _ => builder.append(':'); boxedSig(x)
+        case x :: _ => builder.append(':'); boxedSig(if (isClass.exists(_ eq dominator)) dominator else x)
       }
       isTrait.foreach { tp =>
-        builder.append(':')
-        boxedSig(tp)
+        if (tp ne dominator) {
+          builder.append(':')
+          boxedSig(tp)
+        }
       }
     }
     def paramSig(tsym: Symbol): Unit = {
