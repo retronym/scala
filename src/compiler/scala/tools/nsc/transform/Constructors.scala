@@ -158,7 +158,7 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
    * as required by DelayedInit.
    */
   private trait OmittablesHelper {
-    def computeOmittableAccessors(clazz: Symbol, defs: List[Tree], auxConstructors: List[Tree], @unused constructor: List[Tree]): Set[Symbol] = {
+    def computeOmittableAccessors(clazz: Symbol, defs: List[Tree], auxConstructors: List[Tree], constructor: List[Tree]): Set[Symbol] = {
       val decls = clazz.info.decls.toSet
       val isEffectivelyFinal = clazz.isEffectivelyFinal
 
@@ -195,6 +195,15 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
 
       if (omittables.nonEmpty)
         (defs.iterator ++ auxConstructors.iterator) foreach detectUsages.traverse
+
+      // `intoConstructor` leaves a reference to a parameter accessor of a specialized type in the constructor
+      // (see `canBeSupplanted`), so its field is needed even if nothing outside the constructor reads it.
+      val specializedParamAccs = omittables.filter(sym => omittableParamAcc(sym) && specializeTypes.possiblySpecialized(sym))
+      if (specializedParamAccs.nonEmpty)
+        constructor.foreach(_.foreach {
+          case tree: Select if specializedParamAccs(tree.symbol) => omittables -= tree.symbol
+          case _ =>
+        })
 
       omittables.toSet
     }
