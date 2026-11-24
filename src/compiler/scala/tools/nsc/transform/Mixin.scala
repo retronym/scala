@@ -349,7 +349,9 @@ abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis {
       // For all members of a trait's interface do:
       for (mixinMember <- mixinClass.info.decls) {
         if (mixinMember.hasFlag(SUPERACCESSOR)) { // mixin super accessors
-          val superAccessor = addMember(clazz, mixinMember.cloneSymbol(clazz)) setPos clazz.pos
+          // clone before erasure so that the clone knows which of its parameters and result are
+          // erased value types, see `completeSuperAccessor`
+          val superAccessor = addMember(clazz, enteringErasure(mixinMember.cloneSymbol(clazz))) setPos clazz.pos
           assert(superAccessor.alias != NoSymbol, superAccessor)
 
           rebindSuper(clazz, mixinMember.alias, mixinClass) match {
@@ -584,6 +586,12 @@ abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis {
          * The rhs is:
          *   super.A(xs)  where A is the super accessor's alias and xs are its formal parameters.
          * This rhs is typed and then mixin transformed.
+         *
+         * The accessor has the signature of the super method as seen from the class that contains
+         * the super call, the alias has its own. After erasure they can disagree about a value class:
+         * one has the unboxed representation where the other has `Object` (a type parameter or a
+         * supertype of the value class). The body is typed after posterasure, when both look like the
+         * underlying type, so the conversion is added here based on the types they had after erasure.
          */
         def completeSuperAccessor(stat: Tree) = stat match {
           case DefDef(_, _, _, vparams :: Nil, _, EmptyTree) if stat.symbol.isSuperAccessor =>
@@ -591,7 +599,17 @@ abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis {
             debuglog(s"implementing super accessor in $clazz for ${stat.symbol} --> ${alias.owner} . ${alias}")
             registerRequiredDirectInterface(alias, clazz, parent =>
               s"Unable to implement a super accessor, $parent needs to be directly extended by $clazz.")
-            val body = atPos(stat.pos)(Apply(SuperSelect(clazz, alias), vparams map (v => Ident(v.symbol))))
+            def adapt(tree: Tree, from: Type, to: Type): Tree = (from, to) match {
+              case (ErasedValueType(_, _), ErasedValueType(_, _)) => tree
+              case (ErasedValueType(valueClazz, _), _)            => New(valueClazz.tpe, tree)
+              case (_, ErasedValueType(valueClazz, _))            => Apply(Select(gen.mkAsInstanceOf(tree, valueClazz.tpe, any = false), valueClazz.derivedValueClassUnbox), Nil)
+              case _                                              => tree
+            }
+            def erasedSignature(sym: Symbol) = exitingErasure((sym.info.paramTypes, sym.info.finalResultType))
+            val (accessorParamTypes, accessorResultType) = erasedSignature(stat.symbol)
+            val (aliasParamTypes, aliasResultType)       = erasedSignature(alias)
+            val args = map3(vparams, accessorParamTypes, aliasParamTypes)((v, from, to) => adapt(Ident(v.symbol), from, to))
+            val body = atPos(stat.pos)(adapt(Apply(SuperSelect(clazz, alias), args), aliasResultType, accessorResultType))
             val pt   = stat.symbol.tpe.resultType
 
             copyDefDef(stat)(rhs = enteringMixin(transform(localTyper.typed(body, pt))))
