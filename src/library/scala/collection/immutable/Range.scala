@@ -277,7 +277,7 @@ sealed abstract class Range(
     }
 
   private[this] def posOf(i: Int): Int =
-    if (contains(i)) (i - start) / step else -1
+    if (contains(i)) ((i.toLong - start) / step).toInt else -1
 
   override def sameElements[B >: Int](that: IterableOnce[B]): Boolean = that match {
     case other: Range =>
