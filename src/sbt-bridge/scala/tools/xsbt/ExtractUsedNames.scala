@@ -169,10 +169,15 @@ class ExtractUsedNames[GlobalType <: CallbackGlobal](val global: GlobalType)
     val namesUsedAtTopLevel = new NamesUsedInClass
 
     override def traverse(tree: Tree): Unit = {
+      handleTreeNode(tree)
+      super.traverse(tree)
+    }
+
+    private def handleTreeNode(tree: Tree): Unit = {
       handleAnnotations(tree)
       handleClassicTreeNode(tree)
       processMacroExpansion(tree)(handleMacroExpansion)
-      super.traverse(tree)
+      ()
     }
 
     /** After typer, the annotations of a definition only live in its symbol. */
@@ -296,7 +301,10 @@ class ExtractUsedNames[GlobalType <: CallbackGlobal](val global: GlobalType)
         val original = t.original
         if (!inspectedTypeTrees.contains(original)) {
           inspectedTypeTrees.add(original)
-          original.foreach(traverse)
+          traverse(original)
+          // A member of a refinement or an existential quantifier is the owner of the trees
+          // below it, but the names used there belong to the class that encloses the type.
+          if (original.exists(_.isInstanceOf[DefTree])) original.foreach(handleTreeNode)
         }
 
       case t if t.hasSymbolField =>
