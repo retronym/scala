@@ -919,6 +919,25 @@ class InlinerTest extends BytecodeTesting {
   }
 
   @Test
+  def receiverNullCheckInStaticMethod(): Unit = {
+    val code =
+      """class C {
+        |  @inline final def f: String = "hai!"
+        |  def t1 = this.f // no null check for `this`
+        |  def t2 = (c: C) => { println(); c.f } // null check: in the static lambda body, local 0 is the parameter `c`
+        |}
+      """.stripMargin
+
+    val c = compileClass(code)
+    val t1 = getInstructions(c, "t1")
+    assertNoInvoke(t1)
+    assert(t1.collect({case Jump(IFNONNULL, _) => }).isEmpty, t1.stringLines)
+    val anonfun = getInstructions(c, "$anonfun$t2$1")
+    assertDoesNotInvoke(anonfun, "f")
+    assert(1 == anonfun.collect({case Jump(IFNONNULL, _) => }).size, anonfun.stringLines)
+  }
+
+  @Test
   def inlineIndyLambda(): Unit = {
     val code =
       """object M {

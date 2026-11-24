@@ -743,8 +743,8 @@ abstract class Inliner {
     val paramSizes = (if (isStatic) Iterator.empty else Iterator(1)) ++ calleeParamTypes.iterator.map(_.getSize)
     for (paramSize <- paramSizes) {
       val min = f.aliasesOf(callsiteStackSlot).iterator.min
-      if (calleeParamSlot == 0 && !isStatic && min == 0)
-        skipReceiverNullCheck = true // no need to null-check `this`
+      if (calleeParamSlot == 0 && !isStatic && min == 0 && !isStaticMethod(callsiteMethod))
+        skipReceiverNullCheck = true // no need to null-check `this`. In a static method, local 0 is the first parameter.
       val isWritten = writtenLocals(calleeParamSlot) || paramSize == 2 && writtenLocals(calleeParamSlot + 1)
       if (min < numLocals && !isWritten) {
         calleeParamLocals(calleeParamSlot) = min
