@@ -107,7 +107,10 @@ with IntStepper {
 
 private[collection] object BitSetStepper {
   def from(bs: scala.collection.BitSetOps[_]): IntStepper with EfficientSplit =
-    new BitSetStepper(
+    // The exclusive end index `nwords * WordLength` does not fit in an Int once the set may hold
+    // elements close to Int.MaxValue; step through the iterator instead of indexing.
+    if (bs.nwords > (Int.MaxValue >> BitSetOps.LogWL)) new IntIteratorStepper(bs.iterator) with EfficientSplit
+    else new BitSetStepper(
       if (bs.nwords <= 2) null else bs,
       if (bs.nwords <= 0) -1L else bs.word(0),
       if (bs.nwords <= 1) -1L else bs.word(1),
