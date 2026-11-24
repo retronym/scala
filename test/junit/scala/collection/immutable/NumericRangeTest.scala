@@ -36,6 +36,25 @@ class NumericRangeTest {
   }
 
   @Test
+  def bigDecimalSumAsIfIntegral(): Unit = {
+    val asIntegral = Numeric.BigDecimalAsIfIntegral
+    val r = BigDecimal(0) to BigDecimal(1) by BigDecimal("0.5")
+    assertEquals(BigDecimal("1.5"), r.sum(asIntegral))
+    val q = NumericRange(BigDecimal("0.25"), BigDecimal(1), BigDecimal("0.25"))(asIntegral)
+    assertEquals(BigDecimal("1.5"), q.sum(asIntegral))
+    assertEquals(BigDecimal(6), (BigDecimal(1) to BigDecimal(3) by 1).sum(asIntegral))
+    // n * (head + last) is an even integer, so the series formula is exact
+    assertEquals(BigDecimal(3), (BigDecimal(0) to BigDecimal("1.5") by BigDecimal("0.5")).sum(asIntegral))
+  }
+
+  @Test(timeout = 10000L)
+  def bigDecimalSumAsIfIntegralLarge(): Unit = {
+    // two billion elements: summed by the series formula, not one by one
+    val r = NumericRange.inclusive(BigDecimal(1), BigDecimal(2000000000), BigDecimal(1))(Numeric.BigDecimalAsIfIntegral)
+    assertEquals(BigDecimal("2000000001000000000"), r.sum(Numeric.BigDecimalAsIfIntegral))
+  }
+
+  @Test
   def t11152_BigDecimalMakesProgress(): Unit = {
     // Overflow case with default MathContext
     val a = BigDecimal(1)
