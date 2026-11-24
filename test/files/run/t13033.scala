@@ -49,8 +49,7 @@ object Test extends App {
   assert(c8.hashCode == caseClassHash(c8, "C7"))
 
 
-  // should be true -- scala/bug#13034
-  assert(!VCC(1).canEqual(VCC(1)))
-  // also due to scala/bug#13034
-  assert(VCC(1).canEqual(1))
+  // scala/bug#13034
+  assert(VCC(1).canEqual(VCC(1)))
+  assert(!VCC(1).canEqual(1))
 }

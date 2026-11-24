@@ -726,7 +726,7 @@ abstract class Erasure extends InfoTransform
           } else treeCopy.Apply(tree, treeCopy.TypeApply(ta, treeCopy.Select(sel, qual1, name), List(targ)), List())
 
         case Apply(TypeApply(Select(_, _), List(targ)), List())
-        if tree.symbol == Any_isInstanceOf =>
+        if isTypeTestSymbol(tree.symbol) => // Object_isInstanceOf in the synthetic canEqual of a case class
           targ.tpe match {
             case ErasedValueType(clazz, _) => targ.setType(clazz.tpe)
             case _ =>
