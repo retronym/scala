@@ -285,7 +285,8 @@ final class BigInt private (private var _bigInteger: BigInteger, private val _lo
   /** Compares this `BigInt` with the specified `BigInt` for equality.
    */
   def equals(that: BigInt): Boolean =
-    if (this.longEncoding)
+    if (that eq null) false
+    else if (this.longEncoding)
       that.longEncoding && (this._long == that._long)
     else
       !that.longEncoding && (this._bigInteger == that._bigInteger)

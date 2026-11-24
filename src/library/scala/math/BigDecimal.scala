@@ -471,7 +471,7 @@ extends ScalaNumber with ScalaNumericConversions with Serializable with Ordered[
 
   /** Compares this `BigDecimal` with the specified `BigDecimal` for equality.
    */
-  def equals (that: BigDecimal): Boolean = compare(that) == 0
+  def equals (that: BigDecimal): Boolean = (that ne null) && compare(that) == 0
 
   /** Compares this `BigDecimal` with the specified `BigDecimal`.
    */

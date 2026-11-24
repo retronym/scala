@@ -1,7 +1,7 @@
 package scala.math
 
 import org.junit.Test
-import org.junit.Assert.{assertEquals, assertNotEquals, assertNull, assertTrue}
+import org.junit.Assert.{assertEquals, assertFalse, assertNotEquals, assertNull, assertTrue}
 import java.math.{BigDecimal => BD, MathContext => MC}
 import scala.tools.testkit.AssertUtil.{assertEqualsAny, assertNotEqualsAny}
 
@@ -318,5 +318,12 @@ class BigDecimalTest {
 
     val bdValue: BigDecimal = (BD.ONE: java.math.BigDecimal): BigDecimal
     assertEquals(BD.ONE, bdValue.bigDecimal)
+  }
+
+  @annotation.nowarn("msg=bypasses cooperative equality")
+  @Test def `equals null is false`(): Unit = {
+    val nbd: BigDecimal = null
+    assertFalse(BigDecimal(1).equals(null))
+    assertFalse(BigDecimal(1).equals(nbd))
   }
 }
