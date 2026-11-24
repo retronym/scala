@@ -713,7 +713,7 @@ private class RangeIterator(
 
   override def drop(n: Int): Iterator[Int] = {
     if (n > 0) {
-      val longPos = _next.toLong + step * n
+      val longPos = _next.toLong + step.toLong * n
       if (step > 0) {
         _next = Math.min(lastElement, longPos).toInt
         _hasNext = longPos <= lastElement
