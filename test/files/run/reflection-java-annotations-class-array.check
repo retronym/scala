@@ -1,0 +1,14 @@
+c1 = classOf[java.lang.String]
+c2 = classOf[[Ljava.lang.String;]
+c3 = classOf[[I]
+c4 = classOf[[[Ljava.lang.String;]
+c5 = classOf[scala.Int]
+c6 = classOf[scala.Unit]
+cs = Array(classOf[java.lang.String], classOf[[Ljava.lang.String;], classOf[[[J], classOf[scala.Double])
+c1: String
+c2: Array[String]
+c3: Array[Int]
+c4: Array[Array[String]]
+c5: Int
+c6: Unit
+cs: {String, Array[String], Array[Array[Long]], Double}
