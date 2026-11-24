@@ -175,6 +175,60 @@ class TreeSeqMapTest {
     }
   }
   @Test
+  def derivedCollectionsKeepOrderedBy(): Unit = {
+    import TreeSeqMap.OrderBy.{Insertion, Modification}
+    type M = TreeSeqMap[Int, String]
+    val ops = List[(String, M => M)](
+      "drop"      -> (_.drop(1)),
+      "dropRight" -> (_.dropRight(1)),
+      "dropWhile" -> (_.dropWhile(_._1 == 1)),
+      "filter"    -> (_.filter(_._1 != 2)),
+      "filterNot" -> (_.filterNot(_._1 == 2)),
+      "partition" -> (_.partition(_._1 != 2)._1),
+      "span"      -> (_.span(_._1 != 4)._1),
+      "splitAt"   -> (_.splitAt(3)._1),
+      "splitAt"   -> (_.splitAt(1)._2),
+      "take"      -> (_.take(3)),
+      "takeRight" -> (_.takeRight(3)),
+      "takeWhile" -> (_.takeWhile(_._1 != 4)),
+      "groupBy"   -> (_.groupBy(_._1 != 2)(true)),
+      "grouped"   -> (_.grouped(3).next()),
+      "tapEach"   -> (_.tapEach(_ => ())),
+      "slice"     -> (_.slice(0, 3)),
+      "tail"      -> (_.tail),
+      "init"      -> (_.init),
+      "empty"     -> (_.empty),
+      "concat"    -> (_ ++ List(9 -> "i")),
+      "map"       -> (_.map(identity)),
+      "flatMap"   -> (_.flatMap(kv => List(kv))),
+      "collect"   -> (_.collect { case kv => kv }),
+      "removed"   -> (_.removed(2)))
+    for (orderBy <- List(Insertion, Modification); (name, op) <- ops) {
+      val m = TreeSeqMap.empty[Int, String](orderBy) ++ List(1 -> "a", 2 -> "b", 3 -> "c", 4 -> "d")
+      val derived = op(m)
+      assertEquals(s"$name of a map ordered by $orderBy", orderBy, derived.orderedBy)
+      // 3 is in every result but the empty one, and is never last
+      val updated = derived.updated(3, "C")
+      val expected =
+        if (orderBy == Modification) derived.toList.filter(_._1 != 3) :+ (3 -> "C")
+        else if (derived.isEmpty) List(3 -> "C")
+        else derived.toList.map { case (k, v) => if (k == 3) (k, "C") else (k, v) }
+      assertEquals(s"updated after $name of a map ordered by $orderBy", expected, updated.toList)
+    }
+  }
+
+  @Test
+  def tailAndInitOfEmpty(): Unit = {
+    for (orderBy <- List(TreeSeqMap.OrderBy.Insertion, TreeSeqMap.OrderBy.Modification)) {
+      val e = TreeSeqMap.empty[Int, String](orderBy)
+      assertThrows(classOf[UnsupportedOperationException], () => e.tail)
+      assertThrows(classOf[UnsupportedOperationException], () => e.init)
+      assertThrows(classOf[UnsupportedOperationException], () => (e + (1 -> "a") - 1).tail)
+      assertThrows(classOf[UnsupportedOperationException], () => (e + (1 -> "a") - 1).init)
+    }
+  }
+
+  @Test
   def `t13019 empty.iterator is idempotent`: Unit = {
     val m = util.Try(TreeSeqMap.empty.iterator.next())
     assertTrue(m.isFailure)
