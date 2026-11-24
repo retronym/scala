@@ -336,9 +336,33 @@ abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis {
             (member.name == nme.readResolve || member.name == nme.writeReplace) && member.info.paramss == ListOfNil
           }
 
+          // The JVM looks for `clazz.member` in the superclasses before the superinterfaces, and it does not
+          // pass over private or static methods there (jvms-5.4.3.3). `member` does not override such a method,
+          // so it is not a competing method above, but without a forwarder in `clazz` the call would resolve to
+          // it and fail with an IllegalAccessError or IncompatibleClassChangeError. Example:
+          //   class A { private def f = 0 }; trait T { def f = 1 }; class C extends A with T
+          // The static method can be one of a Java class, or the static forwarder that a top-level Scala class
+          // gets for a method of its companion object. That includes `object C extends C with T`.
+          def isHiddenBySuperclassMethod: Boolean = {
+            def hides(m: Symbol) = m.isMethod && m.info.matches(member.info)
+            def hasPrivate(tp: Type) = tp.decl(member.name).alternatives.exists(m => m.isPrivate && hides(m))
+            @tailrec def loop(superClass: Symbol): Boolean =
+              superClass != NoSymbol && superClass != ObjectClass && {
+                // a static method of a Java class is a member of the companion module, as are the methods
+                // of a Scala object for which the backend adds static forwarders to the class
+                val companion = exitingPickler(superClass.linkedClassOfClass)
+                hasPrivate(superClass.info) ||
+                  (companion != NoSymbol && companion.info.member(member.name).alternatives.exists(hides)) ||
+                  loop(superClass.superClass)
+              }
+            loop(clazz.superClass)
+          }
+
           if (existsCompetingMethod(clazz.baseClasses) || generateJUnitForwarder || generateSerializationForwarder)
             genForwarder(required = true)
-          else if (settings.mixinForwarderChoices.isTruthy)
+          // Not `required` for a hidden method: that would be an error for a default method of a Java interface
+          // that can't be invoked from `clazz`, in a program that is accepted today.
+          else if (settings.mixinForwarderChoices.isTruthy || isHiddenBySuperclassMethod)
             genForwarder(required = false)
         }
     }
