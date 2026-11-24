@@ -131,7 +131,23 @@ private[collection] object JavaCollectionWrappers extends Serializable {
     def get(i: Int) = underlying(i)
     override def set(i: Int, elem: A) = { val p = underlying(i); underlying(i) = elem; p }
     override def add(elem: A) = { underlying += elem; true }
+    override def add(i: Int, elem: A): Unit = underlying.insert(i, elem)
     override def remove(i: Int) = underlying remove i
+    // `iterator` (from IterableWrapperTrait) cannot remove, so implement the removals that
+    // AbstractCollection bases on it with the list iterator, which removes through `remove(i)`
+    override def remove(o: AnyRef): Boolean = {
+      val i = indexOf(o)
+      if (i >= 0) underlying.remove(i)
+      i >= 0
+    }
+    override def removeIf(filter: ju.function.Predicate[_ >: A]): Boolean = {
+      val it = listIterator()
+      var removed = false
+      while (it.hasNext) if (filter.test(it.next())) { it.remove(); removed = true }
+      removed
+    }
+    override def removeAll(c: ju.Collection[_]): Boolean = removeIf(c.contains(_))
+    override def retainAll(c: ju.Collection[_]): Boolean = removeIf(!c.contains(_))
   }
 
   @SerialVersionUID(3L)
