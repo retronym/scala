@@ -128,6 +128,10 @@ trait Unapplies extends ast.TreeDSL {
       gen.scalaFunctionConstr(primaries, toIdent(cdef), abstractFun = true)
     }
 
+    // TODO scala/scala review Z7: for a value case class whose underlying type erases to Object
+    // (`case class CA(a: Any) extends AnyVal`, scala/bug#12131), `apply` erases to the signature of the bridge for
+    // `Function1.apply`, and erasure reports a clash; with an explicit companion it compiles. Suggested direction:
+    // do not inherit from the function type in that case, decided once the parameter types are known.
     def parents        = if (inheritFromFun) List(createFun) else Nil
     def toString       = DefDef(
       Modifiers(OVERRIDE | FINAL | SYNTHETIC),
