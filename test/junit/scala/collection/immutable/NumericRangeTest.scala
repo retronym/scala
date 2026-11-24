@@ -307,6 +307,22 @@ class NumericRangeTest {
   }
 
   @Test
+  def longMinValueToZeroLength(): Unit = {
+    def check(r: NumericRange[Long], expected: List[Long]): Unit = {
+      assertEquals(s"$r.length", expected.length, r.length)
+      assertEquals(s"$r.toList", expected, r.toList)
+      assertEquals(s"$r.last", expected.last, r.last)
+    }
+    check(NumericRange(Long.MinValue, 0L, 1L << 61), List(Long.MinValue, -(3L << 61), -(1L << 62), -(1L << 61)))
+    check(NumericRange.inclusive(Long.MinValue, 0L, 1L << 61), List(Long.MinValue, -(3L << 61), -(1L << 62), -(1L << 61), 0L))
+    check(NumericRange.inclusive(Long.MinValue, 0L, 3L << 61), List(Long.MinValue, -(1L << 61)))
+    check(NumericRange(Long.MinValue, 0L, Long.MaxValue), List(Long.MinValue, -1L))
+    check(NumericRange.inclusive(Long.MaxValue, 0L, -(1L << 62)), List(Long.MaxValue, Long.MaxValue - (1L << 62)))
+    assertThrows[IllegalArgumentException](NumericRange(Long.MinValue, 0L, 1L).length)
+    assertThrows[IllegalArgumentException](NumericRange.inclusive(Long.MinValue, 0L, 1L).length)
+  }
+
+  @Test
   def wideNegativeNumericRangeUntilZeroShouldNotOverflow() = {
     val start = Int.MinValue
     val end = 0
