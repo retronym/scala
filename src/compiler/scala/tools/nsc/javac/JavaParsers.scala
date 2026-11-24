@@ -378,7 +378,7 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
 
     def annotations(): List[Tree] = {
       val annots = new ListBuffer[Tree]
-      while (in.token == AT) {
+      while (in.token == AT && in.lookaheadToken != INTERFACE) { // `@interface` starts a type declaration
         in.nextToken()
         val annot = annotation()
         if (annot.nonEmpty) annots += annot
