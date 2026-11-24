@@ -26,4 +26,17 @@ class EnumerationTest {
     }
     assertSame(Ordering[MyEnum.Value], MyEnum.ValueOrdering)
   }
+
+  @Test def symbolicNames(): Unit = {
+    object Op extends Enumeration {
+      val + = Value
+      val `<=` = Value
+      val `not equal` = Value
+      val `x-ray` = Value
+      val plain = Value
+    }
+    assertEquals(List("+", "<=", "not equal", "x-ray", "plain"), Op.values.toList.map(_.toString))
+    assertSame(Op.+, Op.withName("+"))
+    assertSame(Op.`not equal`, Op.withName("not equal"))
+  }
 }
