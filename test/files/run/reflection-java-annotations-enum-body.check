@@ -1,0 +1,4 @@
+List(Ann_1(body = B, es = [A, B, C], plain = A))
+new Ann_1(body = B, es = Array(A, B, C), plain = A)
+List(constructor E_1)
+List(Java enum A, Java enum B, Java enum C)
