@@ -94,6 +94,12 @@ trait Reporting extends internal.Reporting { self: ast.Positions with Compilatio
       }
     }
 
+    /** Report a malformed `-Wconf` or `-quickfix`. Otherwise it is only noticed once a message is issued. */
+    def checkConfiguration(): Unit = {
+      wconf
+      quickfixFilters
+    }
+
     private val skipRewriteAction = Set(Action.WarningSummary, Action.InfoSummary, Action.Silent)
 
     private def registerTextEdit(m: Message): Boolean =
