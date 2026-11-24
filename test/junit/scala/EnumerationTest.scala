@@ -26,4 +26,11 @@ class EnumerationTest {
     }
     assertSame(Ordering[MyEnum.Value], MyEnum.ValueOrdering)
   }
+
+  @Test def valueSetsOfDifferentEnumerationsAreNotEqual(): Unit = {
+    object Colour extends Enumeration { val Red, Green, Blue = Value }
+    object Animal extends Enumeration { val Cat, Dog, Fish = Value }
+    assertNotEquals(Colour.values, Animal.values)
+    assertFalse(Colour.values.asInstanceOf[Set[Any]].contains(Animal.Dog))
+  }
 }
