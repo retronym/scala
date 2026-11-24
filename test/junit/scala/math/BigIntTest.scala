@@ -2,7 +2,7 @@ package scala.math
 
 import java.util.concurrent.atomic.AtomicLong
 import org.junit.Test
-import org.junit.Assert.{assertFalse, assertNull, assertTrue}
+import org.junit.Assert.{assertEquals, assertFalse, assertNull, assertTrue}
 import scala.tools.testkit.AssertUtil.assertThrows
 
 class BigIntTest {
@@ -38,4 +38,14 @@ class BigIntTest {
   @Test def `testBit 0`: Unit = assertFalse(even.testBit(0))
 
   @Test def `BitInteger to BitInt respects null`: Unit = assertNull(null.asInstanceOf[java.math.BigInteger]: BigInt)
+
+  // == implies ## for a BigInt outside the Long range and the Double it equals
+  @Test def `hashCode agrees with an equal Double beyond the Long range`: Unit = {
+    for (b <- List(BigInt(2).pow(64), -BigInt(2).pow(64), BigInt(2).pow(63), BigInt(3) * BigInt(2).pow(70), BigInt(2).pow(1023))) {
+      val d = b.toDouble
+      assertTrue(s"$b == $d", b == d && d == b)
+      assertEquals(s"$b.## == $d.##", d.##, b.##)
+      assertTrue(s"HashSet($b).contains($d)", collection.mutable.HashSet[Any](b).contains(d))
+    }
+  }
 }
