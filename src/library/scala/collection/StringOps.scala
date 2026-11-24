@@ -490,11 +490,11 @@ final class StringOps(private val s: String) extends AnyVal {
       new WrappedString(s.substring(off, off+length))
     val b = immutable.IndexedSeq.newBuilder[B]
     val k = other.knownSize
-    if(k >= 0) b.sizeHint(len + k - replaced)
     val chunk1 = if(from > 0) min(from, len) else 0
+    val remaining = len - chunk1 - (if(replaced > 0) min(replaced, len - chunk1) else 0)
+    if(k >= 0) b.sizeHint(chunk1 + k + remaining)
     if(chunk1 > 0) b.addAll(slc(0, chunk1))
     b ++= other
-    val remaining = len - chunk1 - replaced
     if(remaining > 0) b.addAll(slc(len - remaining, remaining))
     b.result()
   }
@@ -532,11 +532,11 @@ final class StringOps(private val s: String) extends AnyVal {
     */
   def patch(from: Int, other: String, replaced: Int): String = {
     val len = s.length
-    val sb = new JStringBuilder(len + other.size - replaced)
     val chunk1 = if(from > 0) min(from, len) else 0
+    val remaining = len - chunk1 - (if(replaced > 0) min(replaced, len - chunk1) else 0)
+    val sb = new JStringBuilder(chunk1 + other.length + remaining)
     if(chunk1 > 0) sb.append(s, 0, chunk1)
     sb.append(other)
-    val remaining = len - chunk1 - replaced
     if(remaining > 0) sb.append(s, len - remaining, len)
     sb.toString
   }
