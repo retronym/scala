@@ -1,0 +1,9 @@
+deprecated-since-overflow.scala:10: warning: method f in class Lib is deprecated (since 20240131120000): use g
+  def g(l: Lib) = l.f + l.h
+                    ^
+deprecated-since-overflow.scala:10: warning: method h in class Lib is deprecated (since MyLib 1.99999999999): use g
+  def g(l: Lib) = l.f + l.h
+                          ^
+error: No warnings can be incurred under -Werror.
+2 warnings
+1 error

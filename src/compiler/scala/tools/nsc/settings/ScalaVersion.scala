@@ -108,7 +108,8 @@ object ScalaVersion {
       case "none" | ""   => NoScalaVersion
       case "any"         => AnyScalaVersion
       case vpat(majorS, minorS, revS, buildS) =>
-        SpecificScalaVersion(toInt(majorS), toInt(minorS), toInt(revS), toBuild(buildS))
+        try SpecificScalaVersion(toInt(majorS), toInt(minorS), toInt(revS), toBuild(buildS))
+        catch { case _: NumberFormatException => error(); AnyScalaVersion } // a component exceeds Int
       case _             => error(); AnyScalaVersion
     }
   }
