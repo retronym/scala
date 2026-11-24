@@ -53,4 +53,12 @@ class TreeSetTest {
       assertEquals(expected, src filter set)
     }
   }
+
+  // scala/bug#12121: `s ++= v` with a lazy view `v` of `s` should add what `v` holds before the call
+  @Test
+  def addAllLazyViewOfSelf(): Unit = {
+    val s = mutable.TreeSet(1, 2, 3)
+    s ++= s.view.map(_ * 2)
+    assertEquals(Set(1, 2, 3, 4, 6), s.toSet)
+  }
 }

@@ -38,4 +38,12 @@ class LinkedHashSetTest {
     Assert.assertEquals(fromlhs2, lhs)
     Assert.assertFalse(fromlhs2 eq lhs)
   }
+
+  // scala/bug#12121: `s ++= v` with a lazy view `v` of `s` should add what `v` holds before the call
+  @Test
+  def addAllLazyViewOfSelf(): Unit = {
+    val s = mutable.LinkedHashSet(1, 2, 3)
+    s ++= s.view.map(_ * 2)
+    Assert.assertEquals(Set(1, 2, 3, 4, 6), s.toSet)
+  }
 }

@@ -101,4 +101,12 @@ class HashSetTest {
     hs.addAll(new OnceOnly)
     assertEquals(1, hs.size)
   }
+
+  // scala/bug#12121: `s ++= v` with a lazy view `v` of `s` should add what `v` holds before the call
+  @Test
+  def addAllLazyViewOfSelf(): Unit = {
+    val s = HashSet(1, 2, 3)
+    s ++= s.view.map(_ * 2)
+    assertEquals(Set(1, 2, 3, 4, 6), s.toSet)
+  }
 }
