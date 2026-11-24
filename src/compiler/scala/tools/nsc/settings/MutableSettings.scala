@@ -145,6 +145,17 @@ class MutableSettings(val errorFn: String => Unit, val pathFactory: PathFactory)
           case (p, args) => tryToSetIfExists(p, args.split(",").toList, (s: Setting) => s.tryToSetColon(_))
         }
 
+    // if arg is of form --foo=bar, as javac accepts for its `--` options, and --foo is a setting with an argument
+    def equalsArgSetting(arg: String): Option[Setting] =
+      if (!arg.startsWith("--")) None
+      else arg.indexOf('=') match {
+        case -1 => None
+        case i  => lookupSetting(arg.substring(0, i)).filterNot(_.isInstanceOf[BooleanSetting])
+      }
+    def isEqualsArg(arg: String): Boolean = equalsArgSetting(arg).isDefined
+    def parseEqualsArg(arg: String): Option[List[String]] =
+      equalsArgSetting(arg).flatMap(_.tryToSet(arg.substring(arg.indexOf('=') + 1) :: Nil))
+
     // if arg is of form -Xfoo or -Xfoo bar (name = "-Xfoo")
     def parseNormalArg(p: String, args: List[String]): Option[List[String]] =
       tryToSetIfExists(p, args, (s: Setting) => s.tryToSet(_))
@@ -163,7 +174,8 @@ class MutableSettings(val errorFn: String => Unit, val pathFactory: PathFactory)
         val prefix = prefixSettings.find(_ respondsTo arg)
         prefix.map { setting => setting.tryToSet(args); rest }
         .orElse {
-          if (arg contains ":") parseColonArg(arg).map(_ => rest)
+          if (isEqualsArg(arg)) parseEqualsArg(arg).map(_ => rest)
+          else if (arg contains ":") parseColonArg(arg).map(_ => rest)
           else parseNormalArg(arg, rest)
         }
         .getOrElse(args)
@@ -212,6 +224,7 @@ class MutableSettings(val errorFn: String => Unit, val pathFactory: PathFactory)
     add(new IntSetting(name, descr, default, range, parser))
   def MultiStringSetting(name: String, arg: String, descr: String, default: List[String] = Nil, helpText: Option[String] = None, prepend: Boolean = false) =
     add(new MultiStringSetting(name, arg, descr, default, helpText, prepend))
+  def RepeatableStringSetting(name: String, arg: String, descr: String) = add(new RepeatableStringSetting(name, arg, descr))
   def MultiChoiceSetting[E <: MultiChoiceEnumeration](name: String, helpArg: String, descr: String, domain: E, default: Option[List[String]] = None, helpText: Option[String] = None) =
     add(new MultiChoiceSetting[E](name, helpArg, descr, domain, default, helpText))
   def OutputSetting(default: String) = add(new OutputSetting(default))
@@ -470,6 +483,28 @@ class MutableSettings(val errorFn: String => Unit, val pathFactory: PathFactory)
   }
 
   /** A setting represented by a string, (`default` unless set) */
+  /** A setting that takes exactly one argument per occurrence and may be repeated, like javac's `--add-exports`.
+   *  Unlike `MultiStringSetting`, the argument is not split on commas, and the space separated form consumes a
+   *  single argument: `-opt a,b`, `-opt:a,b` and `--opt=a,b` all add the one value `a,b`.
+   */
+  class RepeatableStringSetting private[nsc](name: String, val arg: String, descr: String) extends Setting(name, descr) with Clearable {
+    type T = List[String]
+    protected var v: T = Nil
+
+    withHelpSyntax(name + " <" + arg + ">")
+
+    def tryToSet(args: List[String]) = args match {
+      case Nil | Optionlike() :: _ => errorAndValue(s"missing argument for $name", None)
+      case h :: rest               => value = value :+ h; Some(rest)
+    }
+    // The colon form arrives split on commas, put it back together.
+    def tryToSetColon(args: List[String]): Option[ResultOfTryToSet] = tryToSet(args.mkString(",") :: Nil)
+    override def tryToSetFromPropertyValue(s: String) = tryToSetColon(List(s.trim))
+    def clear(): Unit = v = Nil
+    def unparse: List[String] = value.flatMap(List(name, _))
+    override def reset(): Unit = { v = Nil; setByUser = false }
+  }
+
   class StringSetting private[nsc](
     name: String,
     val arg: String,

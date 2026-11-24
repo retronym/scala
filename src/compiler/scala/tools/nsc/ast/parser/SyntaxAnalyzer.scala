@@ -89,7 +89,19 @@ abstract class SyntaxAnalyzer extends SubComponent with Parsers with MarkupParse
   }
 
   private def initialUnitBody(unit: CompilationUnit): Tree = {
-    if (unit.isJava) newJavaUnitParser(unit).parse()
+    if (unit.isJava) {
+      val body = newJavaUnitParser(unit).parse()
+
+      if (unit.source.file.name == "module-info.java") {
+        body match {
+          case PackageDef(_, stats) =>
+            stats.collectFirst { case md: Jpms.ModuleDef => md }.foreach(currentRun.registerJpmsModuleInfo(_, stats.collect { case imp: Import => imp }, unit))
+          case _ =>
+        }
+      }
+
+      body
+    }
     else if (currentRun.parsing.incompleteHandled) newUnitParser(unit).parse()
     else newUnitParser(unit).smartParse()
   }

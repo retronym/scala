@@ -293,16 +293,25 @@ final class PathResolver(settings: Settings, closeableRegistry: CloseableRegistr
   import PathResolver.MkLines
 
   def result: ClassPath = {
-    val cp = computeResult()
-    if (settings.Ylogcp.value) {
-      Console.print(f"Classpath built from ${settings.toConciseString} %n")
-      Console.print(s"Defaults: ${PathResolver.Defaults}")
-      Console.print(s"Calculated: $Calculated")
+    if (settings.Yjpms.value) {
+      val cp = settings.YjpmsClassPath.value match {
+        case "javac" => scala.tools.nsc.jpms.JpmsClassPath(settings, Calculated.javaUserClassPath + File.pathSeparator + Calculated.userClassPath)
+        case _       => scala.tools.nsc.jpms.ModulePathClassPath(settings, containers, classPathFactory)
+      }
+      if (settings.Ylogcp.value) Console.println(s"JPMS class path: $cp")
+      cp
+    } else {
+      val cp = computeResult()
+      if (settings.Ylogcp.value) {
+        Console.print(f"Classpath built from ${settings.toConciseString} %n")
+        Console.print(s"Defaults: ${PathResolver.Defaults}")
+        Console.print(s"Calculated: $Calculated")
 
-      val xs = Calculated.basis.drop(2).flatten.distinct
-      Console.print(xs.mkLines(s"After java boot/extdirs classpath has ${xs.size} entries:", indented = true))
+        val xs = Calculated.basis.drop(2).flatten.distinct
+        Console.print(xs.mkLines(s"After java boot/extdirs classpath has ${xs.size} entries:", indented = true))
+      }
+      cp
     }
-    cp
   }
 
   def resultAsURLs: Seq[URL] = result.asURLs

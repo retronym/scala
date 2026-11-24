@@ -79,6 +79,7 @@ abstract class GenBCode extends SubComponent {
           initialize()
           super.run() // invokes `apply` for each compilation unit
           generatedClassHandler.complete()
+          writeModuleInfo()
           writeOtherFiles()
         } finally {
           this.close()
@@ -97,6 +98,15 @@ abstract class GenBCode extends SubComponent {
       generatedClassHandler = GeneratedClassHandler(global)
       statistics.stopTimer(statistics.bcodeInitTimer, initStart)
     }
+    /** Writes `module-info.class` for a `module-info.java` among the sources, under `-Yjpms`. */
+    private def writeModuleInfo(): Unit =
+      if (settings.Yjpms.value) currentRun.jpmsSourceModule.foreach { m =>
+        jpmsModuleInfos.fullDescriptor(m.moduleDef, m.imports).foreach { descriptor =>
+          val bytes = jpmsModuleInfos.classfileBytes(descriptor, postProcessor.backendUtils.classfileVersion.get)
+          postProcessor.classfileWriter.writeClass("module-info", bytes, m.unit.source.file)
+        }
+      }
+
     def writeOtherFiles(): Unit = {
       global.plugins foreach {
         plugin =>
