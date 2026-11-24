@@ -42,6 +42,13 @@ jobs:
         with:
           # the cache is for sbt 2
           disk-cache: false
+      # TODO scala/scala review G2: every push build (a nightly) gets the PGP key and the Sonatype
+      # credentials, and admin/init.sh imports the key, although only a release (SCALA_VER_BASE set,
+      # publishToSonatype=yes) uses them; nightlies need PRIVATE_REPO_PASS and SCALA_REPO_TOKEN only.
+      # The secrets are then in the environment of the whole sbt build, and setup-java restores a
+      # shared sbt cache into it. Passing the PGP and Sonatype secrets only when inputs.SCALA_VER_BASE
+      # is set, and not restoring the cache for a release, would narrow that; init.sh would then need
+      # to write the private-repo netrc without PGP_SECRET, which it currently skips.
       - env:
           SCALA_VER_BASE: ${{ inputs.SCALA_VER_BASE }}
           SCALA_VER_SUFFIX: ${{ inputs.SCALA_VER_SUFFIX }}
