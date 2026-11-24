@@ -93,6 +93,50 @@ class NumericRangeTest {
     }
   }
 
+  // Wide descending ranges from a positive start across zero go through the split in crossesTheEndAfterN
+  @Test
+  def takeDropWideDescendingRangeAcrossZero(): Unit = {
+    def check[T](r: NumericRange[T]): Unit = {
+      val xs = r.toList
+      assertEquals(xs.length, r.length)
+      for (n <- 0 to xs.length + 1) {
+        assertEquals(s"$r take $n", xs.take(n), r.take(n).toList)
+        assertEquals(s"$r drop $n", xs.drop(n), r.drop(n).toList)
+      }
+    }
+    check(NumericRange.inclusive(Int.MaxValue, Int.MinValue, -(1 << 30)))
+    check(NumericRange.inclusive(Long.MaxValue, Long.MinValue, -(1L << 62)))
+    check(NumericRange.inclusive(Int.MaxValue, Int.MinValue + 1, -(1 << 30)))
+    check(NumericRange.inclusive(Int.MaxValue - 1, Int.MinValue, -(1 << 30)))
+    check(NumericRange.inclusive(Int.MaxValue, -1, -(1 << 30)))
+    check(NumericRange.inclusive(Int.MaxValue, Int.MinValue, -(1 << 29) - 3))
+    check(NumericRange.inclusive(1 << 30, Int.MinValue, -(1 << 30)))
+    check(NumericRange.inclusive(Int.MinValue, Int.MaxValue, 1 << 30))
+    check(NumericRange.inclusive(Int.MinValue + 1, Int.MaxValue, 1 << 30))
+    // ranges that end among the elements around zero which are in neither part of the split
+    check(NumericRange.inclusive(Int.MaxValue, 0, -(1 << 30)))
+    check(NumericRange(Int.MaxValue, -1, -(1 << 30)))
+    check(NumericRange(Int.MaxValue - 1, 0, -(1 << 30) + 1))
+    check(NumericRange(Int.MaxValue - 1, -(1 << 30), -(1 << 30) + 1))
+    check(NumericRange[Byte](-128, 0, 1))
+    check(NumericRange[Byte](-128, 1, 1))
+    check(NumericRange.inclusive[Byte](-128, 0, 1))
+    check(NumericRange(Int.MinValue + 1, 0, 1 << 30))
+    check(NumericRange(Int.MinValue, 0, 1 << 30))
+    check(NumericRange(Int.MinValue, 1, 1 << 30))
+    // steps above MaxValue / 2, for which the elements two steps past zero overflow
+    check(NumericRange.inclusive(1, -1, -(1 << 30) - 1))
+    check(NumericRange.inclusive(0, Int.MinValue, -(1 << 30) - 1))
+    check(NumericRange.inclusive(-1, Int.MaxValue, (1 << 30) + 1))
+    check(NumericRange.inclusive[Byte](1, -1, -65))
+    check(NumericRange.inclusive[Byte](0, -128, -65))
+    check(NumericRange(Long.MinValue, 0L, 1L << 62))
+    check(NumericRange.inclusive(Long.MaxValue, Long.MinValue, Long.MinValue))
+    // more than Int.MaxValue elements
+    assertEquals(List(1L, 0L, -1L), NumericRange.inclusive(1L, Long.MinValue, -1L).take(3).toList)
+    assertEquals(List(-1L, 0L, 1L), NumericRange(-1L, Long.MaxValue, 1L).take(3).toList)
+  }
+
   @Test
   def numericRangeIsEmpty(): Unit = {
     //Test Positive Step

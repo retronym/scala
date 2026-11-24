@@ -167,18 +167,6 @@ sealed class NumericRange[T](
   private def locationAfterN(n: Int): T = start + (step * fromInt(n))
 
   private def crossesTheEndAfterN(n: Int): Boolean = {
-    // if we're sure that subtraction in the context of T won't overflow, we use this function
-    // to calculate the length of the range
-    def unsafeRangeLength(r: NumericRange[T]): T = {
-      val diff = num.minus(r.end, r.start)
-      val quotient = num.quot(diff, r.step)
-      val remainder = num.rem(diff, r.step)
-      if (!r.isInclusive && num.equiv(remainder, num.zero))
-        num.max(quotient, num.zero)
-      else
-        num.max(num.plus(quotient, num.one), num.zero)
-    }
-
     // detects whether value can survive a bidirectional trip to -and then from- Int.
     def fitsInInteger(value: T): Boolean = num.equiv(num.fromInt(num.toInt(value)), value)
 
@@ -202,45 +190,11 @@ sealed class NumericRange[T](
       else if (lengthIsQuotient) num.gteq(num.fromInt(n), quotient)
       else num.gt(num.fromInt(n), quotient)
     } else {
-      // split to two ranges, which subtraction is safe in both of them (around zero)
-      val stepsRemainderToZero = num.rem(start, step)
-      val walksOnZero = num.equiv(stepsRemainderToZero, num.zero)
-      val closestToZero = if (walksOnZero) -step else stepsRemainderToZero
-
-      /*
-      When splitting into two ranges, we should be super-careful about one of the sides hitting MinValue of T,
-      so we take two steps smaller than zero to ensure unsafeRangeLength won't overflow (taking one step may overflow depending on the step).
-      Same thing happens for MaxValue from zero, so we take one step further to ensure the safety of unsafeRangeLength.
-      After performing such operation, there are some elements remaining in between and around zero,
-      which their length is represented by carry.
-       */
-      val (l: NumericRange[T], r: NumericRange[T], carry: Int) =
-        if (num.lt(start, num.zero)) {
-          if (walksOnZero) {
-            val twoStepsAfterLargestNegativeNumber = num.plus(closestToZero, num.times(step, num.fromInt(2)))
-            (NumericRange(start, closestToZero, step), copy(twoStepsAfterLargestNegativeNumber, end, step), 2)
-          } else {
-            (NumericRange(start, closestToZero, step), copy(num.plus(closestToZero, step), end, step), 1)
-          }
-        } else {
-          if (walksOnZero) {
-            val twoStepsAfterZero = num.times(step, num.fromInt(2))
-            (copy(twoStepsAfterZero, end, step), NumericRange.inclusive(start, -step, step), 2)
-          } else {
-            val twoStepsAfterSmallestPositiveNumber = num.plus(closestToZero, num.times(step, num.fromInt(2)))
-            (copy(twoStepsAfterSmallestPositiveNumber, end, step), NumericRange.inclusive(start, closestToZero, step), 2)
-          }
-        }
-
-      val leftLength = unsafeRangeLength(l)
-      val rightLength = unsafeRangeLength(r)
-
-      // instead of `n >= rightLength + leftLength + curry` which may cause addition overflow,
-      // this can be used `(n - leftLength - curry) >= rightLength` (Both in Int and T, depends on whether the lengths fit in Int)
-      if (fitsInInteger(leftLength) && fitsInInteger(rightLength))
-        n - num.toInt(leftLength) - carry >= num.toInt(rightLength)
-      else
-        num.gteq(num.minus(num.minus(num.fromInt(n), leftLength), num.fromInt(carry)), rightLength)
+      // `end - start` may overflow. `length` counts the elements without overflowing, and throws if there are
+      // more than Int.MaxValue of them, in which case no `n` reaches the end. (A zero step, its other reason
+      // to throw, is excluded above; a BigDecimal step lost to rounding makes `length` throw anyway.)
+      try n >= length
+      catch { case _: IllegalArgumentException => false }
     }
   }
 
