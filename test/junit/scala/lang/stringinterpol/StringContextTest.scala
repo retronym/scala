@@ -57,6 +57,23 @@ class StringContextTest {
     val res = processEscapes(s)
     assertEquals("Scala", res)
   }
+
+  // SLS 1.3.6: a unicode escape takes four ASCII hex digits, as in a plain string literal
+  @Test def unicodeEscapeTakesAsciiHexDigits(): Unit = {
+    assertEquals("A", processEscapes("\\u0041"))
+    assertEquals("\u00aa", processEscapes("\\u00aA"))
+    val nonAscii = List(
+      "\\u\uFF10\uFF10\uFF14\uFF11", // fullwidth digits
+      "\\u\u0660\u0660\u0664\u0661", // Arabic-Indic digits
+      "\\u00\uFF21\uFF21",           // fullwidth letters
+      "\\u004\uFF11",                // only the last digit fullwidth
+    )
+    for (s <- nonAscii) {
+      assertThrows[InvalidUnicodeEscapeException](processEscapes(s))
+      assertThrows[InvalidUnicodeEscapeException](StringContext(s, "").s(1))
+    }
+  }
+
   @Test def noOctal() = assertThrows[InvalidEscapeException] {
     val s = """\123cala"""
     val res = processEscapes(s)
