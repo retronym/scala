@@ -298,7 +298,7 @@ abstract class Enumeration (initial: Int) extends Serializable {
     def incl (value: Value): ValueSet = new ValueSet(nnIds + (value.id - bottomId))
     def excl (value: Value): ValueSet = new ValueSet(nnIds - (value.id - bottomId))
     def iterator: Iterator[Value] = nnIds.iterator map (id => thisenum.apply(bottomId + id))
-    override def iteratorFrom(start: Value): Iterator[Value] = nnIds iteratorFrom start.id  map (id => thisenum.apply(bottomId + id))
+    override def iteratorFrom(start: Value): Iterator[Value] = nnIds iteratorFrom (start.id - bottomId) map (id => thisenum.apply(bottomId + id))
     override def className: String = s"$thisenum.ValueSet"
     /** Creates a bit mask for the zero-adjusted ids in this set as a
      *  new array of longs. */
