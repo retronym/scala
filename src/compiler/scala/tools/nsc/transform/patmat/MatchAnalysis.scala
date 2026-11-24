@@ -104,7 +104,22 @@ trait TreeAndTypeAnalysis extends Debugging {
           }
         }
         val tpApprox = approximateTypeSkolemsToUpperBound(tp)
-        parentSubtypes.map(_.filter(_ <:< tpApprox))
+        // A subtype that does not conform is still in the domain if a subclass of it can: given `sealed trait T`,
+        // `class B extends T` and `trait M`, `new B with M` is a `T with M`. That takes a class that can be
+        // extended anywhere, and parents that it lacks which are traits it can be extended with. It is
+        // enumerated as its intersection with those traits, which is what a type test for it checks here.
+        def conformingSubclass(subTp: Type): Option[Type] = {
+          val sub = subTp.typeSymbol
+          tpApprox match {
+            case RefinedType(parents, decls) if !sub.isEffectivelyFinal && !sub.isSealed && !sub.isModuleClass =>
+              val (inherited, missing) = parents.partition(parent => sub.isNonBottomSubClass(parent.typeSymbol))
+              if (missing.nonEmpty && missing.forall(_.typeSymbol.isTrait) && subTp <:< refinedType(inherited, tpApprox.typeSymbol.owner, decls, NoPosition))
+                Some(intersectionType(subTp :: missing))
+              else None
+            case _ => None
+          }
+        }
+        parentSubtypes.map(_.flatMap(subTp => if (subTp <:< tpApprox) Some(subTp) else conformingSubclass(subTp)))
       } else Nil
     }
 

@@ -1,0 +1,11 @@
+patmat-exhaust-intersection-nonfinal.scala:22: warning: match may not be exhaustive.
+It would fail on the following inputs: (_ : B with M), (_ : C with M)
+  def f1(x: T with M): Int = x match { case AM() => 1 }
+                             ^
+patmat-exhaust-intersection-nonfinal.scala:24: warning: match may not be exhaustive.
+It would fail on the following input: (_ : C with M)
+  def f2(x: T with M): Int = x match { case _: AM => 1; case _: B => 2 }
+                             ^
+error: No warnings can be incurred under -Werror.
+2 warnings
+1 error
