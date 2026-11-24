@@ -1618,6 +1618,10 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
         def typedOp(member: Symbol)   = localTyper typedOperator newSelect(member)
         def typedTree(member: Symbol) = localTyper typed newSelect(member)
 
+        // TODO scala/scala review P7: `specializedTypeVars(symbol.info)` runs for every Select (54,083 compiling
+        // the typechecker sources). And when `unify` below yields an empty `env`, `matchingSymbolInPrefix` finds
+        // `symbol` itself and the Select is retyped to the same member (189 times). `copySelect` for an empty
+        // `env` would avoid that, but the retyping can change `tree.tpe` once `qual` has been transformed.
         val ignoreEnv = specializedTypeVars(symbol.info).isEmpty || name == nme.CONSTRUCTOR
         if (ignoreEnv) overloads(symbol) find (_ matchesSym symbol) match {
           case Some(Overload(member, _)) => typedOp(member)
