@@ -839,8 +839,11 @@ abstract class BoxUnbox {
           if (isSpecializedTupleClass(expectedTupleClass)) {
             val typeOK = tupleClass == expectedTupleClass || tupleClass == expectedTupleClass.substring(0, expectedTupleClass.indexOf('$'))
             if (typeOK) {
-              if (isSpecializedTupleGetter(mi)) return Some(StaticGetterOrInstanceRead(mi))
-              else if (isTupleGetter(mi)) return Some(PrimitiveBoxingGetter(mi))
+              if (isSpecializedTupleGetter(mi)) {
+                // A specialized getter of another primitive type than the field (after a cast to a different tuple type)
+                // is not an extraction: `Tuple2._1$mcJ$sp` unboxes the value, which fails for a `Tuple2$mcII$sp`.
+                if (Type.getReturnType(mi.desc) == kind.boxedTypes(tupleGetterIndex(mi.name))) return Some(StaticGetterOrInstanceRead(mi))
+              } else if (isTupleGetter(mi)) return Some(PrimitiveBoxingGetter(mi))
             }
           } else if (expectedTupleClass == tupleClass) {
             if (isSpecializedTupleGetter(mi)) return Some(PrimitiveUnboxingGetter(mi, Type.getReturnType(mi.desc)))
