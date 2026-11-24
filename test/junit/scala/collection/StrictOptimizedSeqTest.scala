@@ -20,4 +20,12 @@ class StrictOptimizedSeqTest {
 
     assertEquals(Vector("a", "aa", "aaa", "bbbb"), result)
   }
+
+  @Test
+  def padToLenNearMinValue(): Unit = {
+    assertEquals(List(1), List(1).padTo(Int.MinValue, 0))
+    assertEquals(Vector(1, 2, 3), Vector(1, 2, 3).padTo(Int.MinValue + 1, 0))
+    assertEquals(immutable.ArraySeq(1, 2), immutable.ArraySeq(1, 2).padTo(Int.MinValue, 0))
+    assertEquals(List(1, 0, 0), List(1).padTo(3, 0))
+  }
 }
