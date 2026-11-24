@@ -636,6 +636,14 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
 
         val primaryConstrSym = primaryConstr.symbol
 
+        // The trait setter of `getter`, found by the unexpanded part of its name. The getter of a local trait that
+        // was duplicated by specialization is not linked to its setter, and the setter is named after the trait
+        // that it was duplicated from, so `setterIn`, which expands the name relative to `clazz`, does not find it.
+        def traitSetterByName(getter: Symbol): Symbol = {
+          val suffix = nme.TRAIT_SETTER_SEPARATOR_STRING + getter.name.setterName
+          clazz.info.decls.find(sym => sym.isSetter && sym.name.endsWith(suffix)).getOrElse(NoSymbol)
+        }
+
         for (stat <- stats) {
           val statSym = stat.symbol
 
@@ -701,7 +709,7 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
               val toMove =
                 if (shouldMoveRHS) {
                   if (statSym.isGetter)
-                    moveEffectToCtor(dd.mods, dd.rhs, statSym.asTerm.referenced.orElse(statSym.setterIn(clazz)))
+                    moveEffectToCtor(dd.mods, dd.rhs, statSym.asTerm.referenced.orElse(statSym.setterIn(clazz)).orElse(traitSetterByName(statSym)))
                   deriveDefDef(stat)(_ => EmptyTree)
                 }
                 else dd
