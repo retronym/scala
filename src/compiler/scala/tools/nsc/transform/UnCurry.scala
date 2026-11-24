@@ -205,6 +205,134 @@ abstract class UnCurry extends InfoTransform
       }
     }
 
+// ------- Handling returns from a lifted try -----------------------------------------
+
+    /** A `try` that was moved to a `liftedTree` method. */
+    private class LiftedTry {
+      /** The variables through which a `return` in the `try` reaches the method it was written in, the
+       *  symbol of that method, and the position of the first such `return`. Set by `liftedTryReturn`.
+       */
+      var flag: Symbol  = NoSymbol
+      var value: Symbol = NoSymbol
+      var meth: Symbol  = NoSymbol
+      var pos: Position = NoPosition
+      /** Was the result type of the lifted method changed from Nothing to Unit? */
+      var isUnit = false
+      def hasReturn = flag != NoSymbol
+    }
+
+    /** The methods created by `liftTree` whose bodies are being transformed. */
+    private val liftedTries = mutable.HashMap[Symbol, LiftedTry]()
+
+    /** The number of `finally` blocks and `synchronized` bodies around the current tree in its method. The backend
+     *  emits a `return` under one of these as a jump to a copy of the cleanup code, and all such jumps must arrive
+     *  with the same operand stack.
+     */
+    private var cleanupDepth = 0
+
+    /** Is the current tree known to be evaluated on an empty operand stack? Unlike `!needTryLift`, this is true only
+     *  for statements and results of the blocks, conditionals, handlers and cases that make up the body of the method.
+     */
+    private var onEmptyStack = false
+
+    /** The initial value of a variable of type `tp`. For a type that Null does not conform to (a type parameter, a
+     *  value class) it is `null.asInstanceOf[tp]()`, in the form that the cast has after uncurry and that erasure expects.
+     */
+    private def zeroOf(tp: Type): Tree =
+      if (isPrimitiveValueType(tp) || NullTpe <:< tp) gen.mkZero(tp)
+      else exitingUncurry(localTyper.typed(gen.mkAsInstanceOf(Literal(Constant(null)), tp, any = true, wrapInApply = true)))
+
+    /** Is the current tree, a `return`, in a `try` that was moved to a `liftedTree` method, which can be expanded to a return
+     *  from that method? Under a `finally` or in a `synchronized` body it must be known to be on an empty stack:
+     *  it used to be a `throw`, which is valid on any stack, and it must not become a jump that is not.
+     */
+    private def isLiftedTryReturn =
+      liftedTries.contains(currentOwner.enclMethod) && !isInLazyVal && (cleanupDepth == 0 || onEmptyStack)
+
+    /** Is the current tree in the initializer of a local lazy val, which becomes a method of its own? */
+    private def isInLazyVal = currentOwner.ownerChain.takeWhile(!_.isSourceMethod).exists(_.isLazy)
+
+    /** Transform `return expr` in the lifted method `lifted` to
+     *
+     *    {
+     *      value = expr
+     *      flag = true
+     *      return <zero>   // from `lifted`
+     *    }
+     *
+     *  The call of the lifted method tests `flag`, see `liftedTryCall`. Throwing a NonLocalReturnControl
+     *  here would let a handler of the lifted `try` catch it (scala/bug#10820).
+     */
+    private def liftedTryReturn(ret: Return, lifted: Symbol): Tree = {
+      val meth = ret.symbol
+      // The result type in terms of the type skolems that the trees in the method refer to.
+      val restpe = localTyper.context.enclosingContextChain.map(_.tree).collectFirst {
+        case dd: DefDef if dd.symbol == meth => dd.tpt.tpe
+      }.getOrElse(meth.tpe_*.finalResultType)
+      // The operand of a return from a method of type Nothing does not complete.
+      if (restpe.typeSymbol == NothingClass) ret.expr
+      else liftedTryReturn(ret, lifted, meth, restpe)
+    }
+
+    private def liftedTryReturn(ret: Return, lifted: Symbol, meth: Symbol, restpe: Type): Tree = {
+      val vars = liftedTries(lifted)
+      if (!vars.hasReturn) {
+        val owner = lifted.owner
+        vars.flag  = owner.newVariable(unit.freshTermName("liftedReturn"), lifted.pos, SYNTHETIC) setInfo BooleanTpe
+        vars.value = owner.newVariable(unit.freshTermName("liftedValue"), lifted.pos, SYNTHETIC) setInfo restpe
+        vars.meth  = meth
+        vars.pos   = ret.pos
+        // A call of a method of type Nothing does not return.
+        if (lifted.info.resultType.typeSymbol == NothingClass) {
+          lifted.setInfo(MethodType(Nil, UnitTpe))
+          vars.isUnit = true
+        }
+      }
+      val assigns = List(Assign(Ident(vars.value), ret.expr), Assign(Ident(vars.flag), Literal(Constant(true)))).map(localTyper.typed)
+      val liftedRet = Return(zeroOf(lifted.info.resultType)) setSymbol lifted setType NothingTpe
+      atPos(ret.pos)(Block(assigns, liftedRet) setType NothingTpe)
+    }
+
+    /** Transform the result of lifting a `try` that contains a `return`, `{ def lifted() = ...; lifted() }`, to
+     *
+     *    {
+     *      var flag = false
+     *      var value: T = <zero>
+     *      def lifted() = ...
+     *      val result = lifted()
+     *      if (flag) ret else result
+     *    }
+     *
+     *  where `ret` returns `value`, see `liftedTryCallReturn`.
+     */
+    private def liftedTryCall(tree: Tree, vars: LiftedTry, ret: Tree): Tree = (tree: @unchecked) match {
+      case Block((dd: DefDef) :: Nil, call) =>
+        val lifted  = dd.symbol
+        val varDefs = List(ValDef(vars.flag, Literal(Constant(false))), ValDef(vars.value, zeroOf(vars.value.info))).map(localTyper.typed)
+        atPos(tree.pos) {
+          if (vars.isUnit) {
+            // Every path through the `try` returns or throws. The call was typed as Nothing.
+            val dd1 = treeCopy.DefDef(dd, dd.mods, dd.name, dd.tparams, dd.vparamss, TypeTree(UnitTpe), dd.rhs)
+            Block(varDefs ::: dd1 :: localTyper.typed(Apply(Ident(lifted), Nil)) :: Nil, ret) setType NothingTpe
+          } else {
+            // `call` has been transformed, its type is the uncurried result type
+            val restpe    = call.tpe
+            val result    = lifted.owner.newValue(unit.freshTermName("liftedResult"), tree.pos, SYNTHETIC) setInfo lifted.info.resultType
+            val resultDef = newValDef(result, call)(tpt = TypeTree(restpe)) setType NoType
+            val test      = If(Ident(vars.flag) setType BooleanTpe, ret, Ident(result) setType restpe) setType restpe
+            Block(varDefs ::: dd :: resultDef :: Nil, test) setType restpe
+          }
+        }
+    }
+
+    /** Log and warn about a non-local return, and transform it to a throw of a NonLocalReturnControl. */
+    private def nonLocalReturn(ret: Return): Tree = {
+      log(s"non-local return from ${currentOwner.enclMethod} to ${ret.symbol}")
+      if (settings.warnNonlocalReturn)
+        runReporting.warning(ret.pos, s"return statement uses an exception to pass control to the caller of the enclosing named ${ret.symbol}", WarningCategory.LintNonlocalReturn, ret.symbol)
+      atPos(ret.pos)(nonLocalReturnThrow(ret.expr, ret.symbol))
+    }
+
 // ------ Transforming anonymous functions and by-name-arguments ----------------
 
     /**  Transform a function node (x_1,...,x_n) => body of type FunctionN[T_1, .., T_N, R].
@@ -416,6 +544,32 @@ abstract class UnCurry extends InfoTransform
 // ------ The tree transformers --------------------------------------------------------
 
     def mainTransform(tree: Tree): Tree = {
+      val savedCleanupDepth = cleanupDepth
+      val savedOnEmptyStack = onEmptyStack
+      tree match {
+        case _: DefDef =>
+          cleanupDepth = 0
+          onEmptyStack = true
+        case Try(_, _, finalizer) =>
+          if (!finalizer.isEmpty) cleanupDepth += 1
+        case _: Block | _: If | _: CaseDef | _: Match | _: LabelDef | _: Typed =>
+        case vd: ValDef if vd.symbol.exists && vd.symbol.isLocalToBlock && !vd.symbol.isLazy =>
+        case Apply(fn, _ :: Nil) if fn.symbol != null && fn.symbol.isLabel =>
+        case Apply(fn, _) if fn.symbol == Object_synchronized =>
+          cleanupDepth += 1
+          onEmptyStack = false
+        case _ =>
+          onEmptyStack = false
+      }
+      try mainTransform(tree, savedCleanupDepth)
+      finally {
+        cleanupDepth = savedCleanupDepth
+        onEmptyStack = savedOnEmptyStack
+      }
+    }
+
+    /** @param outerCleanupDepth the value of `cleanupDepth` for `tree` itself, as opposed to its subtrees */
+    private def mainTransform(tree: Tree, outerCleanupDepth: Int): Tree = {
       @inline def withNeedLift(needLift: Boolean)(f: => Tree): Tree = {
         val saved = needTryLift
         needTryLift = needLift
@@ -428,12 +582,47 @@ abstract class UnCurry extends InfoTransform
         debuglog("lifting tree at: " + (tree.pos))
         val sym = currentOwner.newMethod(unit.freshTermName(nme.LIFTED_TREE), tree.pos, Flag.ARTIFACT)
         sym.setInfo(MethodType(List(), tree.tpe))
+        liftedTries(sym) = new LiftedTry
         tree.changeOwner(currentOwner, sym)
         localTyper.typedPos(tree.pos)(Block(
           List(DefDef(sym, ListOfNil, tree)),
           Apply(Ident(sym), Nil)
         ))
       }
+
+      /* The return of the value that a `return` in a lifted `try` has stored, at the call of the lifted method.
+       * It is transformed like a `return` written at the call: it stays a `return`, or it stores the value again if
+       * the call is in another lifted `try`, or it is a non-local return if the call is in a closure. The call is
+       * not known to be on an empty stack, so under a `finally` it throws as well, as it does in a local lazy val.
+       */
+      def liftedTryCallReturn(vars: LiftedTry): Tree = {
+        val ret = atPos(vars.pos.focus)(Return(Ident(vars.value) setType vars.value.info) setSymbol vars.meth setType NothingTpe)
+        if (outerCleanupDepth > 0 || isInLazyVal) exitingUncurry(nonLocalReturn(ret))
+        else {
+          // the state for the `try`, which is now a call
+          val savedCleanupDepth = cleanupDepth
+          val savedOnEmptyStack = onEmptyStack
+          cleanupDepth = outerCleanupDepth
+          onEmptyStack = false
+          try transform(ret)
+          finally {
+            cleanupDepth = savedCleanupDepth
+            onEmptyStack = savedOnEmptyStack
+          }
+        }
+      }
+
+      /* A `return` in a `finally` block is never expanded to a return from a lifted method. */
+      def transformTry(tree: Try): Tree =
+        if (tree.finalizer.isEmpty) super.transform(tree)
+        else {
+          val block1   = transform(tree.block)
+          val catches1 = transformCaseDefs(tree.catches)
+          val savedOnEmptyStack = onEmptyStack
+          onEmptyStack = false
+          val finalizer1 = try transform(tree.finalizer) finally onEmptyStack = savedOnEmptyStack
+          treeCopy.Try(tree, block1, catches1, finalizer1)
+        }
 
       def withInConstructorFlag(inConstructorFlag: Long)(f: => Tree): Tree = {
         val saved = this.inConstructorFlag
@@ -524,16 +713,22 @@ abstract class UnCurry extends InfoTransform
           case ret @ Return(_) if isNonLocalReturn(ret) =>
             withNeedLift(needLift = true) { super.transform(ret) }
 
-          case Try(_, Nil, _) =>
+          case tree @ Try(_, Nil, _) =>
             // try-finally does not need lifting: lifting is needed only for try-catch
             // expressions that are evaluated in a context where the stack might not be empty.
             // `finally` does not attempt to continue evaluation after an exception, so the fact
             // that values on the stack are 'lost' does not matter
-            super.transform(tree)
+            transformTry(tree)
 
-          case Try(block, catches, finalizer) =>
-            if (needTryLift) transform(liftTree(tree))
-            else super.transform(tree)
+          case tree: Try =>
+            if (needTryLift) {
+              val lifted = liftTree(tree)
+              val result = transform(lifted)
+              val Block(dd :: Nil, _) = (lifted: @unchecked)
+              val vars   = liftedTries.remove(dd.symbol).get
+              if (vars.hasReturn) liftedTryCall(result, vars, liftedTryCallReturn(vars)) else result
+            }
+            else transformTry(tree)
 
           case CaseDef(pat, guard, body) =>
             val pat1 = transform(pat)
@@ -652,11 +847,10 @@ abstract class UnCurry extends InfoTransform
           applyUnary()
         case Select(_, _) | TypeApply(_, _) =>
           applyUnary()
-        case ret @ Return(expr) if isNonLocalReturn(ret) =>
-          log(s"non-local return from ${currentOwner.enclMethod} to ${ret.symbol}")
-          if (settings.warnNonlocalReturn)
-            runReporting.warning(ret.pos, s"return statement uses an exception to pass control to the caller of the enclosing named ${ret.symbol}", WarningCategory.LintNonlocalReturn, ret.symbol)
-          atPos(ret.pos)(nonLocalReturnThrow(expr, ret.symbol))
+        case ret: Return if isLiftedTryReturn =>
+          liftedTryReturn(ret, currentOwner.enclMethod)
+        case ret @ Return(_) if isNonLocalReturn(ret) =>
+          nonLocalReturn(ret)
         case TypeTree() =>
           tree
         case _ =>
