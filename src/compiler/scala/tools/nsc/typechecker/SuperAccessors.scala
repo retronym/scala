@@ -590,7 +590,17 @@ abstract class SuperAccessors extends transform.Transform with transform.TypingT
           )
           true
         }
-        !host.isPackageClass && !isSelfType && !isJavaProtected
+        // Scala permits the companion of a subclass to access a protected instance member, the JVM
+        // does not, and the class that could host an accessor is not the one being transformed.
+        // There is no host either for a static member, which may be accessed from within the subclass,
+        // and for an access through a self type, which erasure deals with (scala/bug#13007).
+        def throughSelfType = clazz.ownersIterator.exists(c => c.isClass && c.typeOfThis.baseType(sym.owner) != NoType)
+        def isFromCompanion = host.isPackageClass && sym.isValue && !sym.isStaticMember && !throughSelfType && {
+          restrictionError(pos, unit,
+            s"$clazz accesses protected $sym of ${sym.owner}, which the JVM only permits from a subclass of it.")
+          true
+        }
+        !isFromCompanion && !host.isPackageClass && !isSelfType && !isJavaProtected
       }
     }
 
