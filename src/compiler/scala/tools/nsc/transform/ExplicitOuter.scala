@@ -344,9 +344,10 @@ abstract class ExplicitOuter extends InfoTransform
   class ExplicitOuterTransformer(unit: CompilationUnit) extends OuterPathTransformer(unit) {
     transformer =>
 
-    /** The definition tree of the outer accessor of current class
+    /** The definition tree of the outer field of current class. A parent class that is not effectively final has
+     *  a protected outer field as well, which is also a member of this class.
      */
-    def outerFieldDef: Tree = ValDef(outerField(currentClass))
+    def outerFieldDef: Tree = ValDef(outerField(currentClass).suchThat(_.owner == currentClass))
 
     /** The definition tree of the outer accessor of current class
      */
