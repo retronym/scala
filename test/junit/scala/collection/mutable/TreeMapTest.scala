@@ -31,4 +31,11 @@ class TreeMapTest {
 
   }
 
+  // scala/bug#12121: `m ++= it` with an iterator `it` over `m` should add what `it` yields before the call
+  @Test
+  def addAllIteratorOfSelf(): Unit = {
+    val m = mutable.TreeMap(1 -> 0, 2 -> 0, 3 -> 0)
+    m ++= m.keysIterator.map(k => (k * 2, 0))
+    assertEquals(Set(1, 2, 3, 4, 6), m.keySet.toSet)
+  }
 }
