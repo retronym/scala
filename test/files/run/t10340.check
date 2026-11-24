@@ -1,0 +1,20 @@
+force1
+  D.x initialiser ran
+force2
+  TL.y initialiser ran
+force3
+  O.z initialiser ran
+force4
+  local w initialiser ran
+force5
+  P initialiser ran
+force6
+  LazyImpl.v initialiser ran
+  ObjectImpl.v initialiser ran
+force7
+  NullPointerException
+ok1
+  D.x initialiser ran
+ok2
+  D.x initialiser ran
+fields: kept

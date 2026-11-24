@@ -2644,8 +2644,24 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
           case _ => statsTyped
         }
 
+        // A block of foldable constant type is replaced by its result, so its statements are discarded and must
+        // have no effect at all. `isExprSafeToInline` accepts any stable path as the right-hand side of a val, but
+        // evaluating a path can initialize a lazy val or an object (directly, or through a val that one of them
+        // implements), initialize a Java class, or throw a NullPointerException (scala/bug#10340). Only a literal
+        // or a reference to a local value is known to do none of these.
+        def hasNoEffect(rhs: Tree): Boolean = rhs match {
+          case Literal(_) | This(_) => true
+          case Ident(_)             => val sym = rhs.symbol; sym.isLocalToBlock && !sym.isLazy && !sym.isModule
+          case Typed(expr, _)       => hasNoEffect(expr)
+          case _                    => false
+        }
+        def canDiscard(stat: Tree) = stat match {
+          case vd: ValDef => vd.symbol.isLazy || hasNoEffect(vd.rhs)
+          case _          => true
+        }
+
         treeCopy.Block(block, statsTyped2, expr1)
-          .setType(if (treeInfo.isExprSafeToInline(block)) expr1.tpe else expr1.tpe.deconst)
+          .setType(if (treeInfo.isExprSafeToInline(block) && statsTyped2.forall(canDiscard)) expr1.tpe else expr1.tpe.deconst)
       } finally {
         // enable escaping privates checking from the outside and recycle
         // transient flag
