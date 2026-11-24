@@ -38,6 +38,7 @@ abstract class Duplicators extends AbstractAnalyzer {
     } else resetClassOwners()
 
     envSubstitution = new SubstSkolemsTypeMap(env.keysIterator.toList, env.valuesIterator.toList)
+    duplicatedClasses = tree.collect { case cdef: ClassDef if cdef.symbol != NoSymbol => cdef.symbol }.toSet
     debuglog("retyped with env: " + env)
 
     newBodyDuplicator(context).typed(tree)
@@ -57,6 +58,12 @@ abstract class Duplicators extends AbstractAnalyzer {
   private var oldClassOwner: Symbol = _
   private var newClassOwner: Symbol = _
   private var envSubstitution: SubstTypeMap = _
+
+  /** The classes defined in the tree being duplicated. Their members are invalidated when the definition of the
+   *  class is typed. A selection of such a member can be typed before that, when the class is defined in the
+   *  qualifier of the selection, as in `new C { def m = 1 }.m`, or later in the enclosing block.
+   */
+  private var duplicatedClasses: Set[Symbol] = Set.empty
 
   private class SubstSkolemsTypeMap(from: List[Symbol], to: List[Type]) extends SubstTypeMap(from, to) {
     override protected def matches(sym1: Symbol, sym2: Symbol) =
@@ -217,7 +224,7 @@ abstract class Duplicators extends AbstractAnalyzer {
       val origtreesym = tree.symbol
       if (tree.hasSymbolField && tree.symbol != NoSymbol
           && !tree.symbol.isLabel  // labels cannot be retyped by the type checker as LabelDef has no ValDef/return type trees
-          && invalidSyms.isDefinedAt(tree.symbol)) {
+          && (invalidSyms.isDefinedAt(tree.symbol) || tree.isInstanceOf[Select] && duplicatedClasses(tree.symbol.owner))) {
         debuglog("removed symbol " + tree.symbol)
         tree.symbol = NoSymbol
       }
