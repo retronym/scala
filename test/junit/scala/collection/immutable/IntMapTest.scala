@@ -18,6 +18,7 @@ import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 
 import scala.tools.testkit.ReflectUtil
+import scala.tools.testkit.AssertUtil.assertThrows
 
 @RunWith(classOf[JUnit4])
 class IntMapTest {
@@ -27,5 +28,17 @@ class IntMapTest {
     ReflectUtil.getFieldAccessible[IntMap.Bin[_]]("left").set(m, null)
     ReflectUtil.getFieldAccessible[IntMap.Bin[_]]("right").set(m, null)
     assertFalse(m.isEmpty) // no NPE, does not access left or right
+  }
+
+  @Test
+  def exhaustedIterator(): Unit = {
+    val m = IntMap(1 -> "a", 2 -> "b")
+    for (it <- List[Iterator[Any]](m.iterator, m.keysIterator, m.valuesIterator)) {
+      it.foreach(_ => ())
+      for (_ <- 1 to 2) {
+        assertFalse(it.hasNext)
+        assertThrows[NoSuchElementException](it.next())
+      }
+    }
   }
 }

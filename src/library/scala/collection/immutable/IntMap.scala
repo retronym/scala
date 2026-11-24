@@ -114,6 +114,7 @@ private[immutable] abstract class IntMapIterator[V, T](it: IntMap[V]) extends Ab
   var buffer = new Array[AnyRef](33)
 
   def pop = {
+    if (index == 0) Iterator.empty.next()
     index -= 1
     buffer(index).asInstanceOf[IntMap[V]]
   }

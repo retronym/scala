@@ -4,6 +4,8 @@ import org.junit.Assert._
 import org.junit.Test
 import org.openjdk.jol.info.GraphWalker
 
+import scala.tools.testkit.AssertUtil.assertThrows
+
 /** Tests for [[OpenHashMap]]. */
 @deprecated("Tests deprecated API", since="2.13")
 class OpenHashMapTest {
@@ -74,5 +76,17 @@ class OpenHashMapTest {
     assertEquals("There should be one key instance in the map.", 1, countInstances(m))
     m.remove(obj2)
     assertEquals("There should be no key instance in the map.", 0, countInstances(m))
+  }
+
+  @Test
+  def exhaustedIterator(): Unit = {
+    val m = OpenHashMap(1 -> "a")
+    for (it <- List[Iterator[Any]](m.iterator, m.keysIterator, m.valuesIterator)) {
+      it.foreach(_ => ())
+      for (_ <- 1 to 2) {
+        assertFalse(it.hasNext)
+        assertThrows[NoSuchElementException](it.next())
+      }
+    }
   }
 }

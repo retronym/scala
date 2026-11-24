@@ -250,6 +250,7 @@ class OpenHashMap[Key, Value](initialSize : Int)
 
     def next() = {
       advance()
+      if (index > mask) Iterator.empty.next()
       val result = table(index)
       index += 1
       nextResult(result)

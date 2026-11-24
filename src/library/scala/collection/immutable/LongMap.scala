@@ -111,6 +111,7 @@ private[immutable] abstract class LongMapIterator[V, T](it: LongMap[V]) extends 
   var buffer = new Array[AnyRef](65)
 
   def pop() = {
+    if (index == 0) Iterator.empty.next()
     index -= 1
     buffer(index).asInstanceOf[LongMap[V]]
   }
