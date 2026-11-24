@@ -195,6 +195,66 @@ class TreeSeqMapTest {
     assertEquals(List(1 -> "b"), m.toList)
     assertTrue(m.removed(1).isEmpty)
   }
+
+  @Test
+  def refreshKeepsMappingInSync(): Unit = {
+    for (orderBy <- List(TreeSeqMap.OrderBy.Insertion, TreeSeqMap.OrderBy.Modification)) {
+      val r = (TreeSeqMap.empty[Int, String](orderBy) ++ List(1 -> "a", 2 -> "b", 3 -> "c")).refresh(1)
+      assertEquals(List(2 -> "b", 3 -> "c", 1 -> "a"), r.toList)
+      assertEquals(List(2 -> "b", 3 -> "c"), r.removed(1).toList)
+      assertEquals(List(2 -> "b", 3 -> "c", 1 -> "a"), r.refresh(1).toList)
+      assertEquals(List(3 -> "c", 1 -> "a", 2 -> "b"), r.refresh(2).toList)
+      assertEquals(List(2 -> "b", 3 -> "c", 1 -> "A"), r.updated(1, "A").toList)
+      assertEquals(List(2 -> "b", 3 -> "c", 1 -> "A"), (r ++ List(1 -> "A")).toList)
+      assertEquals(List(3 -> "c", 1 -> "a"), r.tail.toList)
+      assertEquals(List(2 -> "b", 3 -> "c"), r.init.toList)
+      assertEquals(r.orderedBy, orderBy)
+    }
+  }
+
+  // Differential test of refresh mixed with other operations, against an association vector.
+  @Test
+  def refreshRandomized(): Unit = {
+    type Model = Vector[(Int, String)]
+    for (seed <- 0 until 200; orderBy <- List(TreeSeqMap.OrderBy.Insertion, TreeSeqMap.OrderBy.Modification)) {
+      val byModification = orderBy == TreeSeqMap.OrderBy.Modification
+      def update(m: Model, k: Int, v: String): Model = m.indexWhere(_._1 == k) match {
+        case -1                  => m :+ (k -> v)
+        case i if byModification => m.patch(i, Nil, 1) :+ (k -> v)
+        case i                   => m.updated(i, k -> v)
+      }
+      def refresh(m: Model, k: Int): Model = m.indexWhere(_._1 == k) match {
+        case -1 => m
+        case i  => m.patch(i, Nil, 1) :+ m(i)
+      }
+      val rnd = new scala.util.Random(seed)
+      var t = TreeSeqMap.empty[Int, String](orderBy)
+      var r: Model = Vector.empty
+      val log = List.newBuilder[String]
+      for (_ <- 0 until 40) {
+        val k = rnd.nextInt(8)
+        val v = "v" + rnd.nextInt(3)
+        rnd.nextInt(10) match {
+          case 0 | 1 | 2 => log += s"updated($k, $v)"; t = t.updated(k, v); r = update(r, k, v)
+          case 3 | 4 | 5 => log += s"refresh($k)"; t = t.refresh(k); r = refresh(r, k)
+          case 6 => log += s"removed($k)"; t = t.removed(k); r = r.filter(_._1 != k)
+          case 7 =>
+            val xs = List.fill(rnd.nextInt(4))(rnd.nextInt(8) -> ("c" + rnd.nextInt(2)))
+            log += s"concat($xs)"
+            t = t ++ xs
+            xs.foreach { case (k, v) => r = update(r, k, v) }
+          case 8 => if (r.nonEmpty) { log += "tail"; t = t.tail; r = r.tail }
+          case 9 => if (r.nonEmpty) { log += "init"; t = t.init; r = r.init }
+        }
+        def msg = s"seed $seed, $orderBy, after ${log.result().mkString("; ")}"
+        assertEquals(msg, r, t.toVector)
+        assertEquals(msg, r.size, t.size)
+        assertEquals(msg, r.toMap, t)
+        assertEquals(msg, r.headOption, t.headOption)
+        assertEquals(msg, r.lastOption, t.lastOption)
+      }
+    }
+  }
 }
 object TreeSeqMapTest extends App {
   import TreeSeqMap.Ordering._
