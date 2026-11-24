@@ -190,8 +190,17 @@ sealed class NumericRange[T](
     val sameSign = num.equiv(num.sign(start), num.sign(end))
 
     if (sameSign) { // subtraction is safe
-      val len = unsafeRangeLength(this)
-      if (fitsInInteger(len)) n >= num.toInt(len) else num.gteq(num.fromInt(n), len)
+      // The length is the quotient or the quotient + 1. Compare `n` with the quotient, as adding one
+      // overflows T when the length exceeds T's MaxValue (e.g. `NumericRange.inclusive[Byte](-128, -1, 1)`).
+      val diff = num.minus(end, start)
+      val quotient = num.quot(diff, step)
+      val lengthIsQuotient = !isInclusive && num.equiv(num.rem(diff, step), num.zero)
+      if (fitsInInteger(quotient)) {
+        val q = num.toInt(quotient)
+        if (lengthIsQuotient) n >= q else n > q
+      }
+      else if (lengthIsQuotient) num.gteq(num.fromInt(n), quotient)
+      else num.gt(num.fromInt(n), quotient)
     } else {
       // split to two ranges, which subtraction is safe in both of them (around zero)
       val stepsRemainderToZero = num.rem(start, step)
