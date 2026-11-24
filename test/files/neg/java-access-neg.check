@@ -1,16 +1,41 @@
+S2.scala:11: error: class S1 needs to be abstract.
+private[package b] def packageAbstract(): Unit (defined in class J) has package access, so it is not implemented by
+override private[package b] def packageAbstract(): Unit (defined in class S1); only a method of a class in package b can implement it
+class S1 extends J {
+      ^
 S2.scala:12: error: method packageAbstract overrides nothing
   override private[b] def packageAbstract() = ()      // fail
                           ^
 S2.scala:16: error: method packageConcrete overrides nothing
   override private[b] def packageConcrete() = ()      // fail
                           ^
+S2.scala:23: error: class S2 needs to be abstract.
+private[package b] def packageAbstract(): Unit (defined in class J) has package access, so it is not implemented by
+private[package b] def packageAbstract(): Unit (defined in class S2); only a method of a class in package b can implement it
+class S2 extends J {
+      ^
+S2.scala:31: error: class S3 needs to be abstract.
+private[package b] def packageAbstract(): Unit (defined in class J) has package access, so it is not implemented by
+protected[package b] def packageAbstract(): Unit (defined in class S3); only a method of a class in package b can implement it
+class S3 extends J {
+      ^
 S2.scala:36: error: method packageConcrete overrides nothing
   override protected[b] def packageConcrete() = ()    // fail
                             ^
+S2.scala:42: error: class S4 needs to be abstract.
+private[package b] def packageAbstract(): Unit (defined in class J) has package access, so it is not implemented by
+private[package a] def packageAbstract(): Unit (defined in class S4); only a method of a class in package b can implement it
+class S4 extends J {
+      ^
 S2.scala:47: error: method packageConcrete overrides nothing
   override private[a] def packageConcrete() = ()        // fail
                           ^
+S2.scala:53: error: class S5 needs to be abstract.
+private[package b] def packageAbstract(): Unit (defined in class J) has package access, so it is not implemented by
+def packageAbstract(): Unit (defined in class S5); only a method of a class in package b can implement it
+class S5 extends J {
+      ^
 S2.scala:58: error: method packageConcrete overrides nothing
   override def packageConcrete() = ()   // fail
                ^
-5 errors
+10 errors

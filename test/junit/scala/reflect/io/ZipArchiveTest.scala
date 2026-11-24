@@ -63,6 +63,60 @@ class ZipArchiveTest {
     }
   }
 
+  @Test def `manifest resources path of a URL that is not into a jar`(): Unit = {
+    val jar = createTestJar()
+    Using.resources(ForDeletion(jar), new ManifestResources(jar.toUri.toURL)) { (_, archive) =>
+      assertEquals(jar.toUri.toURL.getPath, archive.path)
+      assertEquals(archive.path, archive.name)
+    }
+  }
+
+  @Test def `manifest resources entry streams can be read in bulk`(): Unit = {
+    val jar = createTestJar()
+    val thread = Thread.currentThread
+    val saved = thread.getContextClassLoader
+    Using.resources(ForDeletion(jar), new java.net.URLClassLoader(Array(jar.toUri.toURL), null), new ManifestResources(manifestAt(jar.toAbsolutePath))) { (_, loader, archive) =>
+      thread.setContextClassLoader(loader)
+      try {
+        val f = archive.iterator.next()
+        assertEquals("hello, world", new String(f.toByteArray))
+        Using.resource(f.input) { in =>
+          val buf = new Array[Byte](64)
+          val n = in.read(buf)
+          assertEquals("hello, world", new String(buf, 0, n))
+          assertEquals(-1, in.read(buf))
+        }
+        Using.resource(f.input) { in =>
+          assertEquals(5L, in.skip(5))
+          assertEquals(',', in.read().toChar)
+        }
+        f.input.close() // never read
+      } finally thread.setContextClassLoader(saved)
+    }
+  }
+
+  @annotation.nowarn("cat=deprecation")
+  @Test def `manifest resources closes the stream it opens`(): Unit = {
+    val jar = createTestJar()
+    var opened, closed = 0
+    val handler = new java.net.URLStreamHandler {
+      override def openConnection(url: URL): java.net.URLConnection = new java.net.URLConnection(url) {
+        override def connect() = ()
+        override def getInputStream = {
+          opened += 1
+          new java.io.FilterInputStream(manifestAt(jar.toAbsolutePath).openStream()) {
+            override def close(): Unit = { closed += 1; super.close() }
+          }
+        }
+      }
+    }
+    Using.resources(ForDeletion(jar), new ManifestResources(new URL(null, "test:archive.jar!/META-INF/MANIFEST.MF", handler))) { (_, archive) =>
+      assertEquals("foo.class", archive.iterator.next().name)
+      assertEquals(1, opened)
+      assertEquals(1, closed)
+    }
+  }
+
   private def createTestJar(): Path = Files.createTempFile("junit", ".jar").tap { f =>
     val man = new Manifest()
     man.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0")
@@ -103,6 +157,166 @@ class ZipArchiveTest {
       ()
     }
   }
+  private def createZip(names: String*): Path = Files.createTempFile("junit", ".zip").tap { f =>
+    import java.util.zip._
+    Using.resource(new ZipOutputStream(Files.newOutputStream(f))) { zout =>
+      names.foreach { name =>
+        zout.putNextEntry(new ZipEntry(name))
+        if (!name.endsWith("/")) zout.write(name.getBytes)
+        zout.closeEntry()
+      }
+    }
+  }
+
+  private val contents = List(
+    "foo.class"   -> "hello, world".getBytes,
+    "empty.txt"   -> Array.emptyByteArray,
+    "big.bin"     -> Array.tabulate[Byte](100000)(i => (i * 31 / 7).toByte),
+    "p/q/bar.txt" -> "bar".getBytes,
+  )
+
+  private def createZip(stored: Boolean): Path = Files.createTempFile("junit", ".zip").tap { f =>
+    import java.util.zip._
+    Using.resource(new ZipOutputStream(Files.newOutputStream(f))) { zout =>
+      for ((name, bytes) <- contents) {
+        val entry = new ZipEntry(name)
+        if (stored) {
+          entry.setMethod(ZipEntry.STORED)
+          entry.setSize(bytes.length)
+          entry.setCompressedSize(bytes.length)
+          entry.setCrc(new CRC32().tap(_.update(bytes, 0, bytes.length)).getValue)
+        }
+        // otherwise deflated: the sizes follow the data in a data descriptor, and ZipInputStream reports -1
+        zout.putNextEntry(entry)
+        zout.write(bytes, 0, bytes.length)
+        zout.closeEntry()
+      }
+    }
+  }
+
+  @Test def `DirEntry lookupName honours the directory flag`(): Unit = {
+    val z = createZip("top.txt", "p/A.class", "p/q/B.class")
+    Using.resources(ForDeletion(z), new FileZipArchive(z.toFile)) { (_, fza) =>
+      val root = fza.root
+      val p = root.lookupName("p", directory = true)
+      assertNotNull("directory p", p)
+      assertTrue(p.isDirectory)
+      assertSame(fza.allDirs.get("p/"), p)
+      assertNull("p is not a file", root.lookupName("p", directory = false))
+      assertNull("top.txt is not a directory", root.lookupName("top.txt", directory = true))
+      assertEquals("top.txt", root.lookupName("top.txt", directory = false).path)
+      assertEquals("p/A.class", p.lookupName("A.class", directory = false).path)
+      assertSame(fza.allDirs.get("p/q/"), p.lookupName("q", directory = true))
+      assertEquals(Set("top.txt", "p"), root.iterator.map(_.name).toSet)
+    }
+  }
+
+  @Test def `AbstractFileClassLoader finds a class in a package of a zip`(): Unit = {
+    import scala.reflect.internal.util.AbstractFileClassLoader
+    val name = "scala.reflect.io.ZipArchiveTest"
+    val path = name.replace('.', '/') + ".class"
+    val z = Files.createTempFile("junit", ".zip").tap { f =>
+      Using.resource(new java.util.zip.ZipOutputStream(Files.newOutputStream(f))) { zout =>
+        zout.putNextEntry(new java.util.zip.ZipEntry(path))
+        Using.resource(getClass.getClassLoader.getResourceAsStream(path))(in => zout.write(Streamable.bytes(in)))
+        zout.closeEntry()
+      }
+    }
+    Using.resources(ForDeletion(z), new FileZipArchive(z.toFile)) { (_, fza) =>
+      val loader = new AbstractFileClassLoader(fza.root, null)
+      assertEquals(name, loader.loadClass(name).getName)
+    }
+  }
+
+  // The zip format allows a file `p/q` beside a directory `p/q/`.
+  @Test def `file and directory of the same name are both kept`(): Unit = {
+    def check(names: String*): Unit = {
+      val z = createZip(names: _*)
+      Using.resources(ForDeletion(z), new FileZipArchive(z.toFile)) { (_, fza) =>
+        val p = fza.allDirs.get("p/")
+        val file = p.lookupName("q", directory = false)
+        val dir  = p.lookupName("q", directory = true)
+        assertNotNull(s"file p/q in $names", file)
+        assertFalse(file.isDirectory)
+        assertEquals("p/q", new String(file.toByteArray))
+        assertSame(fza.allDirs.get("p/q/"), dir)
+        assertEquals("p/q/r", dir.lookupName("r", directory = false).path)
+        assertEquals(List("q", "q"), p.iterator.map(_.name).toList)
+      }
+    }
+    check("p/q", "p/q/r")
+    check("p/q/r", "p/q")
+  }
+
+  @Test def `directory name of consecutive entries is shared`(): Unit = {
+    val z = createZip("p/A.class")
+    Using.resources(ForDeletion(z), new FileZipArchive(z.toFile)) { (_, fza) =>
+      val m = classOf[ZipArchive].getDeclaredMethods.find(_.getName.endsWith("dirNameUsingLast")).get
+      m.setAccessible(true)
+      def dirName(name: String) = m.invoke(fza, name)
+      val first = dirName("p/q/A.class")
+      assertEquals("p/q/", first)
+      assertSame(first, dirName("p/q/B.class"))
+      assertSame(first, dirName("p/q/B$.class"))
+      assertEquals("p/q/r/", dirName("p/q/r/C.class"))
+      assertEquals("p/", dirName("p/q"))
+      assertEquals("/", dirName("top.txt"))
+      assertEquals("/", dirName("other.txt"))
+      assertEquals("p/qq/", dirName("p/qq/D.class"))
+      assertEquals("p/q/", dirName("p/q/E.class"))
+    }
+  }
+
+  private def checkURLArchive(stored: Boolean): Unit = {
+    val z = createZip(stored)
+    Using.resources(ForDeletion(z), new URLZipArchive(z.toUri.toURL)) { (_, zip) =>
+      def files(dir: AbstractFile): List[AbstractFile] =
+        dir.iterator.toList.flatMap(f => if (f.isDirectory) files(f) else List(f))
+      val found = zip.iterator.toList.flatMap(f => if (f.isDirectory) files(f) else List(f)).map(f => f.path -> f).toMap
+      assertEquals(contents.map(_._1).toSet, found.keySet)
+      for ((name, bytes) <- contents) {
+        val f = found(name)
+        assertEquals(name, Some(bytes.length), f.sizeOption)
+        assertArrayEquals(name, bytes, f.toByteArray)
+        assertArrayEquals(name, bytes, f.unsafeToByteArray)
+        Using.resource(f.input) { in =>
+          assertEquals(name, bytes.length, in.available)
+          val out = new java.io.ByteArrayOutputStream
+          val buf = new Array[Byte](1024)
+          var n = in.read(buf)
+          while (n >= 0) { out.write(buf, 0, n); n = in.read(buf) }
+          assertArrayEquals(name, bytes, out.toByteArray)
+        }
+      }
+    }
+  }
+
+  @Test def `URL archive reads stored entries`(): Unit = checkURLArchive(stored = true)
+
+  @Test def `URL archive reads deflated entries`(): Unit = checkURLArchive(stored = false)
+
+  @annotation.nowarn("cat=deprecation")
+  @Test def `URL archive closes the stream it opens`(): Unit = {
+    val z = createZip(stored = false)
+    var opened, closed = 0
+    val handler = new java.net.URLStreamHandler {
+      override def openConnection(url: URL): java.net.URLConnection = new java.net.URLConnection(url) {
+        override def connect() = ()
+        override def getInputStream = {
+          opened += 1
+          new java.io.FilterInputStream(Files.newInputStream(z)) {
+            override def close(): Unit = { closed += 1; super.close() }
+          }
+        }
+      }
+    }
+    Using.resources(ForDeletion(z), new URLZipArchive(new URL(null, "test:archive.zip", handler))) { (_, zip) =>
+      assertEquals(4, zip.iterator.size)
+      assertEquals(1, opened)
+      assertEquals(1, closed)
+    }
+  }
+
   /* zipfs doesn't write size field in file header as required by URLZipArchive
   private def createTestZip2(): Path = {
     import java.nio.file.FileSystems

@@ -89,7 +89,7 @@ trait Infer extends Checkable {
       val samInfoWithTVars = ptVars.memberInfo(sam)
 
       // use function type subtyping, not method type subtyping (the latter is invariant in argument types)
-      funTp <:< functionType(samInfoWithTVars.paramTypes, samInfoWithTVars.finalResultType)
+      funTp <:< samMethodToFunctionType(samInfoWithTVars)
 
       // solve constraints tracked by tvars
       val targs = solvedTypes(tvars, tparams, variances.varianceInType(sam.info), upper = false, lubDepth(sam.info :: Nil))
@@ -265,7 +265,7 @@ trait Infer extends Checkable {
           if (settings.check.isDefault)
             analyzer.lastAccessCheckDetails
           else
-            ptBlock("because of an internal error (no accessible symbol)",
+            ptBlock("\n because of an internal error (no accessible symbol)",
               "sym.ownerChain"                -> sym.ownerChain,
               "underlyingSymbol(sym)"         -> underlyingSymbol(sym),
               "pre"                           -> pre,
@@ -329,12 +329,13 @@ trait Infer extends Checkable {
      *  `isAsSpecific` no longer prefers A by testing applicability to A for both m(A) and m(=> A)
      *  since that induces a tie between m(=> A) and m(=> A, B*) [scala/bug#3761]
      */
-    private def isCompatible(tp: Type, pt: Type): Boolean = {
-      def isCompatibleByName(tp: Type, pt: Type): Boolean = (
-           isByNameParamType(pt)
-        && !isByNameParamType(tp)
-        && isCompatible(tp, dropByName(pt))
-      )
+    private def isCompatible(tp: Type, pt: Type): Boolean =
+      // Compare a by-value argument only with the underlying type of a by-name parameter.
+      // Comparing with `=> T` itself would admit `Null` for any `T`, as `<byname>` is not a value class.
+      if (isByNameParamType(pt) && !isByNameParamType(tp)) isCompatible(tp, dropByName(pt))
+      else isCompatibleNotByName(tp, pt)
+
+    private def isCompatibleNotByName(tp: Type, pt: Type): Boolean = {
       def isCompatibleSam(tp: Type, pt: Type): Boolean = (definitions.isFunctionType(tp) || definitions.isPartialFunctionType(tp) || tp.isInstanceOf[MethodType] || tp.isInstanceOf[PolyType]) &&  {
         val samFun = samToFunctionType(pt)
         (samFun ne NoType) && isCompatible(tp, samFun)
@@ -346,7 +347,6 @@ trait Infer extends Checkable {
 
         ((tp1 weak_<:< pt)
          || isCoercible(tp1, pt)
-         || isCompatibleByName(tp, pt)
          || isCompatibleSam(tp, pt)
         )
       }
@@ -896,14 +896,19 @@ trait Infer extends Checkable {
             //
             // Note that as of https://github.com/scala/scala3/commit/b9f3084205bc9fcbd2a5181d3f0e539e2a20253a
             // Dotty flips variances throughout, not just at the top level. We follow that behaviour here.
+            //
+            // As in Dotty, an argument `T` of a contravariant type parameter in a covariant position is
+            // replaced by `T => Unit`, which makes it compare covariantly. The class itself is kept, so
+            // that `SubShow[T => Unit] <: Show[T => Unit]` holds through the parents of `SubShow` at any depth.
 
             val e1 = existentialAbstraction(undef1, tpe1)
             val e2 = existentialAbstraction(undef2, tpe2)
 
             val flip = new VariancedTypeMap {
               def apply(tp: Type): Type = tp match {
-                case TypeRef(pre, sym, args) if variance > 0 && sym.typeParams.exists(_.isContravariant) =>
-                  mapOver(TypeRef(pre, sym.flipped, args))
+                case TypeRef(pre, sym, args) if variance > 0 && sym.isClass && sym.typeParams.exists(_.isContravariant) =>
+                  val args1 = map2Conserve(args, sym.typeParams)((arg, tparam) => if (tparam.isContravariant) functionType(arg :: Nil, UnitTpe) else arg)
+                  mapOver(TypeRef(pre, sym, args1))
                 case _ =>
                   mapOver(tp)
               }

@@ -1,0 +1,37 @@
+C1: T.v get: 1, after set: 11, read: 11
+C1: T.w get: w, after set: ww, read: ww
+C1: T.abs get: 8, after set: 12, read: 12
+C1: T.pt get: 4, after set: 13, read: 24
+C1: T.p get: 5, after set: 14, read: 33
+C1: T.ptv get: 6, after set: 15, read: 42
+C1: T.l get: 3, after set: 16, read: 16
+C2: T.v get: 1, after set: 11, read: 11
+C2: T.w get: w, after set: ww, read: ww
+C2: T.abs get: 9, after set: 12, read: 12
+C2: T.pt get: 4, after set: 13, read: 24
+C2: T.p get: 5, after set: 14, read: 33
+C2: T.ptv get: 6, after set: 15, read: 42
+C2: T.l get: 3, after set: 16, read: 16
+C2: U.u get: 7, after set: 17, read: 17
+D1: T.v get: 1, after set: 11, read: 11
+D1: T.w get: w, after set: ww, read: ww
+D1: T.abs get: 8, after set: 12, read: 12
+D1: T.pt get: 4, after set: 13, read: 24
+D1: T.p get: 5, after set: 14, read: 33
+D1: T.ptv get: 6, after set: 15, read: 42
+D1: T.l get: 3, after set: 16, read: 16
+D2: T.v get: 1, after set: 11, read: 10
+D2: T.w get: w, after set: ww, read: ww
+D2: T.abs get: 9, after set: 12, read: 12
+D2: T.pt get: 4, after set: 13, read: 24
+D2: T.p get: 5, after set: 14, read: 33
+D2: T.ptv get: 6, after set: 15, read: 42
+D2: T.l get: 3, after set: 16, read: 16
+D2: U.u get: 7, after set: 17, read: 17
+E1: T.p get: 5, after set: 14, read: 24 own
+10
+(2,2)
+9
+C1: T.w_$eq get: w, after set: , read: ()
+scala.ScalaReflectionException: Scala field k of trait Const isn't represented as a Java field in Test$$anon$1 or its superclasses
+scala.ScalaReflectionException: expected a field or an accessor method symbol, you provided method m

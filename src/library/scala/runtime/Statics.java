@@ -78,7 +78,9 @@ public final class Statics {
 
   public static int floatHash(float fv) {
     int iv = (int)fv;
-    if (iv == fv)
+    // Compare as double. `iv == fv` converts iv to float, and for fv == 2^31 the cast above
+    // saturates to Integer.MAX_VALUE, which rounds back up to 2^31.
+    if (iv == (double)fv)
       return iv;
 
     long lv = (long)fv;

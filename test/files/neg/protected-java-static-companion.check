@@ -1,0 +1,14 @@
+C_2.scala:7: error: Implementation restriction: object C accesses protected static method sm of class JP_1, which the JVM only permits from a subclass of it.
+  def comp = JP_1.sm(4)
+                  ^
+C_2.scala:8: error: Implementation restriction: object C accesses protected static variable sf of class JP_1, which the JVM only permits from a subclass of it.
+  def field = JP_1.sf
+                   ^
+C_2.scala:9: error: Implementation restriction: object Nested accesses protected static method sz of class JP_1, which the JVM only permits from a subclass of it.
+  object Nested { def a = JP_1.sz() }
+                               ^
+C_2.scala:14: error: Implementation restriction: trait T accesses protected method sm inside a concrete trait method.
+Add an accessor in a class extending class JP_1 as a workaround.
+  def t = JP_1.sm(5)
+               ^
+4 errors

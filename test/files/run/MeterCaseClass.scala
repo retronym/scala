@@ -70,7 +70,7 @@ object Test extends App {
   println("x.hashCode: "+x.hashCode)
   println("x == 1: "+(x == 1))
   println("x == y: "+(x == y))
-  assert(x.hashCode == (1.0).hashCode)
+  assert(x.hashCode == (1.0).##)
 
   val a: Any = x
   val b: Any = y

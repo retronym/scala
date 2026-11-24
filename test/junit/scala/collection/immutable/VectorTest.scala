@@ -8,7 +8,7 @@ import org.junit.Test
 import scala.annotation.{nowarn, unused}
 import scala.collection.immutable.VectorInline.{WIDTH3, WIDTH4, WIDTH5}
 import scala.collection.mutable.{ListBuffer, StringBuilder}
-import scala.tools.testkit.AssertUtil.intercept
+import scala.tools.testkit.AssertUtil.{intercept, interceptMessage}
 
 @RunWith(classOf[JUnit4])
 class VectorTest {
@@ -658,6 +658,52 @@ class VectorTest {
     assertEquals(1000000, v.last)
     assertEquals(1000000, v2(v2.length-1)) // ArrayIndexOutOfBoundsException
     assertEquals(1024, v2(1023))
+  }
+
+  @Test def `iterator drop near Int.MaxValue after next does not overflow`: Unit = {
+    for (size <- List(5, 100, 2000); n <- List(Int.MaxValue, Int.MaxValue - 1, Int.MaxValue - size + 1)) {
+      def it() = { val it = Vector.range(0, size).iterator; it.next(); it }
+      val d = it().drop(n)
+      assertEquals(s"size=$size n=$n", 0, d.knownSize)
+      assertFalse(s"size=$size n=$n", d.hasNext)
+      assertEquals(s"size=$size n=$n", Vector.empty, it().drop(n).toVector)
+      assertEquals(s"size=$size n=$n", Nil, it().slice(n, Int.MaxValue).toList)
+    }
+  }
+
+  @Test def `empty last message`: Unit = {
+    interceptMessage[NoSuchElementException]("empty.last")(Vector.empty[Int].last)
+  }
+
+  @Test def `cannot grow beyond Int.MaxValue elements`: Unit = {
+    val v = Vector.fillSparse(Int.MaxValue)("v")
+    assertEquals(Int.MaxValue, v.length)
+    def check(f: => Vector[String]): Unit =
+      interceptMessage[IllegalArgumentException]("Vector cannot have more than Int.MaxValue elements")(f)
+    check(v :+ "x")
+    check("x" +: v)
+    check(v ++ Vector("x"))
+    check(Vector("x") ++: v)
+  }
+  @Test def `prependedAll with unknown-size prefix`: Unit = {
+    for (bigSize <- List(31, 32, 33, 1024, 1025, 40000); prefixSize <- List(0, 1, 3, 33, 1000)) {
+      val big    = Vector.tabulate(bigSize)(i => -i)
+      val prefix = List.tabulate(prefixSize)(identity)
+      val expected = prefix ::: big.toList
+      def check(kind: String, result: Vector[Int]): Unit = {
+        assertEquals(s"$kind bigSize=$bigSize prefixSize=$prefixSize", expected, result.toList)
+        validateDebug(result)
+      }
+      check("List", prefix ++: big)
+      val it = prefix.iterator
+      check("Iterator", it ++: big)
+      assertFalse(it.hasNext)
+      var evaluated = 0
+      val view = prefix.view.map { x => evaluated += 1; x }
+      if (prefixSize > 0) assertEquals(-1, view.knownSize)
+      check("View", view ++: big)
+      assertEquals(prefixSize, evaluated)
+    }
   }
 }
 

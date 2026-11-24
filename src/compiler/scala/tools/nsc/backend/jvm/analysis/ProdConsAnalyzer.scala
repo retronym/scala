@@ -110,47 +110,94 @@ class ProdConsAnalyzer(methodNode: MethodNode, classInternalName: InternalName) 
    * and LOAD. If the producer of the value is a LOAD, then the producers of the stored value(s) are
    * returned instead.
    */
-  def initialProducersForValueAt(insn: AbstractInsnNode, slot: Int): Set[AbstractInsnNode] = {
-    def initialProducers(insn: AbstractInsnNode, producedSlot: Int): Set[AbstractInsnNode] = {
-      if (isCopyOperation(insn)) {
-        val key = (insn, producedSlot)
-        _initialProducersCache.getOrElseUpdate(key, {
-          // prevent infinite recursion if an instruction is its own producer or consumer
-          // see cyclicProdCons in ProdConsAnalyzerTest
-          _initialProducersCache(key) = Set.empty
-          val (sourceValue, sourceValueSlot) = copyOperationSourceValue(insn, producedSlot)
-          sourceValue.insns.iterator.asScala.flatMap(initialProducers(_, sourceValueSlot)).toSet
-        })
-      } else {
-        Set(insn)
-      }
-    }
+  def initialProducersForValueAt(insn: AbstractInsnNode, slot: Int): Set[AbstractInsnNode] =
     producersForValueAt(insn, slot).flatMap(initialProducers(_, slot))
+
+  private[this] val initialProducers: CopyClosure = new CopyClosure {
+    def foreachNext(copyOp: AbstractInsnNode, producedSlot: Int)(f: (AbstractInsnNode, Int) => Unit): Unit = {
+      val (sourceValue, sourceValueSlot) = copyOperationSourceValue(copyOp, producedSlot)
+      sourceValue.insns.forEach(f(_, sourceValueSlot))
+    }
   }
 
   /**
    * Returns the potential ultimate consumers of a value in the frame of `insn`. Consumers are
    * tracked through copying operations such as SOTRE and LOAD.
    */
-  def ultimateConsumersOfValueAt(insn: AbstractInsnNode, slot: Int): Set[AbstractInsnNode] = {
-    def ultimateConsumers(insn: AbstractInsnNode, consumedSlot: Int): Set[AbstractInsnNode] = {
-      if (isCopyOperation(insn)) {
-        val key = (insn, consumedSlot)
-        _ultimateConsumersCache.getOrElseUpdate(key, {
-          // prevent infinite recursion if an instruction is its own producer or consumer
-          // see cyclicProdCons in ProdConsAnalyzerTest
-          _ultimateConsumersCache(key) = Set.empty
-          for {
-            producedSlot     <- copyOperationProducedValueSlots(insn, consumedSlot)
-            consumer         <- consumersOfValueAt(insn.getNext, producedSlot)
-            ultimateConsumer <- ultimateConsumers(consumer, producedSlot)
-          } yield ultimateConsumer
-        })
-      } else {
-        Set(insn)
-      }
-    }
+  def ultimateConsumersOfValueAt(insn: AbstractInsnNode, slot: Int): Set[AbstractInsnNode] =
     consumersOfValueAt(insn, slot).flatMap(ultimateConsumers(_, slot))
+
+  private[this] val ultimateConsumers: CopyClosure = new CopyClosure {
+    def foreachNext(copyOp: AbstractInsnNode, consumedSlot: Int)(f: (AbstractInsnNode, Int) => Unit): Unit =
+      for {
+        producedSlot <- copyOperationProducedValueSlots(copyOp, consumedSlot)
+        consumer     <- consumersOfValueAt(copyOp.getNext, producedSlot)
+      } f(consumer, producedSlot)
+  }
+
+  /**
+   * The instructions reached from a value by following copy operations (LOAD, STORE, DUP, CHECKCAST, ...) until
+   * an instruction that is not a copy operation: towards producers for `initialProducers`, towards consumers for
+   * `ultimateConsumers`. The result for each copy operation is memoized.
+   *
+   * Copy operations can form a cycle, for example `t = x; x = y; y = t` in a loop. Every copy operation on a cycle
+   * reaches the same instructions, but a search that meets a copy operation it is still exploring cannot use its
+   * answer yet: the answer it computes for the other operations on the cycle is only complete once the search returns
+   * to the operation where it entered the cycle. So the search is Tarjan's strongly connected components algorithm:
+   * the result of an operation is cached only when its component is complete, and then for all operations in it.
+   * On acyclic copy chains every component is a single operation, cached as soon as it is computed.
+   */
+  private abstract class CopyClosure {
+    /** Calls `f` with each instruction one step further from `copyOp` in the direction of the search, and the slot of the value there. */
+    def foreachNext(copyOp: AbstractInsnNode, slot: Int)(f: (AbstractInsnNode, Int) => Unit): Unit
+
+    private[this] val cache = mutable.HashMap.empty[(AbstractInsnNode, Int), Set[AbstractInsnNode]]
+    // copy operations whose component is not yet complete, in the order the search reached them
+    private[this] val stack = mutable.ArrayBuffer.empty[(AbstractInsnNode, Int)]
+    private[this] val stackIndex = mutable.HashMap.empty[(AbstractInsnNode, Int), Int]
+    // the lowest index in `stack` reachable from the operation the last `visit` returned for
+    private[this] var lowLink = 0
+
+    def apply(insn: AbstractInsnNode, slot: Int): Set[AbstractInsnNode] =
+      if (isCopyOperation(insn)) {
+        val key = (insn, slot)
+        val cached = cache.getOrElse(key, null)
+        if (cached != null) cached else visit(key)
+      } else Set(insn)
+
+    private def visit(key: (AbstractInsnNode, Int)): Set[AbstractInsnNode] = {
+      val index = stack.length
+      stack += key
+      stackIndex(key) = index
+      var result = Set.empty[AbstractInsnNode]
+      var low = index
+      foreachNext(key._1, key._2) { (insn, slot) =>
+        if (isCopyOperation(insn)) {
+          val k = (insn, slot)
+          val cached = cache.getOrElse(k, null)
+          if (cached != null) result ++= cached
+          else {
+            val i = stackIndex.getOrElse(k, -1)
+            if (i >= 0) low = math.min(low, i)
+            else {
+              result ++= visit(k)
+              low = math.min(low, lowLink)
+            }
+          }
+        } else result += insn
+      }
+      if (low == index) {
+        // `key` is the first operation of its component; the ones above it on the stack are the rest of it, and their
+        // results are included in `result`
+        while (stack.length > index) {
+          val k = stack.remove(stack.length - 1)
+          stackIndex -= k
+          cache(k) = result
+        }
+      }
+      lowLink = low
+      result
+    }
   }
 
   def initialProducersForInputsOf(insn: AbstractInsnNode): Set[AbstractInsnNode] = {
@@ -431,8 +478,6 @@ class ProdConsAnalyzer(methodNode: MethodNode, classInternalName: InternalName) 
     res
   }
 
-  private val _initialProducersCache:  mutable.HashMap[(AbstractInsnNode, Int), Set[AbstractInsnNode]] = mutable.HashMap.empty
-  private val _ultimateConsumersCache: mutable.HashMap[(AbstractInsnNode, Int), Set[AbstractInsnNode]] = mutable.HashMap.empty
 }
 
 /**

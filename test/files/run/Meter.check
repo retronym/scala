@@ -5,7 +5,7 @@ Meter.scala:74: warning: a.Meter and Int are unrelated: they will never compare 
 4.0m
 false
 x.isInstanceOf[Meter]: true
-x.hashCode: 1072693248
+x.hashCode: 1
 x == 1: false
 x == y: true
 a == b: true

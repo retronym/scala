@@ -1,0 +1,6 @@
+qualified-private-namer-inferred.scala:10: error: type mismatch;
+ found   : String("x")
+ required: Int
+class B extends A { def f = "x" }
+                            ^
+1 error

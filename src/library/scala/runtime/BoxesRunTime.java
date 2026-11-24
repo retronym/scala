@@ -543,11 +543,11 @@ public final class BoxesRunTime
     }
 
     public static Object testEqual(Object arg1, Object arg2) throws NoSuchMethodException {
-        return boxToBoolean(arg1 == arg2);
+        return boxToBoolean(equals(arg1, arg2));
     }
 
     public static Object testNotEqual(Object arg1, Object arg2) throws NoSuchMethodException {
-        return boxToBoolean(arg1 != arg2);
+        return boxToBoolean(!equals(arg1, arg2));
     }
 
     public static Object testLessThan(Object arg1, Object arg2) throws NoSuchMethodException {

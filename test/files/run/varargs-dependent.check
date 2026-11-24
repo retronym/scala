@@ -1,0 +1,12 @@
+2
+ab
+ab
+a
+2
+ab
+ab
+a
+public int O$.unbounded(A,java.lang.Object[])
+public java.lang.String O$.bounded(A,java.lang.String[])
+public java.lang.String O$.chained(A,A,java.lang.String[])
+public java.lang.String O$.nested(A,scala.Option[])

@@ -1,0 +1,33 @@
+xml-charref.scala:4: error: in XML literal: char ref is not a valid code point, the largest is &#x10FFFF;
+  val tooBig      = <a>&#x110000;</a>
+                                ^
+xml-charref.scala:5: error: in XML literal: char ref is not a valid code point, the largest is &#x10FFFF;
+  val wrapsHex    = <a>&#x100000041;</a>
+                                   ^
+xml-charref.scala:6: error: in XML literal: char ref is not a valid code point, the largest is &#x10FFFF;
+  val wrapsDec    = <a>&#4294967361;</a>
+                                   ^
+xml-charref.scala:7: error: in XML literal: char ref must have at least one digit
+  val noDigits    = <a>&#;</a>
+                         ^
+xml-charref.scala:8: error: in XML literal: char ref must have at least one digit
+  val noHexDigits = <a>&#x;</a>
+                          ^
+xml-charref.scala:9: error: in XML literal: hex char not allowed in decimal char ref
+Did you mean to write &#x ?
+  val hexInDec    = <a>&#1af;</a>
+                            ^
+xml-charref.scala:10: error: in XML literal: character 'y' not allowed in char ref
+
+  val notDigits   = <a>&#xyz;</a>
+                            ^
+xml-charref.scala:12: error: in XML literal: error parsing attribute value
+  val attrTooBig  = <a b="&#x110000;"/>
+                                     ^
+xml-charref.scala:13: error: in XML literal: error parsing attribute value
+  val attrWraps   = <a b="&#x100000041;"/>
+                                        ^
+xml-charref.scala:14: error: in XML literal: error parsing attribute value
+  val attrEmpty   = <a b="&#;"/>
+                              ^
+10 errors

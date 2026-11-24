@@ -340,3 +340,20 @@ object LocalAndAnonymousInLazyInitializer {
     }
   }
 }
+
+object NestedInSuperConstructorArg {
+  trait T
+  class P(f: () => AnyRef) {
+    def this(x: Int, g: => AnyRef) = this(() => g)
+    def this(s: String, a: AnyRef) = this(() => a)
+    def get = f()
+  }
+  // Functions and by-name arguments in a super constructor call are expanded into classes also under delambdafy:method.
+  class Fun    extends P(() => new T { })
+  class ByName extends P(0, new T { })
+  class FunLocals    extends P(() => { class L; trait LT; object LO; (new L, new LT { }, LO, () => new T { }) })
+  class ByNameLocals extends P(0, { class L; trait LT; object LO; (new L, new LT { }, LO, () => new T { }) })
+  class SelfCall(f: () => AnyRef) { def this() = this(() => new T { }) }
+  // No function here: the local class is nested in the constructor.
+  object O extends P("", { class LL; new LL })
+}

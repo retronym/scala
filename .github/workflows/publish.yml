@@ -42,6 +42,13 @@ jobs:
         with:
           # the cache is for sbt 2
           disk-cache: false
+      # TODO scala/scala review G2: every push build (a nightly) gets the PGP key and the Sonatype
+      # credentials, and admin/init.sh imports the key, although only a release (SCALA_VER_BASE set,
+      # publishToSonatype=yes) uses them; nightlies need PRIVATE_REPO_PASS and SCALA_REPO_TOKEN only.
+      # The secrets are then in the environment of the whole sbt build, and setup-java restores a
+      # shared sbt cache into it. Passing the PGP and Sonatype secrets only when inputs.SCALA_VER_BASE
+      # is set, and not restoring the cache for a release, would narrow that; init.sh would then need
+      # to write the private-repo netrc without PGP_SECRET, which it currently skips.
       - env:
           SCALA_VER_BASE: ${{ inputs.SCALA_VER_BASE }}
           SCALA_VER_SUFFIX: ${{ inputs.SCALA_VER_SUFFIX }}
@@ -83,6 +90,8 @@ jobs:
       - name: Install wkhtmltopdf
         run: |
           wget --quiet https://github.com/wkhtmltopdf/packaging/releases/download/0.12.6.1-3/wkhtmltox_0.12.6.1-3.jammy_amd64.deb
+          # the package is installed as root in the job that holds the deploy key of the spec
+          echo "4f723b2691ad8638a9df960e0421d346d7315083e3583a334f33362280ddba15  wkhtmltox_0.12.6.1-3.jammy_amd64.deb" | sha256sum -c -
           sudo apt-get update
           sudo apt-get install -y ./wkhtmltox_0.12.6.1-3.jammy_amd64.deb
           rm wkhtmltox_0.12.6.1-3.jammy_amd64.deb

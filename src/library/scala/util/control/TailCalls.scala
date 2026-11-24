@@ -58,9 +58,10 @@ object TailCalls {
      *  of this computation with that of `f`. */
     final def flatMap[B](f: A => TailRec[B]): TailRec[B] = this match {
       case Done(a)         => Call(() => f(a))
-      case Call(_)         => Cont(this, f)
-      // Take advantage of the monad associative law to optimize the size of the required stack
-      case c: Cont[a1, b1] => Cont(c.a, (x: a1) => c.f(x).flatMap(f))
+      // A left-nested `Cont` is re-associated by `resume` and `result`, one step at a time. Doing
+      // it here would compose the continuations of repeated binds on one value into a closure that
+      // calls itself once per bind.
+      case _               => Cont(this, f)
     }
 
     /** Returns either the next step of the tailcalling computation,

@@ -156,6 +156,11 @@ lazy val commonSettings = instanceSettings ++ clearSourceAndResourceDirectories 
   cleanFiles += (Compile / doc / target).value,
   run / fork := true,
   run / connectInput := true,
+  // TODO scala/scala review G7: javac gets `-source 1.8 -target 1.8` above, but scalac gets no
+  // `-release 8`, so on a newer JDK it links against that JDK's API: built on JDK 17, reflect and
+  // compiler call `ByteBuffer.flip()Ljava/nio/ByteBuffer;` (JDK 9+ only; NoSuchMethodError on 8).
+  // Releases are safe only because publish.yml pins JDK 8. Adding `-release 8` for library,
+  // reflect and compiler compiles cleanly on JDK 17 and emits `Buffer` descriptors instead.
   Compile / scalacOptions ++= Seq("-feature", "-Xlint",
     //"-Wunused:patvars",
     //"-Wunused:params",
@@ -201,7 +206,7 @@ lazy val commonSettings = instanceSettings ++ clearSourceAndResourceDirectories 
   pomIncludeRepository := { _ => false },
   pomExtra := {
     <scm>
-      <connection>scm:git:git://github.com/scala/scala.git</connection>
+      <connection>scm:git:https://github.com/scala/scala.git</connection>
       <url>https://github.com/scala/scala</url>
     </scm>
       <issueManagement>
@@ -517,7 +522,7 @@ lazy val compiler = configureAsSubproject(project)
         (LocalProject("replFrontend")  / Compile / packageBin / products).value,
     Compile / unmanagedResources / includeFilter :=
       "*.tmpl" | "*.xml" | "*.js" | "*.css" | "*.html" | "*.properties" | "*.swf" |
-      "*.png" | "*.gif" | "*.gif" | "*.txt",
+      "*.png" | "*.gif" | "*.txt",
     // Also include the selected unmanaged resources and source files from the additional projects in the source JAR:
     Compile / packageSrc / mappings ++= {
       val base = (Compile / unmanagedResourceDirectories).value ++
@@ -546,6 +551,9 @@ lazy val compiler = configureAsSubproject(project)
       "-doc-root-content", (Compile / sourceDirectory).value + "/rootdoc.txt"
     ),
     Osgi.headers ++= Seq(
+      // java-diff-utils is included for the compiler's own use, under its original package names:
+      // keep those packages private rather than exporting them with the version of Scala.
+      "Export-Package" -> raw"""!com.github.difflib.*,*;version=$${ver};-noimport:=true;-split-package:=merge-first""",
       "Import-Package" -> raw"""org.jline.reader.*;resolution:=optional
                             |org.jline.terminal;resolution:=optional
                             |org.jline.terminal.impl;resolution:=optional
@@ -566,7 +574,8 @@ lazy val compiler = configureAsSubproject(project)
       "/project/packaging" -> <packaging>jar</packaging>
     ),
     apiURL := Some(url(s"https://www.scala-lang.org/api/${versionProperties.value.mavenVersion}/scala-${projectFolder.value}/")),
-    pomDependencyExclusions += (("org.scala-lang.modules", "scala-asm"))
+    // the classes of these dependencies are included in scala-compiler.jar, see `packageBin / products` above
+    pomDependencyExclusions ++= List(("org.scala-lang.modules", "scala-asm"), (diffUtilsDep.organization, diffUtilsDep.name))
   )
   .dependsOn(library, reflect)
 

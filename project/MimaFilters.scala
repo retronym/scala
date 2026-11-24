@@ -37,7 +37,6 @@ object MimaFilters extends AutoPlugin {
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.concurrent.impl.FutureConvertersImpl#P.apply"),
     ProblemFilters.exclude[IncompatibleMethTypeProblem]("scala.concurrent.impl.FutureConvertersImpl#P.andThen"),
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.concurrent.impl.FutureConvertersImpl#P.accept"),
-    ProblemFilters.exclude[IncompatibleMethTypeProblem]("scala.concurrent.impl.FutureConvertersImpl#P.andThen"),
 
     // KEEP: the CommonErrors object is not a public API
     ProblemFilters.exclude[MissingClassProblem]("scala.collection.generic.CommonErrors"),
@@ -49,6 +48,10 @@ object MimaFilters extends AutoPlugin {
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.mutable.StringBuilder.getChars"),
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.runtime.ArrayCharSequence.getChars"),
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.runtime.SeqCharSequence.getChars"),
+
+    // TreeSeqMap becomes serializable; only breaks forward compatibility
+    ProblemFilters.exclude[MissingTypesProblem]("scala.collection.immutable.TreeSeqMap"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.TreeSeqMap.writeReplace"),
 
     // scala/scala#11242
     ProblemFilters.exclude[MissingClassProblem]("scala.collection.immutable.LazyList$MidEvaluation$"),
@@ -95,6 +98,13 @@ object MimaFilters extends AutoPlugin {
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.SynchronizedSymbols#SynchronizedSymbol.completeTypeParams"),
     ProblemFilters.exclude[ReversedMissingMethodProblem]("scala.reflect.runtime.SynchronizedSymbols#SynchronizedSymbol.scala$reflect$runtime$SynchronizedSymbols$SynchronizedSymbol$$super$typeParams"),
     ProblemFilters.exclude[ReversedMissingMethodProblem]("scala.reflect.runtime.SynchronizedSymbols#SynchronizedSymbol.scala$reflect$runtime$SynchronizedSymbols$SynchronizedSymbol$$super$completeTypeParams"),
+
+    // CollisionProofHashMap gains the Serializable parent that its writeReplace method was written for; this is
+    // only a forwards incompatibility
+    ProblemFilters.exclude[MissingTypesProblem]("scala.collection.mutable.CollisionProofHashMap"),
+    // new overrides in 2.13.19: rangeTo implemented directly with RedBlackTree.to
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.TreeMap.rangeTo"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.TreeSet.rangeTo"),
   )
 
   override val buildSettings = Seq(

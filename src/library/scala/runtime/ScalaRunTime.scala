@@ -148,9 +148,53 @@ object ScalaRunTime {
     }
   }
 
-  // Java bug: https://bugs.java.com/view_bug.do?bug_id=4071957
-  // More background at ticket #2318.
-  def ensureAccessible(m: JMethod): JMethod = scala.reflect.ensureAccessible(m)
+  /** Called by structural calls with the method that `getMethod` found on the receiver's class.
+   *
+   *  If that method is not accessible from everywhere, because its class is not public
+   *  (https://bugs.java.com/view_bug.do?bug_id=4071957, scala/bug#2318) or, since JDK 9, in a
+   *  package that its module does not export, returns a public declaration of the method in a
+   *  supertype instead, if there is one. Invoking that dispatches to the same implementation.
+   *  Otherwise, tries to make the method accessible with `setAccessible`. Since JDK 16 that
+   *  fails for classes in JDK packages that are not open, such as `sun.nio.ch.ChannelInputStream`
+   *  or the private implementations of `java.util.List`.
+   */
+  def ensureAccessible(m: JMethod): JMethod =
+    if (isPubliclyAccessible(m)) scala.reflect.ensureAccessible(m)
+    else {
+      val pub = publicSuperDeclaration(m)
+      if (pub ne null) pub else scala.reflect.ensureAccessible(m)
+    }
+
+  // Uses the access check of `publicLookup` rather than the Module API, which is not available on JDK 8.
+  private def isPubliclyAccessible(m: JMethod): Boolean =
+    try { java.lang.invoke.MethodHandles.publicLookup().unreflect(m); true }
+    catch { case _: IllegalAccessException | _: SecurityException => false }
+
+  private def publicSuperDeclaration(m: JMethod): JMethod = {
+    val name   = m.getName
+    val params = m.getParameterTypes
+    val seen   = new java.util.HashSet[jClass[_]]
+    val queue  = new java.util.ArrayDeque[jClass[_]]
+    var result: JMethod = null
+    queue.add(m.getDeclaringClass)
+    while ((result eq null) && !queue.isEmpty) {
+      val c = queue.poll()
+      if (seen.add(c)) {
+        if (c ne m.getDeclaringClass) {
+          try {
+            val cm = c.getDeclaredMethod(name, params: _*)
+            if (!java.lang.reflect.Modifier.isStatic(cm.getModifiers) && isPubliclyAccessible(cm)) result = cm
+          } catch { case _: NoSuchMethodException | _: SecurityException => }
+        }
+        val sup: jClass[_] = c.getSuperclass
+        if (sup ne null) queue.add(sup)
+        val ifaces = c.getInterfaces
+        var i = 0
+        while (i < ifaces.length) { queue.add(ifaces(i)); i += 1 }
+      }
+    }
+    result
+  }
 
   // This is called by the synthetic case class `toString` method.
   // It originally had a `CaseClass` parameter type which was changed to `Product`.

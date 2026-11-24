@@ -57,7 +57,14 @@ class Random(val self: java.util.Random) extends AnyRef with Serializable {
   def between(minInclusive: Double, maxExclusive: Double): Double = {
     require(minInclusive < maxExclusive, "Invalid bounds")
 
-    val next = nextDouble() * (maxExclusive - minInclusive) + minInclusive
+    val span = maxExclusive - minInclusive
+    val next =
+      if (span != Double.PositiveInfinity) nextDouble() * span + minInclusive
+      else {
+        // The span overflows: pick from the interval scaled down by half, then scale back up.
+        val halfMin = minInclusive * 0.5
+        (nextDouble() * (maxExclusive * 0.5 - halfMin) + halfMin) * 2.0
+      }
     if (next < maxExclusive) next
     else Math.nextAfter(maxExclusive, Double.NegativeInfinity)
   }
@@ -73,7 +80,14 @@ class Random(val self: java.util.Random) extends AnyRef with Serializable {
   def between(minInclusive: Float, maxExclusive: Float): Float = {
     require(minInclusive < maxExclusive, "Invalid bounds")
 
-    val next = nextFloat() * (maxExclusive - minInclusive) + minInclusive
+    val span = maxExclusive - minInclusive
+    val next =
+      if (span != Float.PositiveInfinity) nextFloat() * span + minInclusive
+      else {
+        // The span overflows: pick from the interval scaled down by half, then scale back up.
+        val halfMin = minInclusive * 0.5f
+        (nextFloat() * (maxExclusive * 0.5f - halfMin) + halfMin) * 2.0f
+      }
     if (next < maxExclusive) next
     else Math.nextAfter(maxExclusive, Float.NegativeInfinity)
   }
@@ -143,7 +157,7 @@ class Random(val self: java.util.Random) extends AnyRef with Serializable {
     var _n = n
 
     while (_n >= Integer.MAX_VALUE) {
-      val bits = nextInt(2)
+      val bits = nextInt(4)
       val halfn = _n >>> 1
       val nextn =
         if ((bits & 2) == 0) halfn

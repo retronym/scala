@@ -366,6 +366,9 @@ A special rule concerns parameterless methods. If a parameterless
 method defined as `def ´f´: ´T´ = ...` or `def ´f´ = ...` overrides a method of
 type ´()T'´ which has an empty parameter list, then ´f´ is also
 assumed to have an empty parameter list.
+A warning is issued if a parameterless method overrides a method with an
+empty parameter list, or _vice versa_, unless one of the two methods, or
+a method they override, is defined in Java or is a member of `scala.Any`.
 
 An overriding method inherits all default arguments from the definition
 in the superclass. By specifying default arguments in the overriding method
@@ -421,7 +424,9 @@ EarlyDef          ::=  {Annotation} {Modifier} PatVarDef
 
 A template may start with an _early field definition_ clause,
 which serves to define certain field values before the supertype
-constructor is called. In a template
+constructor is called.
+(Early definitions are deprecated since Scala 2.13.0.)
+In a template
 
 ```scala
 { val ´p_1´: ´T_1´ = ´e_1´
@@ -866,7 +871,7 @@ parameters ´\mathit{tps}´ and value parameters ´\mathit{ps}´ with type ascri
 the definition of a companion object, which serves as an [extractor object](08-pattern-matching.html#extractor-patterns). It has the following shape:
 
 ```scala
-object ´c´ extends Function´\mathit{n}\,´[´\mathit{pt}_1\,\ldots\,\mathit{pt}_n´\,´c´[´\mathit{tps}\,´]]{
+object ´c´ {
   def apply[´\mathit{tps}\,´](´\mathit{ps}_1\,´)´\ldots´(´\mathit{ps}_n´): ´c´[´\mathit{tps}\,´] = new ´c´[´\mathit{Ts}\,´](´\mathit{xs}_1\,´)´\ldots´(´\mathit{xs}_n´)
   def unapply[´\mathit{tps}\,´](´x´: ´c´[´\mathit{tps}\,´]) =
     if (x eq null) scala.None
@@ -882,13 +887,26 @@ section ´\mathit{ps}\_i´, and
 in the first parameter section ´\mathit{xs}\_1´.
 If a type parameter section is missing in the class, it is also missing in the `apply` and `unapply` methods.
 
+The implied companion object additionally extends
+`Function´k´[´\mathit{pt}_{11}, \ldots , \mathit{pt}_{1k}´, ´c´]`,
+where ´\mathit{pt}\_{11}, \ldots , \mathit{pt}\_{1k}´ are the types of the parameters
+´\mathit{xs}\_{11}, \ldots , \mathit{xs}\_{1k}´, if all of the following hold:
+
+- the class ´c´ is not `abstract`,
+- the class ´c´ has no type parameters,
+- the class ´c´ has exactly one parameter section, and
+- that parameter section has at most 22 parameters.
+
+The type of a [repeated parameter](04-basic-declarations-and-definitions.html#repeated-parameters)
+`´T´*` is taken to be `scala.Seq[´T´]` for this purpose.
+
 If the companion object ´c´ is already defined,
 the  `apply` and `unapply` methods are added to the existing object.
 If the object ´c´ already has a [matching](#definition-matching)
 `apply` (or `unapply`) member, no new definition is added.
 The definition of `apply` is omitted if class ´c´ is `abstract`.
 
-It will not be modified to extend Function if the existing definition doesn't extend it.
+An existing companion object is not modified to extend `Function´k´`.
 
 If the case class definition contains an empty value parameter list, the
 `unapply` method returns a `Boolean` instead of an `Option` type and

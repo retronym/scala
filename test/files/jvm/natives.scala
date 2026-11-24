@@ -5,7 +5,7 @@ object Test {
   //println("java.library.path=" + System.getProperty("java.library.path"))
 
   val libName =
-    // set to 'natives' for freshly built binary on linux. See mkLibNatives.sh
+    // set to 'natives' for freshly built binary on linux. See natives-mkLib.sh
     sys.env.getOrElse("scala_test_nativelib", {
       val os = sys.props("os.name")
       val arch = sys.props("os.arch")

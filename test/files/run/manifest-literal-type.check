@@ -1,0 +1,18 @@
+Int
+java.lang.String
+Boolean
+Int
+Int
+scala.collection.immutable.List[Int]
+Array[Int]
+scala.Function1[Int, Int]
+Int
+scala.Option[_ >: Int <: Int]
+Int
+true
+true
+Int
+Int
+Any
+scala.collection.immutable.List[Int]
+s.type

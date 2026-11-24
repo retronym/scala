@@ -1210,6 +1210,11 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
              * the string concatenation is longer (unlikely), we spill into multiple calls
              */
             val MaxIndySlots = 200
+            /* The recipe is a constant pool string, limited to 65535 bytes of modified UTF-8. A
+             * literal that does not fit into the recipe is passed as a constant of its own. The
+             * tags take one byte each, and there are at most `MaxIndySlots` of them.
+             */
+            val MaxRecipeLiteralBytes = 65535 - MaxIndySlots
             val TagArg = '\u0001'    // indicates a hole (in the recipe string) for an argument
             val TagConst = '\u0002'  // indicates a hole (in the recipe string) for a constant
 
@@ -1217,7 +1222,22 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
             val argTypes = Seq.newBuilder[asm.Type]
             val constVals = Seq.newBuilder[String]
             var totalArgSlots = 0
+            var recipeLiteralBytes = 0
             var countConcats = 1     // ie. 1 + how many times we spilled
+
+            /* `makeConcatWithConstants` converts its arguments to strings when it is invoked, after
+             * all operands have been evaluated. An operand whose string representation can change
+             * (anything but a primitive, a box of a primitive or a `String`) is converted before
+             * the next operand is evaluated, as the `StringBuilder` encoding does. This is not
+             * needed when evaluating the remaining operands cannot run any code: the conversions
+             * then happen in the same order and observe the same state inside the bootstrap.
+             */
+            val lastEffect = concatArguments.lastIndexWhere {
+              case Literal(_) | This(_) => false
+              case id: Ident            => id.symbol.isModule
+              case _                    => true
+            }
+            var elemIndex = 0
 
             for (elem <- concatArguments) {
               val tpe = tpeTK(elem)
@@ -1228,6 +1248,7 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
                 bc.genIndyStringConcat(recipe.toString, argTypes.result(), constVals.result())
                 countConcats += 1
                 totalArgSlots = 0
+                recipeLiteralBytes = 0
                 recipe.setLength(0)
                 argTypes.clear()
                 constVals.clear()
@@ -1235,21 +1256,26 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
 
               elem match {
                 case Literal(Constant(s: String)) =>
-                  if (s.contains(TagArg) || s.contains(TagConst)) {
+                  val literalBytes = utf8Length(s)
+                  if (s.contains(TagArg) || s.contains(TagConst) || recipeLiteralBytes + literalBytes > MaxRecipeLiteralBytes) {
                     totalArgSlots += elemSlots
                     recipe.append(TagConst)
                     constVals += s
                   } else {
+                    recipeLiteralBytes += literalBytes
                     recipe.append(s)
                   }
 
                 case _ =>
                   totalArgSlots += elemSlots
                   recipe.append(TagArg)
-                  val tpe = tpeTK(elem)
-                  argTypes += tpe.toASMType
                   genLoad(elem, tpe)
+                  val convertEagerly =
+                    elemIndex < lastEffect && tpe.isRef && tpe != StringRef && !tpe.isBoxed && !tpe.isNullType && !tpe.isNothingType
+                  if (convertEagerly) genCallMethod(String_valueOf, InvokeStyle.Static, elem.pos)
+                  argTypes += (if (convertEagerly) StringRef else tpe).toASMType
               }
+              elemIndex += 1
             }
             bc.genIndyStringConcat(recipe.toString, argTypes.result(), constVals.result())
 
@@ -1264,6 +1290,18 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
           }
       }
       StringRef
+    }
+
+    /* The length of `s` as a `CONSTANT_Utf8`, which uses modified UTF-8 (JVMS 4.4.7) */
+    private def utf8Length(s: String): Int = {
+      var bytes = 0
+      var i = 0
+      while (i < s.length) {
+        val c = s.charAt(i)
+        bytes += (if (c >= 0x0001 && c <= 0x007F) 1 else if (c <= 0x07FF) 2 else 3)
+        i += 1
+      }
+      bytes
     }
 
     /**
@@ -1308,6 +1346,10 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
       val receiverBType = classBTypeFromSymbol(receiverClass)
       val receiverName = receiverBType.internalName
 
+      // TODO scala/scala review P3: the name and descriptor are rebuilt at every call site: 46,575 builds for
+      // 8,458 distinct (method, receiver) pairs, 2.15M descriptor chars, compiling the typechecker sources. A
+      // memo keyed on the method symbol would remove the allocation; it must be per run and safe for the backend's
+      // parallel class generation.
       val jname  = method.javaSimpleName.toString
       val bmType = methodBTypeFromSymbol(method)
       val mdescr = bmType.descriptor
@@ -1546,15 +1588,28 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
        * not using the rich equality is possible (their own equals method will do ok), except for
        * java.lang.Float and java.lang.Double: their `equals` have different behavior around `NaN`
        * and `-0.0`, see Javadoc (scala-dev#329).
+       *
+       * A number or character compared with a value of a trait or interface type also needs it: that
+       * value can be a `ScalaNumber` (`1 == (BigInt(1): Ordered[BigInt])`), and `Integer.equals` does
+       * not know about those.
        */
       val mustUseAnyComparator: Boolean = {
-        platform.isMaybeBoxed(l.tpe.typeSymbol) && platform.isMaybeBoxed(r.tpe.typeSymbol) && {
+        val lsym = l.tpe.typeSymbol
+        val rsym = r.tpe.typeSymbol
+        // erasure types a box call as Object
+        def unboxedSym(t: Tree) = t match {
+          case Apply(fun, _ :: Nil) if currentRun.runDefinitions.isBox(fun.symbol) => fun.symbol.info.resultType.typeSymbol
+          case _ => t.tpe.typeSymbol
+        }
+        def isNumOrChar(sym: Symbol) = (sym isNonBottomSubClass BoxedNumberClass) || (sym isNonBottomSubClass BoxedCharacterClass)
+        def isNumAndTrait(num: Tree, other: Symbol) = other.isTrait && isNumOrChar(unboxedSym(num))
+        val bothMaybeBoxed = platform.isMaybeBoxed(lsym) && platform.isMaybeBoxed(rsym) && {
           val areSameFinals = l.tpe.isFinalType && r.tpe.isFinalType && (l.tpe =:= r.tpe) && {
-            val sym = l.tpe.typeSymbol
-            sym != BoxedFloatClass && sym != BoxedDoubleClass
+            lsym != BoxedFloatClass && lsym != BoxedDoubleClass
           }
           !areSameFinals
         }
+        bothMaybeBoxed || isNumAndTrait(l, rsym) || isNumAndTrait(r, lsym)
       }
 
       if (mustUseAnyComparator) {

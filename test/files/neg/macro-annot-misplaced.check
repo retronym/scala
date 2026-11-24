@@ -1,0 +1,7 @@
+Test_2.scala:5: error: macro annotations can only be put on definitions
+  def onExpr = (1: @ident)
+                    ^
+Test_2.scala:7: error: macro annotations can only be put on definitions
+  def onType: Int @ident = 1
+                   ^
+2 errors

@@ -1,0 +1,42 @@
+Spec$mcI$sp.t
+  get: 3
+  get via accessor symbol: 3
+  get after set: 4
+  read after set: 4
+Spec.t
+  get: three
+  get via accessor symbol: three
+  get after set: four
+  read after set: four
+SpecVar$mcI$sp.t
+  get: 3
+  get via accessor symbol: 3
+  get after set: 4
+  read after set: 4
+Spec2$mcID$sp.a
+  get: 1
+  get via accessor symbol: 1
+  get after set: 10
+  read after set: 10
+Spec2$mcID$sp.b
+  get: 2.0
+  get via accessor symbol: 2.0
+  get after set: 20.0
+  read after set: 20.0
+Spec2.a
+  get: a
+  get via accessor symbol: a
+  get after set: aa
+  read after set: aa
+Spec2.b
+  get: 2
+  get via accessor symbol: 2
+  get after set: 20
+  read after set: 20
+Sub.t
+  get: 5
+  get via accessor symbol: 5
+  get after set: 6
+  read after set: 6
+7
+seven

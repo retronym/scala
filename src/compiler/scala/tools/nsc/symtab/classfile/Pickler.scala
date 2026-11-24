@@ -370,17 +370,34 @@ abstract class Pickler extends SubComponent {
       override def traverseModifiers(mods: Modifiers): Unit = if (putEntry(mods)) putEntry(mods.privateWithin)
       override def traverseName(name: Name): Unit           = putEntry(name)
       override def traverseConstant(const: Constant): Unit  = putConstant(const)
+      override def traverseImportSelector(sel: ImportSelector): Unit = {
+        putEntry(sel.name)
+        putEntry(pickledRename(sel))
+      }
       override def traverse(tree: Tree): Unit               = putTree(tree)
 
       def put(tree: Tree): Unit = {
         if (tree.canHaveAttrs)
-          putType(tree.tpe)
+          putType(pickledType(tree))
         if (tree.hasSymbolField)
-          putSymbol(tree.symbol)
+          putSymbol(pickledSymbol(tree))
 
         super.traverse(tree)
       }
     }
+
+    /** Typer leaves an `Import` untyped. */
+    private def pickledType(tree: Tree): Type = if (tree.tpe eq null) NoType else tree.tpe
+
+    /** The symbol of an `Import` in an annotation argument is owned by `NoSymbol`, so a pickle can't refer to it. */
+    private def pickledSymbol(tree: Tree): Symbol = tree match {
+      case _: Import => NoSymbol
+      case _         => tree.symbol
+    }
+
+    /** The rename of a wildcard selector is null; the unpickler reads an empty name back as null. */
+    private def pickledRename(sel: ImportSelector): Name = if (sel.rename == null) nme.EMPTY else sel.rename
+
     private def putTree(tree: Tree): Unit = {
       if (putEntry(tree))
         putTreeTraverser put tree
@@ -511,6 +528,10 @@ abstract class Pickler extends SubComponent {
       override def traverseModifiers(mods: Modifiers): Unit          = if (refs) writeRef(mods) else super.traverseModifiers(mods)
       override def traverseName(name: Name): Unit                    = writeRef(name)
       override def traverseConstant(const: Constant): Unit           = writeRef(const)
+      override def traverseImportSelector(sel: ImportSelector): Unit = {
+        writeRef(sel.name)
+        writeRef(pickledRename(sel))
+      }
       override def traverseParams(params: List[Tree]): Unit          = writeRefsWithLength(params)
       override def traverseParamss(vparamss: List[List[Tree]]): Unit = {
         writeNat(vparamss.length)
@@ -520,9 +541,9 @@ abstract class Pickler extends SubComponent {
         if (refs)
           writeRef(tree)
         else {
-          writeRef(tree.tpe)
+          writeRef(pickledType(tree))
           if (tree.hasSymbolField)
-            writeRef(tree.symbol)
+            writeRef(pickledSymbol(tree))
 
           asRefs(super.traverse(tree))
         }

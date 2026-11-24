@@ -52,7 +52,8 @@ final class TreeSeqMap[K, +V] private (
     with MapOps[K, V, TreeSeqMap, TreeSeqMap[K, V]]
     with StrictOptimizedIterableOps[(K, V), Iterable, TreeSeqMap[K, V]]
     with StrictOptimizedMapOps[K, V, TreeSeqMap, TreeSeqMap[K, V]]
-    with MapFactoryDefaults[K, V, TreeSeqMap, Iterable] {
+    with MapFactoryDefaults[K, V, TreeSeqMap, Iterable]
+    with Serializable {
 
   import TreeSeqMap._
 
@@ -81,8 +82,7 @@ final class TreeSeqMap[K, +V] private (
   def updated[V1 >: V](key: K, value: V1): TreeSeqMap[K, V1] = {
     mapping.get(key) match {
       case e if ordinal == -1 && (orderedBy == OrderBy.Modification || e.isEmpty) =>
-        // Reinsert into fresh instance to restart ordinal counting, expensive but only done after 2^32 updates.
-        TreeSeqMap.empty[K, V1](orderedBy) ++ this + (key -> value)
+        renumbered[V1] + (key -> value)
       case Some((o, _)) if orderedBy == OrderBy.Insertion =>
         new TreeSeqMap(
           ordering.include(o, key),
@@ -121,17 +121,21 @@ final class TreeSeqMap[K, +V] private (
 
   def refresh(key: K): TreeSeqMap[K, V] = {
     mapping.get(key) match {
-      case Some((o, _)) =>
+      case Some((o, v)) =>
         val o1 = increment(ordinal)
-        new TreeSeqMap(
+        if (ordinal == -1) renumbered[V].refresh(key)
+        else new TreeSeqMap(
           ordering.exclude(o).append(o1, key),
-          mapping,
+          mapping.updated(key, (o1, v)),
           o1,
           orderedBy)
       case None =>
         this
     }
   }
+
+  /** Reinserts into a fresh instance to restart ordinal counting, expensive but only done after 2^32^ updates. */
+  private def renumbered[V1 >: V]: TreeSeqMap[K, V1] = TreeSeqMap.empty[K, V1](orderedBy) ++ this
 
   def get(key: K): Option[V] = mapping.get(key).map(value)
 
@@ -170,11 +174,13 @@ final class TreeSeqMap[K, +V] private (
   override def lastOption: Option[(K, V)] = ordering.lastOption.map(binding)
 
   override def tail: TreeSeqMap[K, V] = {
+    if (isEmpty) throw new UnsupportedOperationException("empty.tail")
     val (head, tail) = ordering.headTail
     new TreeSeqMap(tail, mapping.removed(head), ordinal, orderedBy)
   }
 
   override def init: TreeSeqMap[K, V] = {
+    if (isEmpty) throw new UnsupportedOperationException("empty.init")
     val (init, last) = ordering.initLast
     new TreeSeqMap(init, mapping.removed(last), ordinal, orderedBy)
   }
@@ -262,26 +268,33 @@ final class TreeSeqMap[K, +V] private (
   override def concat[V2 >: V](suffix: IterableOnce[(K, V2)]): TreeSeqMap[K, V2] = {
     var ong: Ordering[K] = ordering
     var mng: Mapping[K, V2] = mapping
-    var ord = increment(ordinal)
+    var ord = ordinal // the last ordinal in use
     val iter = suffix.iterator
     while (iter.hasNext) {
-      val (k, v2) = iter.next()
-      mng.get(k) match {
+      val kv @ (k, v2) = iter.next()
+      val e = mng.get(k)
+      if (ord == -1 && (orderedBy == OrderBy.Modification || e.isEmpty))
+        // Out of ordinals, as in `updated`: carry on from a renumbered copy of the map built so far.
+        return new TreeSeqMap[K, V2](ong, mng, ord, orderedBy).renumbered[V2].concat(Iterator.single(kv) ++ iter)
+      e match {
         case Some((o, v)) =>
           if (orderedBy == OrderBy.Insertion && v != v2) mng = mng.updated(k, (o, v2))
           else if (orderedBy == OrderBy.Modification) {
+            ord = increment(ord)
             mng = mng.updated(k, (ord, v2))
             ong = ong.exclude(o).append(ord, k)
-            ord = increment(ord)
           }
         case None =>
+          ord = increment(ord)
           mng = mng.updated(k, (ord, v2))
           ong = ong.append(ord, k)
-          ord = increment(ord)
       }
     }
     new TreeSeqMap[K, V2](ong, mng, ord, orderedBy)
   }
+
+  // Not DefaultSerializable, which rebuilds through `mapFactory` and so would always order by insertion.
+  protected[this] def writeReplace(): AnyRef = new generic.DefaultSerializationProxy(new TreeSeqMap.DeserializationFactory[K, V](orderedBy), this)
 
   @`inline` private[this] def value(p: (_, V)) = p._2
   @`inline` private[this] def binding(k: K) = mapping(k).copy(_1 = k)
@@ -330,16 +343,21 @@ object TreeSeqMap extends MapFactory[TreeSeqMap] {
             else if (orderedBy == OrderBy.Modification) {
               bdr.addOne(key, (ord, value))
               ong = ong.exclude(o).appendInPlace(ord, key)
-              ord = increment(ord)
+              nextOrdinal()
             }
           case null =>
             bdr.addOne(key, (ord, value))
             ong = ong.appendInPlace(ord, key)
-            ord = increment(ord)
+            nextOrdinal()
         }
       }
       this
     }
+
+    private[this] def nextOrdinal(): Unit =
+      // After the last ordinal, carry on through `updated`, which renumbers the map.
+      if (ord == -1) aliased = new TreeSeqMap(ong, bdr.result(), ord, orderedBy)
+      else ord = increment(ord)
 
     override def clear(): Unit = {
       ong = Ordering.empty
@@ -354,6 +372,12 @@ object TreeSeqMap extends MapFactory[TreeSeqMap] {
       }
       aliased
     }
+  }
+
+  @SerialVersionUID(3L)
+  private final class DeserializationFactory[K, V](val orderedBy: OrderBy) extends Factory[(K, V), TreeSeqMap[K, V]] with Serializable {
+    def fromSpecific(it: IterableOnce[(K, V)]): TreeSeqMap[K, V] = newBuilder.addAll(it).result()
+    def newBuilder: mutable.Builder[(K, V), TreeSeqMap[K, V]] = TreeSeqMap.newBuilder[K, V](orderedBy)
   }
 
   private type Mapping[K, +V] = Map[K, (Int, V)]
@@ -519,7 +543,7 @@ object TreeSeqMap extends MapFactory[TreeSeqMap] {
     }
 
     final def headTail: (T, Ordering[T]) = this match {
-      case Zero => throw new NoSuchElementException("init of empty map")
+      case Zero => throw new NoSuchElementException("tail of empty map")
       case Tip(_, v) => (v, Zero)
       case Bin(p, m, l, r) =>
         val (head, tail) = l.headTail
@@ -574,8 +598,8 @@ object TreeSeqMap extends MapFactory[TreeSeqMap] {
     private[collection] final def appendInPlace1[S >: T](parent: Bin[S], ordinal: Int, value: S): Ordering[S] = this match {
       case Zero =>
         Tip(ordinal, value)
-      case Tip(o, _) if o >= ordinal =>
-        throw new IllegalArgumentException(s"Append called with ordinal out of range: $o is not greater than current max ordinal ${this.ordinal}")
+      case Tip(o, _) if Integer.compareUnsigned(o, ordinal) >= 0 => // ordinals are ordered as unsigned
+        throw new IllegalArgumentException(s"Append called with ordinal out of range: $ordinal is not greater than current max ordinal ${this.ordinal}")
       case Tip(o, _) if parent == null =>
         join(ordinal, Tip(ordinal, value), o, this)
       case Tip(o, _) =>

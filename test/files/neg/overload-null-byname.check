@@ -1,0 +1,10 @@
+overload-null-byname.scala:5: error: an expression of type Null is ineligible for implicit conversion
+  def t1 = g(null)
+             ^
+overload-null-byname.scala:6: error: overloaded method m with alternatives:
+  (x: => Long)(implicit d: DummyImplicit): Long <and>
+  (x: => Int)Int
+ cannot be applied to (Null)
+  def t2 = m(null)
+           ^
+2 errors

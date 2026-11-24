@@ -445,7 +445,7 @@ trait MatchTreeMaking extends MatchCodeGen with Debugging {
                   // by `Select(q, outerAccessor(outerSym.owner)) OBJ_EQ expectedPrefix`
                   // if there's an outer accessor, otherwise the condition becomes `true`
                   // TODO: centralize logic whether there's an outer accessor and use here?
-                  val synthOuterGetter = expectedTp.typeSymbol.newMethod(nme.OUTER_SYNTH, newFlags = SYNTHETIC | ARTIFACT) setInfo expectedPrefix
+                  val synthOuterGetter = expectedTp.typeSymbol.newMethod(nme.OUTER_SYNTH, newFlags = SYNTHETIC | ARTIFACT) setInfo NullaryMethodType(expectedPrefix)
                   val outerTest = (Select(codegen._asInstanceOf(testedBinder, expectedTp), synthOuterGetter)) OBJ_EQ expectedOuterRef
                   and(orig, outerTest)
               }
@@ -539,10 +539,14 @@ trait MatchTreeMaking extends MatchCodeGen with Debugging {
         //  - the isInstanceOf test includes a test for the element type
         //  - Scala's arrays are invariant (so we don't drop type tests unsoundly)
         if (extractorArgTypeTest) mkDefault
-        else expectedTp match {
-          case SingleType(_, sym)                       =>
-            val expected = gen.mkAttributedQualifier(expectedTp) // scala/bug#4577, scala/bug#4897
+        else expectedTp.dealias match { // an alias of a singleton type is tested like the singleton type
+          case expectedSingle @ SingleType(_, sym)      =>
+            val expected = gen.mkAttributedQualifier(expectedSingle) // scala/bug#4577, scala/bug#4897
             if (expectedTp <:< AnyRefTpe) mkEqTest(expected)
+            // scala/scala review C6: for a path that is not an AnyRef this is `==`, while the spec
+            // says `eq`. On this branch erasure's `isInstanceOf[x.type]` also uses `==`, because
+            // retronym/scala#426 is merged, so the two agree: `1000L` matches `case _: x.type` for
+            // `x: Int = 1000` and is `isInstanceOf[x.type]` (run/singleton-type-pattern-eq).
             else mkEqualsTest(expected)
           // Should revisit if we end up lifting `eq`'s definition to `Any`, as discussed here:
           // https://groups.google.com/d/msg/scala-internals/jsVlJI4H5OQ/8emZWRmgzcoJ
@@ -554,8 +558,24 @@ trait MatchTreeMaking extends MatchCodeGen with Debugging {
         }
       }
 
+      // A pattern `x: p.type` for a path of a primitive type is tested with `p == scrutinee`, which is cooperative for
+      // boxed numbers and chars: `1 == 1L`. So the scrutinee needn't be a box of the type of `p`, and a cast to `p.type`
+      // would fail when it is unboxed. The only value of `p.type` is `p`, so that is what we bind instead.
+      // The type of `p` may be an abstract type bounded by a primitive type (`b: B` for `B <: Int`), which erases to it.
+      // The pattern type may be an alias of `p.type`, which is tested like `p.type` (see `renderCondition`).
+      private def bindsPath = !extractorArgTypeTest && (expectedTp.dealias match {
+        case path @ SingleType(_, _) =>
+          @tailrec def upperBoundClass(tp: Type): Type =
+            if (tp.typeSymbol.isAbstractType) upperBoundClass(tp.upperBound) else tp
+          val expectedWide = upperBoundClass(path.widen.deconst)
+          isPrimitiveValueType(expectedWide) && !(testedBinder.info.widen <:< expectedWide)
+        case _ => false
+      })
+
       val cond = renderCondition(treeCondStrategy)
-      val res  = codegen._asInstanceOf(testedBinder, nextBinderTp)
+      val res  =
+        if (bindsPath) gen.mkAttributedQualifier(expectedTp.dealias)
+        else codegen._asInstanceOf(testedBinder, nextBinderTp)
 
       // is this purely a type test, e.g. no outer check, no equality tests (used in switch emission)
       def isPureTypeTest = renderCondition(pureTypeTestChecker)

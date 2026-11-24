@@ -181,6 +181,8 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
       sm"""Scala field ${sym.name} of ${sym.owner} isn't represented as a Java field, nor does it have a
           |Java accessor method. One common reason for this is that it may be a private class parameter
           |not used outside the primary constructor.""")
+    private def ErrorNonExistentAccessedField(sym: Symbol, jclazz: jClass[_]) = abort(
+      s"Scala field ${sym.name} of ${sym.owner} isn't represented as a Java field in ${jclazz.getName} or its superclasses")
 
     /** Helper functions for extracting typed values from a (Class[_], Any)
      *  representing an annotation argument.
@@ -195,13 +197,19 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
 
       object ConstantArg {
         def enumToSymbol(`enum`: Enum[_]): Symbol = {
-          val staticPartOfEnum = classToScala(`enum`.getClass).companionSymbol
+          // not `getClass`, which is an anonymous subclass of the enum for a constant with a body
+          val staticPartOfEnum = classToScala(`enum`.getDeclaringClass).companionSymbol
           staticPartOfEnum.info.declaration(TermName(`enum`.name))
         }
 
+        // `classToScala` maps every array class to `ArrayClass`, which loses the element type
+        def classToType(jclazz: jClass[_]): Type =
+          if (jclazz.isArray) arrayType(classToType(jclazz.getComponentType))
+          else classToScala(jclazz).toType
+
         def unapply(schemaAndValue: (jClass[_], Any)): Option[Any] = schemaAndValue match {
           case (StringClass | PrimitiveClass(), value) => Some(value)
-          case (ClassClass, value: jClass[_])          => Some(classToScala(value).toType)
+          case (ClassClass, value: jClass[_])          => Some(classToType(value))
           case (EnumClass(), value: Enum[_])           => Some(enumToSymbol(value))
           case _                                       => None
         }
@@ -292,12 +300,24 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
         checkMemberOf(field, symbol)
         if ((field.isMethod && !field.isAccessor) || field.isModule) ErrorNotField(field)
         val name = if (field.isAccessor) field.localName else field.name
-        val field1 = (field.owner.info decl name).asTerm
-        try fieldToJava(field1)
-        catch {
-          case _: NoSuchFieldException => ErrorNonExistentField(field1)
+        field.owner.info.decl(name) match {
+          case NoSymbol =>
+            // The owner has no field for a getter that is deferred or a member of a trait,
+            // the field is in one of the classes of the instance.
+            val getter = (if (field.isSetter) field.getterIn(field.owner) else field).asTerm
+            val mirror = new JavaAccessedFieldMirror(instance, getter)
+            try mirror.jfield
+            catch {
+              case _: NoSuchFieldException => ErrorNonExistentAccessedField(getter, instance.getClass)
+            }
+            mirror
+          case field1 =>
+            try fieldToJava(field1.asTerm)
+            catch {
+              case _: NoSuchFieldException => ErrorNonExistentField(field1)
+            }
+            new JavaFieldMirror(instance, field1.asTerm)
         }
-        new JavaFieldMirror(instance, field1)
       }
       def reflectMethod(method: MethodSymbol): MethodMirror = {
         checkMemberOf(method, symbol)
@@ -334,7 +354,7 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
       def bind(newReceiver: Any) = new JavaFieldMirror(newReceiver, symbol, metadata)
       import metadata._
 
-      lazy val jfield = ensureAccessible(fieldToJava(symbol))
+      lazy val jfield = ensureAccessible(specializedFieldToJava(symbol, receiver))
       def get = {
         val value = jfield get receiver
         if (isDerivedValueClass) boxer.newInstance(value) else value
@@ -346,6 +366,13 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
       }
 
       override def toString = s"field mirror for ${showDecl(symbol)} (bound to $receiver)"
+    }
+
+    private class JavaAccessedFieldMirror(receiver: Any, getter: TermSymbol, metadata: DerivedValueClassMetadata)
+            extends JavaFieldMirror(receiver, getter, metadata) {
+      def this(receiver: Any, getter: TermSymbol) = this(receiver, getter, new DerivedValueClassMetadata(getter.info.resultType))
+      override def bind(newReceiver: Any) = new JavaAccessedFieldMirror(newReceiver, getter, metadata)
+      override lazy val jfield = ensureAccessible(accessedFieldToJava(getter, receiver.getClass))
     }
 
     // the "symbol == Any_getClass || symbol == Object_getClass" test doesn't cut it
@@ -1335,7 +1362,7 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
     private[this] val PackageAndClassPattern = """(.*\.)(.*)$""".r
 
     private def expandedName(sym: Symbol): String =
-      if (sym.isPrivate) nme.expandedName(sym.name.toTermName, sym.owner).toString
+      if (sym.isPrivate) nme.expandedName(sym.name.dropLocal.toTermName, sym.owner).toString
       else sym.name.toString
 
     /** The Java field corresponding to a given Scala field.
@@ -1348,6 +1375,36 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
       catch {
         case ex: NoSuchFieldException => jclazz getDeclaredField expandedName(fld)
       }
+    }
+
+    /** The Java field that holds the value of a given Scala field in a given instance.
+     *  An instance of a specialized subclass of the owner of the field inherits the generic field
+     *  but leaves it unset, and stores the value in a specialized variant of the field instead.
+     */
+    private def specializedFieldToJava(fld: TermSymbol, receiver: Any): jField = {
+      val jfield = fieldToJava(fld)
+      // e.g. `t$mcI$sp` for `t`
+      def isSpecializedVariant(jname: String) =
+        jname.startsWith(jfield.getName + "$mc") && jname.endsWith(nme.SPECIALIZED_SUFFIX.toString)
+      def specializedVariant(jclazz: jClass[_]): Option[jField] =
+        if (jclazz == null || jclazz == jfield.getDeclaringClass) None
+        else specializedVariant(jclazz.getSuperclass) orElse jclazz.getDeclaredFields.find(f => isSpecializedVariant(f.getName))
+      if (receiver == null || !fld.owner.typeParams.exists(_.isSpecialized)) jfield
+      else specializedVariant(receiver.getClass).getOrElse(jfield)
+    }
+
+    /** The Java field accessed by a given Scala getter in an instance of a given Java class,
+     *  for a getter whose owner has no field for it. The field of a trait is added to each class
+     *  that mixes in the trait, and a deferred getter is implemented in a subclass. Of the classes
+     *  of the instance that declare such a field, the one closest to the owner of the getter is chosen.
+     */
+    private def accessedFieldToJava(getter: TermSymbol, jclazz: jClass[_]): jField = {
+      val jowner = classToJava(getter.owner.asClass)
+      val jname = expandedName(getter)
+      def loop(jclazz: jClass[_]): Option[jField] =
+        if (jclazz == null || !jowner.isAssignableFrom(jclazz)) None
+        else loop(jclazz.getSuperclass) orElse jclazz.getDeclaredFields.find(_.getName == jname)
+      loop(jclazz).getOrElse(throw new NoSuchFieldException(jname))
     }
 
     /** The Java method corresponding to a given Scala method.

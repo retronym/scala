@@ -162,6 +162,7 @@ object ArrayOps {
 
   @SerialVersionUID(3L)
   private final class GroupedIterator[A](xs: Array[A], groupSize: Int) extends AbstractIterator[Array[A]] with Serializable {
+    require(groupSize >= 1, s"size=$groupSize, but it must be positive")
     private[this] var pos = 0
     def hasNext: Boolean = pos < xs.length
     def next(): Array[A] = {
@@ -674,7 +675,7 @@ final class ArrayOps[A](private val xs: Array[A]) extends AnyVal {
     *           to `elem`, or `-1`, if none exists.
     */
   def indexOf(elem: A, from: Int = 0): Int = {
-    var i = from
+    var i = max(from, 0)
     while(i < xs.length) {
       if(elem == xs(i)) return i
       i += 1
@@ -690,7 +691,8 @@ final class ArrayOps[A](private val xs: Array[A]) extends AnyVal {
     *           or `-1`, if none exists.
     */
   def indexWhere(@deprecatedName("f", "2.13.3") p: A => Boolean, from: Int = 0): Int = {
-    var i = from
+    // not `max(from, 0)`: when this is inlined, as in `exists`, the branch keeps the inlined loop free of a call to `Math.max`
+    var i = if (from < 0) 0 else from
     while(i < xs.length) {
       if(p(xs(i))) return i
       i += 1
@@ -1322,6 +1324,8 @@ final class ArrayOps[A](private val xs: Array[A]) extends AnyVal {
           first
         } else asArray(xs)
 
+        if (subArray.length != first.length)
+          throw new IllegalArgumentException("transpose requires all collections have the same size")
         for (x <- new ArrayOps(subArray)) {
           bs(i) += x
           i += 1

@@ -63,12 +63,13 @@ Predefined annotations are found in the `scala.annotation` package, and also in 
 
     Without the `@unchecked` annotation, a Scala compiler could infer that the pattern match is non-exhaustive and issue a warning because `Option` is a `sealed` class.
 
-  * `@uncheckedStable` When applied to a value definition, it allows the defined
+  * `@uncheckedStable` This annotation is defined in the package
+    `scala.annotation.unchecked`. When applied to a value definition, it allows the defined
     value to appear in a path, even if its type is [volatile](03-types.html#volatile-types).
     For instance, the following member definitions are legal:
 
     ```scala
-    type A { type T }
+    trait A { type T }
     type B
     @uncheckedStable val x: A with B // volatile type
     val y: x.T                       // OK since `x' is still a path
@@ -128,7 +129,7 @@ Java platform, the following annotations have a standard meaning.
     definition in Java:
 
     ```java
-    private final static SerialVersionUID = <longlit>
+    private static final long serialVersionUID = <longlit>
     ```
 
   * `@throws(<classlit>)` A Java compiler checks that a program contains handlers for checked exceptions
@@ -150,7 +151,7 @@ Java platform, the following annotations have a standard meaning.
     code-generation; therefore, these methods become visible only once a
     classfile for the containing class is generated.
 
-  * `@scala.beans.BooleanBeanProperty` This annotation is equivalent to `scala.reflect.BeanProperty`, but
+  * `@scala.beans.BooleanBeanProperty` This annotation is equivalent to `scala.beans.BeanProperty`, but
     the generated getter method is named `isX` instead of `getX`.
 
 ## User-defined Annotations
@@ -165,8 +166,8 @@ user-defined annotations. It has two sub-traits:
   may only have arguments which are
   [constant expressions](06-expressions.html#constant-expressions), and are
   also stored in the generated class files.
-- If an annotation class inherits from neither `scala.ConstantAnnotation` nor
-  `scala.StaticAnnotation`, its instances are visible only locally during the
+- If an annotation class inherits from neither `scala.annotation.ConstantAnnotation` nor
+  `scala.annotation.StaticAnnotation`, its instances are visible only locally during the
   compilation run that analyzes them.
 
 ## Host-platform Annotations

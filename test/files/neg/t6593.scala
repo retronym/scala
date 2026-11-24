@@ -150,7 +150,7 @@ class Hello2024 {
     lst == map // w: non-sensible (collections)
     lst == eqs // w: non-sensible (collections)
     val itr = Iterator(1)
-    lst == itr // w: non-sensible (collections)
+    lst == itr // n: a trait, which is not known to be disjoint from List
     lst == (itr: scala.collection.IterableOnce[Int]) // n
   }
 

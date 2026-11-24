@@ -1,0 +1,4 @@
+anon-class-case-class-pattern.scala:5: error: class P is defined in an anonymous class and cannot be used in a pattern outside of it
+  def f(x: Any) = x match { case y.P(a) => a; case _ => -1 } // error
+                                   ^
+1 error

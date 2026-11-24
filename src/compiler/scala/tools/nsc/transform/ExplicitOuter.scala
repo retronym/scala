@@ -49,7 +49,8 @@ abstract class ExplicitOuter extends InfoTransform
     !clazz.isPackageClass && !clazz.outerClass.isStaticOwner
 
   private def haveSameOuter(parent: Type, clazz: Symbol) = {
-    val owner = clazz.owner
+    // the class whose `this` the outer pointer of `clazz` refers to, also for a local or anonymous class
+    val owner = clazz.outerClass
     val parentSym = parent.typeSymbol
 
     parentSym.isClass && owner.isClass &&
@@ -69,7 +70,10 @@ abstract class ExplicitOuter extends InfoTransform
   }
 
   private def outerField(clazz: Symbol): Symbol = {
-    val result = clazz.info.member(nme.OUTER_LOCAL)
+    // A class with an outer field of its own may also inherit one (a local subclass of an inner class);
+    // `member` would give both, overloaded.
+    val decl = clazz.info.decl(nme.OUTER_LOCAL)
+    val result = if (decl != NoSymbol) decl else clazz.info.member(nme.OUTER_LOCAL)
     assert(result != NoSymbol, "no outer field in "+clazz+" at "+phase)
 
     result
@@ -370,7 +374,8 @@ abstract class ExplicitOuter extends InfoTransform
       // I added the mixinPrefix.typeArgs.nonEmpty condition to address the
       // crash in scala/bug#4970.  I feel quite sure this can be improved.
       val path = (
-        if (mixinClass.owner.isTerm) gen.mkAttributedThis(mixinClass.owner.enclClass)
+        // `outerClass`, not `owner.enclClass`: they differ for a trait local to a constructor
+        if (mixinClass.owner.isTerm) gen.mkAttributedThis(mixinClass.outerClass)
         else if (mixinPrefix.typeArgs.nonEmpty) gen.mkAttributedThis(mixinPrefix.typeSymbol)
         else gen.mkAttributedQualifier(mixinPrefix)
       )
@@ -388,7 +393,12 @@ abstract class ExplicitOuter extends InfoTransform
       tree match {
         case Template(_, _, _) =>
           val newDefs = new ListBuffer[Tree]
-          atOwner(tree, currentOwner) {
+          // The new definitions are members of `currentClass`; references to outer instances in them
+          // must be paths from `this`, not from the outer parameter of an enclosing constructor.
+          // `super.transform` below clears `outerParam` for the template body, do the same here.
+          val savedOuterParam = outerParam
+          outerParam = NoSymbol
+          try atOwner(tree, currentOwner) {
             if (!currentClass.isInterface) {
               if (isInner(currentClass)) {
                 if (hasOuterField(currentClass))
@@ -400,7 +410,7 @@ abstract class ExplicitOuter extends InfoTransform
                   if (outerAccessor(mc) != NoSymbol && !skipMixinOuterAccessor(currentClass, mc))
                     newDefs += mixinOuterAccessorDef(mc)
             }
-          }
+          } finally outerParam = savedOuterParam
           super.transform(
             deriveTemplate(tree)(decls =>
               if (newDefs.isEmpty) decls
@@ -452,10 +462,13 @@ abstract class ExplicitOuter extends InfoTransform
               assert(outerParam != NoSymbol, tree)
               outerValue
             case _        =>
-              gen.mkAttributedQualifier(qual.tpe.prefix match {
+              val outer = gen.mkAttributedQualifier(qual.tpe.prefix match {
                 case NoPrefix => sym.owner.outerClass.thisType
                 case x        => x
               })
+              // A Scala inner class checks its outer argument in the constructor (see `copyParam` in Constructors).
+              // A Java inner class doesn't: javac emits the check required by JLS 15.9.4 at the call site.
+              if (sym.owner.isJavaDefined && !outer.isInstanceOf[This]) nullCheckedOuter(outer) else outer
           })
           super.transform(treeCopy.Apply(tree, sel, outerVal :: args))
 
@@ -487,7 +500,8 @@ abstract class ExplicitOuter extends InfoTransform
         case TypeApply(fun, targs) =>
           val rewriteTypeToExplicitOuter = new TypeMap { typeMap =>
             def apply(tp: Type) = tp match {
-              case ThisType(sym) if sym != currentClass && !(sym.hasModuleFlag && sym.isStatic) =>
+              // only an enclosing class is reached through outer accessors, e.g., not the `this` of a refinement
+              case ThisType(sym) if sym != currentClass && !(sym.hasModuleFlag && sym.isStatic) && currentClass.hasTransOwner(sym) =>
                 var cls = currentClass
                 var tpe = cls.thisType
                 do {
@@ -511,6 +525,18 @@ abstract class ExplicitOuter extends InfoTransform
           val x = super.transform(tree)
           if (x.tpe eq null) x
           else x setType transformInfo(currentOwner, x.tpe)
+      }
+    }
+
+    /** `{ val outer$1 = outer; if (outer$1 eq null) throw null else outer$1 }` */
+    private def nullCheckedOuter(outer: Tree): Tree = {
+      val temp = currentOwner.newValue(unit.freshTermName("outer$"), outer.pos, SYNTHETIC | ARTIFACT) setInfo outer.tpe.widen
+      localTyper.typedPos(outer.pos) {
+        Block(
+          ValDef(temp, outer) :: Nil,
+          // `throw null` has the same effect as `throw new NullPointerException`, see JVM spec on instruction `athrow`
+          IF (REF(temp) OBJ_EQ NULL) THEN Throw(gen.mkZero(ThrowableTpe)) ELSE REF(temp)
+        )
       }
     }
 

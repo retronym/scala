@@ -857,9 +857,30 @@ trait Definitions extends api.StandardDefinitions {
           }
 
           if (samSym.exists && tp.typeSymbol != correspondingFunctionSymbol) // don't treat Functions as SAMs
-            wildcardExtrapolation(methodToExpressionTp(tp memberInfo samSym))
+            wildcardExtrapolation(samMethodToFunctionType(tp memberInfo samSym))
           else NoType
       }
+
+    /** The function type for the method type of a SAM.
+      *
+      * A function literal implementing a Java varargs method `m(T... xs)` receives the array, so `xs`
+      * gets the type `Array[T]`, not `T*`. (A Scala `T*` parameter adapts to `Seq[T]` where it is used.)
+      * A Java array is a reference array: if `T` is a primitive value class, as in `J[Int]` for
+      * `interface J<T> { String m(T... xs); }`, the elements arrive boxed in an `Object[]`, so `xs` is an `Array[Object]`.
+      */
+    def samMethodToFunctionType(samMethodTp: Type): Type = samMethodTp match {
+      case mt @ MethodType(params, restpe) if !phase.erasedTypes && params.exists(p => isJavaRepeatedParamType(p.tpe)) =>
+        val paramTypes = mt.paramTypes.map { tp =>
+          if (!isJavaRepeatedParamType(tp)) tp
+          else {
+            val elem = tp.typeArgs.head
+            arrayType(if (isPrimitiveValueType(elem)) ObjectTpeJava else elem)
+          }
+        }
+        functionType(paramTypes, methodToExpressionTp(restpe))
+      case _ =>
+        methodToExpressionTp(samMethodTp)
+    }
 
     /** Automatically perform the following conversions on expression types:
       *  A method type becomes the corresponding function type.
@@ -1232,24 +1253,32 @@ trait Definitions extends api.StandardDefinitions {
     }
 
 
+    /** Is this a reference to class Object, perhaps through an alias such as AnyRef? A singleton type
+     *  `x.type` is not, even when `x: Object` and its `typeSymbol` is therefore `ObjectClass`.
+     */
+    private def isObjectRef(tp: Type): Boolean = tp.dealias match {
+      case TypeRef(_, ObjectClass, _) => true
+      case _                          => false
+    }
+
     /** Remove all but one reference to class Object from a list of parents. */
     def removeRedundantObjects(tps: List[Type]): List[Type] = tps match {
       case Nil      => Nil
       case x :: xs  =>
-        if (x.typeSymbol == ObjectClass)
-          x :: xs.filterNot(_.typeSymbol == ObjectClass)
+        if (isObjectRef(x))
+          x :: xs.filterNot(isObjectRef)
         else
           x :: removeRedundantObjects(xs)
     }
 
     /** The following transformations applied to a list of parents.
-     *  If any parent is a class/trait, all parents which normalize to
-     *  Object are discarded.  Otherwise, all parents which normalize
-     *  to Object except the first one found are discarded.
+     *  If any parent is a class/trait, all parents which are references
+     *  to Object are discarded.  Otherwise, all references to Object
+     *  except the first one found are discarded.
      */
     def normalizedParents(parents: List[Type]): List[Type] = {
       if (parents exists (t => (t.typeSymbol ne ObjectClass) && t.typeSymbol.isClass))
-        parents filterNot (_.typeSymbol eq ObjectClass)
+        parents filterNot isObjectRef
       else
         removeRedundantObjects(parents)
     }

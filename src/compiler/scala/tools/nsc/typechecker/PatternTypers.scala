@@ -113,9 +113,21 @@ trait PatternTypers {
         || member.isOverloaded // the whole overloading situation is over the rails
       )
 
+      // A case class of an anonymous class, seen from outside through a value of the anonymous class's inferred
+      // type (`val y = new { case class P(a: Int) }; x match { case y.P(_) => }`): that type abstracts the class to a
+      // type member, so the type of the pattern would refer to the anonymous class's `this`, which is not in scope.
+      // That only matters for the outer test of the pattern: explicitouter drops it for a final class (with an
+      // "outer reference cannot be checked" warning), and such a pattern has always worked.
+      def isCaseClassOfInaccessibleAnonClass = {
+        val owner = caseClass.owner
+        owner.isAnonymousClass && !caseClass.isEffectivelyFinal && fun.tpe.prefix.baseType(owner) == NoType
+      }
+
       // if we're already failing, no need to emit another error here
       if (fun.tpe.isErroneous)
         fun
+      else if (useConstructor && isCaseClassOfInaccessibleAnonClass)
+        CaseClassConstructorError(fun, s"$caseClass is defined in an anonymous class and cannot be used in a pattern outside of it")
       else if (useConstructor)
         logResult(s"convertToCaseConstructor($fun, $caseClass, pt=$pt)")(convertToCaseConstructor(fun, caseClass, pt))
       else if (!reallyExists(member))
@@ -402,6 +414,10 @@ trait PatternTypers {
         // only look at top-level type, can't (reliably) do anything about unchecked type args (in general)
         // but at least make a proper type before passing it elsewhere
         val pt1 = applyTypeToWildcards(pt.dealiasWiden)
+        // TODO scala/scala review X3: `ClassTag.unapply` tests only the runtime class. When the tag found
+        // here was materialized for a literal or singleton type (`viaTag["lit"]` with `case a: A`), any
+        // String matches and is bound as `a: A` (run/classtag-singleton-pattern); SIP-23 says a literal
+        // type pattern compares with `==`. The materializer could refuse or warn for singleton types.
         if (isCheckable(pt1)) EmptyTree
         else resolveClassTag(pos, pt1) match {
           case tree if unapplyMember(tree.tpe).exists => tree

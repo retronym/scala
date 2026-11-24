@@ -30,16 +30,16 @@ package pkg {
         private[this]    override def bB(): Unit = println("Inner12349c#bB()") // weaker access privileges
 
                          override def c1(): Unit = println("Inner12349c#c1()") // overrides nothing (invisible)
-      protected          override def c2(): Unit = println("Inner12349c#c2()") // weaker access privileges
-        private          override def c3(): Unit = println("Inner12349c#c3()") // weaker access privileges
-      protected[t12349c] override def c4(): Unit = println("Inner12349c#c4()") // weaker access privileges
-        private[t12349c] override def c5(): Unit = println("Inner12349c#c5()") // weaker access privileges
-      protected[pkg]     override def c6(): Unit = println("Inner12349c#c6()") // weaker access privileges
-        private[pkg]     override def c7(): Unit = println("Inner12349c#c7()") // weaker access privileges
-      protected[Inner12349c] override def c8(): Unit = println("Inner12349c#c8()") // weaker access privileges
-        private[Inner12349c] override def c9(): Unit = println("Inner12349c#c9()") // weaker access privileges
-      protected[this]    override def cA(): Unit = println("Inner12349c#cA()") // weaker access privileges
-        private[this]    override def cB(): Unit = println("Inner12349c#cB()") // weaker access privileges
+      protected          override def c2(): Unit = println("Inner12349c#c2()") // overrides nothing (invisible)
+        private          override def c3(): Unit = println("Inner12349c#c3()") // overrides nothing (invisible)
+      protected[t12349c] override def c4(): Unit = println("Inner12349c#c4()") // overrides nothing (invisible)
+        private[t12349c] override def c5(): Unit = println("Inner12349c#c5()") // overrides nothing (invisible)
+      protected[pkg]     override def c6(): Unit = println("Inner12349c#c6()") // overrides nothing (invisible)
+        private[pkg]     override def c7(): Unit = println("Inner12349c#c7()") // overrides nothing (invisible)
+      protected[Inner12349c] override def c8(): Unit = println("Inner12349c#c8()") // overrides nothing (invisible)
+        private[Inner12349c] override def c9(): Unit = println("Inner12349c#c9()") // overrides nothing (invisible)
+      protected[this]    override def cA(): Unit = println("Inner12349c#cA()") // overrides nothing (invisible)
+        private[this]    override def cB(): Unit = println("Inner12349c#cB()") // overrides nothing (invisible)
 
                          override def d1(): Unit = println("Inner12349c#d1()") // overrides nothing
       protected          override def d2(): Unit = println("Inner12349c#d2()") // overrides nothing

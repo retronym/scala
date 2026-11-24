@@ -149,7 +149,9 @@ abstract class FormatInterpolator {
           def accept(op: Conversion): Unit = {
             if (!op.isLeading) errorLeading(op)
             op.accepts(argType(n-1, op.acceptableVariants: _*))
-            amended += part
+            // Drop the index of a conversion that refers to its own arg. An explicit index does not advance
+            // the formatter's ordinary index, so keeping it would shift the args of all the conversions that follow.
+            amended += (if (op.index.contains(n) && !op.hasFlag('<')) part.patch(op.descriptor.at(Index), "", op.descriptor.group(Index).get.length + 1) else part)
             op.lintToString(argTypes(n-1))
           }
 
@@ -157,18 +159,21 @@ abstract class FormatInterpolator {
           else if (!matches.hasNext) insertStringConversion()
           else {
             val cv = Conversion(matches.next(), part0.pos, argc)
-            if (cv.kind != Kind.StringXn || cv.cc.isUpper || cv.width.nonEmpty || cv.flags.nonEmpty)
+            if (cv.kind != Kind.StringXn || cv.cc.isUpper || cv.width.nonEmpty || cv.precision.nonEmpty || cv.flags.nonEmpty)
               formatting = true
             if (cv.isLiteral) insertStringConversion()
+            else if (cv.isError) () // already reported, and there is no arg type to check
             else if (cv.isIndexed) {
               if (cv.index.getOrElse(-1) == n) accept(cv)
               else {
                 // "$x$y%1" where "%1" follows a splice but does not apply to it
                 c.warning(cv.groupPosAt(Index, 0), "Index is not this arg")
                 insertStringConversion()
+                // the index is only understood by the formatter
+                formatting = true
               }
             }
-            else if (!cv.isError) accept(cv)
+            else accept(cv)
           }
           // any remaining conversions in this part must be either literals or indexed
           while (matches.hasNext) {
@@ -225,7 +230,7 @@ abstract class FormatInterpolator {
     val index: Option[Int]     = descriptor.intOf(Index)
     val flags: String          = descriptor.stringOf(Flags)
     val width: Option[Int]     = descriptor.intOf(Width)
-    val precision: Option[Int] = descriptor.group(Precision).map(_.drop(1).toInt)
+    val precision: Option[Int] = descriptor.intOf(Precision, skip = 1)
     val op: String             = descriptor.stringOf(CC)
 
     // the conversion char is the head of the op string (but see DateTimeXn)
@@ -249,7 +254,15 @@ abstract class FormatInterpolator {
     // true if passes.
     def verify: Boolean = {
       // various assertions
-      def goodies = goodFlags && goodIndex
+      def goodies = goodFlags && goodIndex && goodWidth && goodPrecision
+      // a field that does not fit in an Int is OutOfRange
+      def goodWidth = !width.contains(OutOfRange) or errorAt(Width)("Width out of range")
+      def goodPrecision = !precision.contains(OutOfRange) or errorAt(Precision, 1)("Precision out of range")
+      // the formatter rejects padding flags without a width
+      def widthFor(f: Char) = !hasFlag(f) || width.nonEmpty or badFlag(f, s"Flag '$f' requires a width")
+      def padded = widthFor('-') && widthFor('0')
+      def exclusive(f: Char, g: Char) = !(hasFlag(f) && hasFlag(g)) or errorAt(Flags, flags.indexOf(f) max flags.indexOf(g))(s"Illegal combination of flags '$f' and '$g'")
+      def numeric = exclusive('+', ' ') && exclusive('-', '0') && padded
       def noFlags = flags.isEmpty or errorAt(Flags)("flags not allowed")
       def noWidth = width.isEmpty or errorAt(Width)("width not allowed")
       def noPrecision = precision.isEmpty or errorAt(Precision)("precision not allowed")
@@ -270,28 +283,28 @@ abstract class FormatInterpolator {
       }
       // begin verify
       kind match {
-        case StringXn        => goodies
-        case BooleanXn       => goodies
-        case HashXn          => goodies
-        case CharacterXn     => goodies && noPrecision && only_-("c conversion")
+        case StringXn        => goodies && padded
+        case BooleanXn       => goodies && padded
+        case HashXn          => goodies && padded
+        case CharacterXn     => goodies && noPrecision && only_-("c conversion") && padded
         case IntegralXn      =>
           def d_# = cc == 'd' && hasFlag('#') and badFlag('#', "# not allowed for d conversion")
           def x_comma = cc != 'd' && hasFlag(',') and badFlag(',', "',' only allowed for d conversion of integral types")
-          goodies && noPrecision && !d_# && !x_comma
+          goodies && noPrecision && !d_# && !x_comma && numeric
         case FloatingPointXn =>
           goodies && (cc match {
             case 'a' | 'A' =>
               val badFlags = ",(".filter(hasFlag)
               noPrecision && badFlags.isEmpty or badFlags.foreach(badf => badFlag(badf, s"'$badf' not allowed for a, A"))
             case _ => true
-          })
+          }) && numeric
         case DateTimeXn      =>
           def hasCC = op.length == 2 or errorAt(CC)("Date/time conversion must have two characters")
           def goodCC = "HIklMSLNpzZsQBbhAaCYyjmdeRTrDFc".contains(cc) or errorAt(CC, 1)(s"'$cc' doesn't seem to be a date or time conversion")
-          goodies && hasCC && goodCC && noPrecision && only_-("date/time conversions")
+          goodies && hasCC && goodCC && noPrecision && only_-("date/time conversions") && padded
         case LiteralXn       =>
           op match {
-            case "%" => goodies && noPrecision and width.foreach(_ => warningAt(Width)("width ignored on literal"))
+            case "%" => goodies && noPrecision && padded and width.foreach(_ => warningAt(Width)("width ignored on literal"))
             case "n" => noFlags && noWidth && noPrecision
           }
         case ErrorXn         =>
@@ -391,6 +404,8 @@ abstract class FormatInterpolator {
 object FormatInterpolator {
   // match a conversion specifier
   private val formatPattern = """%(?:(\d+)\$)?([-#+ 0,(<]+)?(\d+)?(\.\d+)?([tT]?[%a-zA-Z])?""".r
+  // the value of a numeric field of a specifier that is not an Int
+  private final val OutOfRange = -1
   // ordinal is the regex group index in the format pattern
   private object SpecifierGroups extends Enumeration { val Spec, Index, Flags, Width, Precision, CC = Value }
   import SpecifierGroups.{Value => SpecGroup}
@@ -409,7 +424,7 @@ object FormatInterpolator {
     def offset(g: SpecGroup, i: Int = 0): Int = at(g) + i
     def group(g: SpecGroup): Option[String]   = Option(descriptor.group(g.ordinal))
     def stringOf(g: SpecGroup): String        = group(g).getOrElse("")
-    def intOf(g: SpecGroup): Option[Int]      = group(g).map(_.toInt)
+    def intOf(g: SpecGroup, skip: Int = 0): Option[Int] = group(g).map(_.drop(skip).toIntOption.getOrElse(OutOfRange))
   }
   private def escapeHatch(c: Context)(s0: String, pos: c.universe.Position): PartialFunction[Throwable, String] = {
     // trailing backslash, octal escape, or other
@@ -449,6 +464,9 @@ object FormatInterpolator {
         case i if octalOf(i) >= 0 => c.error(errPoint, s"octal escape literals are unsupported: $alt")
         case _   => c.error(errPoint, e.getMessage)
       }
+      s0
+    case e: StringContext.InvalidUnicodeEscapeException =>
+      c.error(pos.withPoint(pos.point + e.index), e.getMessage)
       s0
   }
 }

@@ -102,6 +102,9 @@ sealed abstract class ArraySeq[+A]
       if (mismatch)
         // Combining primatives and objects: abort
         null
+      else if (!thisIsObj && (this.unsafeArray.getClass ne that.unsafeArray.getClass))
+        // Combining two different primitive types: abort
+        null
       else if (thisIsObj) {
         // A and B are objects
         val ax = this.unsafeArray.asInstanceOf[Array[A]]

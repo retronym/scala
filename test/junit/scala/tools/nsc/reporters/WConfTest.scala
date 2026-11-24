@@ -18,7 +18,7 @@ import org.junit.Test
 import java.io.{File => JFile}
 
 import scala.collection.mutable.ListBuffer
-import scala.reflect.internal.util.{BatchSourceFile, Position}
+import scala.reflect.internal.util.{BatchSourceFile, NoSourceFile, Position}
 import scala.reflect.internal.{Reporter => InternalReporter}
 import scala.reflect.io.AbstractFile
 import scala.reflect.io.File
@@ -197,6 +197,23 @@ class WConfTest extends BytecodeTesting {
   }
 
   @Test
+  def deprecatedSinceOverflowsInt(): Unit = {
+    val code =
+      """class A {
+        |  @deprecated("use g", since = "20240131120000") def f = 0
+        |  def g = f
+        |}
+        |""".stripMargin
+    val l3 = (3, "method f in class A is deprecated (since 20240131120000): use g")
+    check(infos(code, "cat=deprecation:i"), List(l3))
+    check(infos(code, "since>1:i,cat=deprecation:s"), Nil)
+    assertEquals(Version.NonParseableVersion("20240131120000"), Version.fromString("20240131120000"))
+    assertEquals(Version.NonParseableVersion("1.99999999999"), Version.fromString("1.99999999999"))
+    assertEquals(Version.NonParseableVersion("1.2.99999999999"), Version.fromNumberOnlyString("1.2.99999999999"))
+    assertTrue(Reporting.WConf.parseFilter("since>99999999999", rootDir = "").left.exists(_.startsWith("invalid since filter")))
+  }
+
+  @Test
   def filterUnchecked(): Unit = {
     check(infos(code, "cat=unchecked:i"), List(l13, l16))
   }
@@ -329,6 +346,17 @@ class WConfTest extends BytecodeTesting {
     check(v123, v124, s)
     check(v123, v124, ne)
     check(v123, v124, ng)
+  }
+
+  @Test
+  def deprecationMessageShape(): Unit = {
+    // Tools construct and match on `Message.Deprecation`, keep its shape.
+    val m: Reporting.Message = Reporting.Message.Deprecation(Position.offset(NoSourceFile, 0), "msg", "site", "origin", Version.fromString("1.0"), Nil)
+    m match {
+      case Reporting.Message.Deprecation(_, msg, site, origin, since, actions) =>
+        assertEquals(List("msg", "site", "origin", "1.0", "List()"), List(msg, site, origin, since.filterString, actions.toString))
+      case _ => fail(s"unexpected $m")
+    }
   }
 
   def wrapFileInMessage(file: AbstractFile) = Reporting.Message.Plain(

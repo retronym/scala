@@ -306,8 +306,8 @@ sealed abstract class IntMap[+T] extends AbstractMap[Int, T]
   @tailrec
   final override def apply(key: Int): T = this match {
     case IntMap.Bin(prefix, mask, left, right) => if (zero(key, mask)) left(key) else right(key)
-    case IntMap.Tip(key2, value) => if (key == key2) value else throw new IllegalArgumentException("Key not found")
-    case IntMap.Nil => throw new IllegalArgumentException("key not found")
+    case IntMap.Tip(key2, value) => if (key == key2) value else default(key)
+    case IntMap.Nil => default(key)
   }
 
   override def + [S >: T] (kv: (Int, S)): IntMap[S] = updated(kv._1, kv._2)
@@ -366,8 +366,13 @@ sealed abstract class IntMap[+T] extends AbstractMap[Int, T]
   def removed (key: Int): IntMap[T] = this match {
     case IntMap.Bin(prefix, mask, left, right) =>
       if (!hasMatch(key, prefix, mask)) this
-      else if (zero(key, mask)) bin(prefix, mask, left - key, right)
-      else bin(prefix, mask, left, right - key)
+      else if (zero(key, mask)) {
+        val newleft = left.removed(key)
+        if (newleft eq left) this else bin(prefix, mask, newleft, right)
+      } else {
+        val newright = right.removed(key)
+        if (newright eq right) this else bin(prefix, mask, left, newright)
+      }
     case IntMap.Tip(key2, _) =>
       if (key == key2) IntMap.Nil
       else this

@@ -1,0 +1,5 @@
+error: Failed to parse `-Wconf` configuration: List(cat=bogus:e, cat=deprecation:ws, cat=feature:ws, cat=optimizer:ws)
+Unknown category: `bogus`
+error: Failed to parse `-quickfix` filters: cat=nope
+Unknown category: `nope`
+2 errors

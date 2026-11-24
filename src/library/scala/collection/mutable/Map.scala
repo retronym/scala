@@ -39,7 +39,9 @@ trait Map[K, V]
     *  Note: The default is only used for `apply`. Other methods like `get`, `contains`, `iterator`, `keys`, etc.
     *  are not affected by `withDefaultValue`.
     *
-    *  Invoking transformer methods (e.g. `map`) will not preserve the default value.
+    *  Methods returning a map with the same key and value types, such as `filter`, `concat` or `clone`, preserve the default.
+    *  Methods that build a map of a new element type, such as `map`, `flatMap` or `collect`,
+    *  and views such as `view.mapValues` or `view.filterKeys`, do not.
     *
     *  @param d     the function mapping keys to values, used for non-present keys
     *  @return      a wrapper of the map with a default value
@@ -50,7 +52,9 @@ trait Map[K, V]
     *  Note: The default is only used for `apply`. Other methods like `get`, `contains`, `iterator`, `keys`, etc.
     *  are not affected by `withDefaultValue`.
     *
-    *  Invoking transformer methods (e.g. `map`) will not preserve the default value.
+    *  Methods returning a map with the same key and value types, such as `filter`, `concat` or `clone`, preserve the default.
+    *  Methods that build a map of a new element type, such as `map`, `flatMap` or `collect`,
+    *  and views such as `view.mapValues` or `view.filterKeys`, do not.
     *
     *  @param d     default value used for non-present keys
     *  @return      a wrapper of the map with a default value

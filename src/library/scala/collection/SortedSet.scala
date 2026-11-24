@@ -78,13 +78,13 @@ trait SortedSetOps[A, +CC[X] <: SortedSet[X], +C <: SortedSetOps[A, CC, C]]
 
   /** Finds the smallest element larger than or equal to a given key.
     * @param key The given key.
-    * @return `None` if there is no such node.
+    * @return `None` if there is no such element.
     */
   def minAfter(key: A): Option[A] = rangeFrom(key).headOption
 
   /** Finds the largest element less than a given key.
     * @param key The given key.
-    * @return `None` if there is no such node.
+    * @return `None` if there is no such element.
     */
   def maxBefore(key: A): Option[A] = rangeUntil(key).lastOption
 

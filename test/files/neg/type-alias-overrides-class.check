@@ -1,0 +1,33 @@
+type-alias-overrides-class.scala:10: warning: overriding a nested class of a parent with a type alias is deprecated but type X overrides class X defined in class A; rename the type to something else
+class B extends A { type X = Int }             // warn
+                         ^
+type-alias-overrides-class.scala:11: warning: overriding a nested class of a parent with a type alias is deprecated but type X overrides class X defined in class A; rename the type to something else
+class C extends A { override type X = Int }    // warn
+                                  ^
+type-alias-overrides-class.scala:12: warning: overriding a nested class of a parent with a type alias is deprecated but type Y overrides trait Y defined in class A; rename the type to something else
+class D extends A { type Y = String }          // warn
+                         ^
+type-alias-overrides-class.scala:15: warning: overriding a nested class of a parent with a type alias is deprecated but type Z defined in trait T overrides class Z defined in class A; rename the type to something else
+class E extends A with T                       // warn
+      ^
+type-alias-overrides-class.scala:18: warning: overriding a nested class of a parent with a type alias is deprecated but type W defined in trait V overrides class W defined in trait U; rename the type to something else
+class UV extends U with V                      // warn
+      ^
+type-alias-overrides-class.scala:19: error: classes can only override abstract types; cannot override:
+type W = Int (defined in trait V)
+  with class W extends AnyRef (defined in trait U)
+class VU extends V with U                      // error
+      ^
+type-alias-overrides-class.scala:20: error: classes can only override abstract types; cannot override:
+type Z = Int (defined in trait T)
+class F extends T { class Z }                  // error
+                          ^
+type-alias-overrides-class.scala:23: error: incompatible type in overriding
+type X <: Int (defined in class H)
+  with class X extends AnyRef (defined in class A);
+  (note that type X <: Int (defined in class H) is abstract,
+  and is therefore overridden by concrete class X extends AnyRef (defined in class A))
+abstract class H extends A { type X <: Int }   // error, the class is not within the bounds
+               ^
+5 warnings
+3 errors

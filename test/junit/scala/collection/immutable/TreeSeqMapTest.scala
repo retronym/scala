@@ -93,6 +93,28 @@ class TreeSeqMapTest {
     assertEquals(List(4 -> 5, 5 -> 4), ((m - 3) - 1 - 2).iterator.toList)
   }
   @Test
+  def serializable(): Unit = {
+    import java.io._
+    def roundTrip[A <: AnyRef](a: A): A = {
+      val bos = new ByteArrayOutputStream
+      new ObjectOutputStream(bos).writeObject(a)
+      new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray)).readObject().asInstanceOf[A]
+    }
+    for (orderBy <- List(TreeSeqMap.OrderBy.Insertion, TreeSeqMap.OrderBy.Modification)) {
+      val m = (TreeSeqMap.empty[Int, String](orderBy) ++ List(1 -> "a", 2 -> "b", 3 -> "c", 4 -> "d")).updated(2, "B") - 3
+      val r = roundTrip(m)
+      assertEquals(m.toList, r.toList)
+      assertSame(orderBy, r.orderedBy)
+      assertEquals(m.updated(1, "A").updated(5, "e").toList, r.updated(1, "A").updated(5, "e").toList)
+      val e = roundTrip(TreeSeqMap.empty[Int, String](orderBy))
+      assertTrue(e.isEmpty)
+      assertSame(orderBy, e.orderedBy)
+      assertEquals(m.keySet.toList, roundTrip(m.keySet).toList)
+      assertEquals(m.values.toList, roundTrip(m.values).toList)
+    }
+  }
+
+  @Test
   def testSlice(): Unit = {
     val m = TreeSeqMap(3 -> 1, 2 -> 2, 1 -> 3, 4 -> 5, 5 -> 4)
     assertEquals(List(3 -> 1, 2 -> 2), ((m - 1) - 4).slice(0, 2).iterator.toList)
@@ -147,6 +169,66 @@ class TreeSeqMapTest {
       assertEquals(s"$i", o3, o5)
     }
   }
+  // A builder whose next ordinal is `ord`, as it would be after that many additions.
+  private def builderAt(ord: Int, orderBy: TreeSeqMap.OrderBy): mutable.Builder[(Int, String), TreeSeqMap[Int, String]] = {
+    val b = TreeSeqMap.newBuilder[Int, String](orderBy)
+    val f = b.getClass.getDeclaredFields.find(_.getName.endsWith("ord")).get
+    f.setAccessible(true)
+    f.setInt(b, ord)
+    b
+  }
+
+  @Test
+  def ordinalWraparoundInBuilder(): Unit = {
+    import TreeSeqMap.OrderBy.{Insertion, Modification}
+    // ordinals are ordered as unsigned, Int.MinValue follows Int.MaxValue
+    for (start <- List(Int.MaxValue - 1, Int.MaxValue, -3, -2, -1)) {
+      val b = builderAt(start, Modification)
+      b ++= List(1 -> "a", 2 -> "b", 1 -> "c", 2 -> "d", 3 -> "e")
+      val m = b.result()
+      assertEquals(s"from $start", List(1 -> "c", 2 -> "d", 3 -> "e"), m.toList)
+      assertEquals(s"from $start", List(2 -> "d", 3 -> "e", 1 -> "f", 4 -> "g"), m.updated(1, "f").updated(4, "g").toList)
+      b += (1 -> "h")
+      assertEquals(s"from $start", List(2 -> "d", 3 -> "e", 1 -> "h"), b.result().toList)
+
+      val b2 = builderAt(start, Insertion)
+      b2 ++= List(1 -> "a", 2 -> "b", 1 -> "c", 3 -> "d", 4 -> "e")
+      assertEquals(s"from $start", List(1 -> "c", 2 -> "b", 3 -> "d", 4 -> "e"), b2.result().toList)
+      assertEquals(s"from $start", List(1 -> "f", 2 -> "b", 3 -> "d", 4 -> "e", 5 -> "g"), b2.result().updated(1, "f").updated(5, "g").toList)
+    }
+  }
+
+  @Test
+  def ordinalWraparound(): Unit = {
+    import TreeSeqMap.OrderBy.Modification
+    for (orderBy <- List(TreeSeqMap.OrderBy.Insertion, Modification); start <- List(Int.MaxValue - 2, -5, -4, -3)) {
+      def msg = s"$orderBy from $start"
+      def move(kvs: List[(Int, String)], k: Int, v: String) =
+        if (orderBy == Modification) kvs.filter(_._1 != k) :+ (k -> v) else kvs.map(kv => if (kv._1 == k) (k, v) else kv)
+      val m0 = builderAt(start, orderBy).addAll(List(1 -> "a", 2 -> "b")).result()
+      val l3 = List(1 -> "a", 2 -> "b", 3 -> "c")
+      val m3 = m0.updated(3, "c")
+      assertEquals(msg, l3, m3.toList)
+
+      assertEquals(msg, l3 ::: List(4 -> "d", 5 -> "e"), (m3 ++ List(4 -> "d", 5 -> "e")).toList)
+      assertEquals(msg, move(l3, 1, "A") :+ (4 -> "d"), (m3 ++ List(1 -> "A", 4 -> "d")).toList)
+      assertEquals(msg, List(2 -> "b", 3 -> "c", 1 -> "a"), m3.refresh(1).toList)
+
+      val l6 = move(move(l3, 2, "B"), 1, "A") ::: List(4 -> "d", 5 -> "e", 6 -> "f")
+      val m6 = m0 ++ List(3 -> "c", 2 -> "B", 1 -> "A", 4 -> "d", 5 -> "e", 6 -> "f")
+      assertEquals(msg, l6, m6.toList)
+      assertEquals(msg, 6, m6.size)
+      assertEquals(msg, move(l6, 3, "C") :+ (7 -> "g"), m6.updated(3, "C").updated(7, "g").toList)
+      assertEquals(msg, move(l6, 3, "C") :+ (7 -> "g"), (m6 ++ List(3 -> "C", 7 -> "g")).toList)
+      assertEquals(msg, l6.filter(_._1 != 4), m6.removed(4).toList)
+      for (i <- 0 to 7) {
+        assertEquals(msg, l6.splitAt(i), { val (a, b) = m6.splitAt(i); (a.toList, b.toList) })
+        assertEquals(msg, l6.slice(i, i + 2), m6.slice(i, i + 2).toList)
+        assertEquals(msg, l6.slice(i, i + 4), m6.slice(i, i + 4).toList)
+      }
+    }
+  }
+
   @Test
   def testEmpty(): Unit = {
     {
@@ -175,6 +257,60 @@ class TreeSeqMapTest {
     }
   }
   @Test
+  def derivedCollectionsKeepOrderedBy(): Unit = {
+    import TreeSeqMap.OrderBy.{Insertion, Modification}
+    type M = TreeSeqMap[Int, String]
+    val ops = List[(String, M => M)](
+      "drop"      -> (_.drop(1)),
+      "dropRight" -> (_.dropRight(1)),
+      "dropWhile" -> (_.dropWhile(_._1 == 1)),
+      "filter"    -> (_.filter(_._1 != 2)),
+      "filterNot" -> (_.filterNot(_._1 == 2)),
+      "partition" -> (_.partition(_._1 != 2)._1),
+      "span"      -> (_.span(_._1 != 4)._1),
+      "splitAt"   -> (_.splitAt(3)._1),
+      "splitAt"   -> (_.splitAt(1)._2),
+      "take"      -> (_.take(3)),
+      "takeRight" -> (_.takeRight(3)),
+      "takeWhile" -> (_.takeWhile(_._1 != 4)),
+      "groupBy"   -> (_.groupBy(_._1 != 2)(true)),
+      "grouped"   -> (_.grouped(3).next()),
+      "tapEach"   -> (_.tapEach(_ => ())),
+      "slice"     -> (_.slice(0, 3)),
+      "tail"      -> (_.tail),
+      "init"      -> (_.init),
+      "empty"     -> (_.empty),
+      "concat"    -> (_ ++ List(9 -> "i")),
+      "map"       -> (_.map(identity)),
+      "flatMap"   -> (_.flatMap(kv => List(kv))),
+      "collect"   -> (_.collect { case kv => kv }),
+      "removed"   -> (_.removed(2)))
+    for (orderBy <- List(Insertion, Modification); (name, op) <- ops) {
+      val m = TreeSeqMap.empty[Int, String](orderBy) ++ List(1 -> "a", 2 -> "b", 3 -> "c", 4 -> "d")
+      val derived = op(m)
+      assertEquals(s"$name of a map ordered by $orderBy", orderBy, derived.orderedBy)
+      // 3 is in every result but the empty one, and is never last
+      val updated = derived.updated(3, "C")
+      val expected =
+        if (orderBy == Modification) derived.toList.filter(_._1 != 3) :+ (3 -> "C")
+        else if (derived.isEmpty) List(3 -> "C")
+        else derived.toList.map { case (k, v) => if (k == 3) (k, "C") else (k, v) }
+      assertEquals(s"updated after $name of a map ordered by $orderBy", expected, updated.toList)
+    }
+  }
+
+  @Test
+  def tailAndInitOfEmpty(): Unit = {
+    for (orderBy <- List(TreeSeqMap.OrderBy.Insertion, TreeSeqMap.OrderBy.Modification)) {
+      val e = TreeSeqMap.empty[Int, String](orderBy)
+      assertThrows(classOf[UnsupportedOperationException], () => e.tail)
+      assertThrows(classOf[UnsupportedOperationException], () => e.init)
+      assertThrows(classOf[UnsupportedOperationException], () => (e + (1 -> "a") - 1).tail)
+      assertThrows(classOf[UnsupportedOperationException], () => (e + (1 -> "a") - 1).init)
+    }
+  }
+
+  @Test
   def `t13019 empty.iterator is idempotent`: Unit = {
     val m = util.Try(TreeSeqMap.empty.iterator.next())
     assertTrue(m.isFailure)
@@ -194,6 +330,66 @@ class TreeSeqMapTest {
     assertEquals(1, m.iterator.size)
     assertEquals(List(1 -> "b"), m.toList)
     assertTrue(m.removed(1).isEmpty)
+  }
+
+  @Test
+  def refreshKeepsMappingInSync(): Unit = {
+    for (orderBy <- List(TreeSeqMap.OrderBy.Insertion, TreeSeqMap.OrderBy.Modification)) {
+      val r = (TreeSeqMap.empty[Int, String](orderBy) ++ List(1 -> "a", 2 -> "b", 3 -> "c")).refresh(1)
+      assertEquals(List(2 -> "b", 3 -> "c", 1 -> "a"), r.toList)
+      assertEquals(List(2 -> "b", 3 -> "c"), r.removed(1).toList)
+      assertEquals(List(2 -> "b", 3 -> "c", 1 -> "a"), r.refresh(1).toList)
+      assertEquals(List(3 -> "c", 1 -> "a", 2 -> "b"), r.refresh(2).toList)
+      assertEquals(List(2 -> "b", 3 -> "c", 1 -> "A"), r.updated(1, "A").toList)
+      assertEquals(List(2 -> "b", 3 -> "c", 1 -> "A"), (r ++ List(1 -> "A")).toList)
+      assertEquals(List(3 -> "c", 1 -> "a"), r.tail.toList)
+      assertEquals(List(2 -> "b", 3 -> "c"), r.init.toList)
+      assertEquals(r.orderedBy, orderBy)
+    }
+  }
+
+  // Differential test of refresh mixed with other operations, against an association vector.
+  @Test
+  def refreshRandomized(): Unit = {
+    type Model = Vector[(Int, String)]
+    for (seed <- 0 until 200; orderBy <- List(TreeSeqMap.OrderBy.Insertion, TreeSeqMap.OrderBy.Modification)) {
+      val byModification = orderBy == TreeSeqMap.OrderBy.Modification
+      def update(m: Model, k: Int, v: String): Model = m.indexWhere(_._1 == k) match {
+        case -1                  => m :+ (k -> v)
+        case i if byModification => m.patch(i, Nil, 1) :+ (k -> v)
+        case i                   => m.updated(i, k -> v)
+      }
+      def refresh(m: Model, k: Int): Model = m.indexWhere(_._1 == k) match {
+        case -1 => m
+        case i  => m.patch(i, Nil, 1) :+ m(i)
+      }
+      val rnd = new scala.util.Random(seed)
+      var t = TreeSeqMap.empty[Int, String](orderBy)
+      var r: Model = Vector.empty
+      val log = List.newBuilder[String]
+      for (_ <- 0 until 40) {
+        val k = rnd.nextInt(8)
+        val v = "v" + rnd.nextInt(3)
+        rnd.nextInt(10) match {
+          case 0 | 1 | 2 => log += s"updated($k, $v)"; t = t.updated(k, v); r = update(r, k, v)
+          case 3 | 4 | 5 => log += s"refresh($k)"; t = t.refresh(k); r = refresh(r, k)
+          case 6 => log += s"removed($k)"; t = t.removed(k); r = r.filter(_._1 != k)
+          case 7 =>
+            val xs = List.fill(rnd.nextInt(4))(rnd.nextInt(8) -> ("c" + rnd.nextInt(2)))
+            log += s"concat($xs)"
+            t = t ++ xs
+            xs.foreach { case (k, v) => r = update(r, k, v) }
+          case 8 => if (r.nonEmpty) { log += "tail"; t = t.tail; r = r.tail }
+          case 9 => if (r.nonEmpty) { log += "init"; t = t.init; r = r.init }
+        }
+        def msg = s"seed $seed, $orderBy, after ${log.result().mkString("; ")}"
+        assertEquals(msg, r, t.toVector)
+        assertEquals(msg, r.size, t.size)
+        assertEquals(msg, r.toMap, t)
+        assertEquals(msg, r.headOption, t.headOption)
+        assertEquals(msg, r.lastOption, t.lastOption)
+      }
+    }
   }
 }
 object TreeSeqMapTest extends App {

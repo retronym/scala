@@ -378,7 +378,7 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
 
     def annotations(): List[Tree] = {
       val annots = new ListBuffer[Tree]
-      while (in.token == AT) {
+      while (in.token == AT && in.lookaheadToken != INTERFACE) { // `@interface` starts a type declaration
         in.nextToken()
         val annot = annotation()
         if (annot.nonEmpty) annots += annot
@@ -402,7 +402,8 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
      *  //   https://docs.oracle.com/javase/specs/jls/se14/html/jls-15.html#jls-15.29
      *  //
      *  // Luckily, we can just parse matching `(` and `)` to find our way to the end of the argument list.
-     *  // and drop the arguments until we implement full support for Java constant expressions
+     *  // and drop the arguments until we implement full support for Java constant expressions.
+     *  // To that end, the parens and braces in the tokens consumed below are always balanced.
      *  //
      *  ConditionalExpressionSubset := Literal
      *                               | Identifier
@@ -420,19 +421,21 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
         case IDENTIFIER  => qualId(orClassLiteral = true)
         case LBRACE      => accept(LBRACE); elementArray()
         case AT          => accept(AT); annotation()
-        case _           => in.nextToken(); EmptyTree
+        case _           => EmptyTree // unsupported, not consumed
       }
 
       def elementArray(): Tree = atPos(in.pos) {
         val ts = new ListBuffer[Tree]
-        while (in.token != RBRACE) {
-          ts += elementValue()
+        var ok = true
+        while (ok && in.token != RBRACE) {
+          val t = elementValue()
+          ts += t
+          ok = t.nonEmpty
           if (in.token == COMMA) in.nextToken() // done this way trailing commas are supported
         }
-        val ok = !ts.contains(EmptyTree)
         in.token match {
           case RBRACE if ok => accept(RBRACE); Apply(ArrayModule_overloadedApply, ts.toList: _*)
-          case _            => skipTo(RBRACE); EmptyTree
+          case _            => skipTo(RBRACE); accept(RBRACE); EmptyTree
         }
       }
 
@@ -454,8 +457,6 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
         val id = convertToTypeId(qualId())
         in.token match {
           case LPAREN =>
-            // TODO: fix copyFrom+skipAhead; CharArrayReaderData missing
-            val saved = new JavaTokenData {}.copyFrom(in) // prep to bail if non-literals/identifiers
             accept(LPAREN)
             val args = in.token match {
               case RPAREN => Nil
@@ -464,7 +465,7 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
             val ok = !args.contains(EmptyTree)
             in.token match {
               case RPAREN if ok => accept(RPAREN); New(id, List(args))
-              case _            => in.copyFrom(saved); skipAhead(); accept(RPAREN); EmptyTree
+              case _            => skipTo(RPAREN); accept(RPAREN); EmptyTree // bail if non-literals/identifiers
             }
           case _ => New(id, ListOfNil)
         }
@@ -591,10 +592,14 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
       accept(LPAREN)
       val vparams = if (in.token == RPAREN) List() else repsep(() => formalParam(), COMMA)
       accept(RPAREN)
-      vparams
+      vparams.collect { case vd: ValDef => vd }
     }
 
-    def formalParam(): ValDef = {
+    /** A formal parameter, or `EmptyTree` for a receiver parameter (JLS 8.4.1), `T this` or, in the
+     *  constructor of an inner class, `Outer Outer.this`. It only serves as a place for annotations on
+     *  the type of the receiver and is not a parameter of the method.
+     */
+    def formalParam(): Tree = {
       if (in.token == FINAL) in.nextToken()
       val anns = annotations()
       var t = typ()
@@ -604,7 +609,18 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
           AppliedTypeTree(scalaDot(tpnme.JAVA_REPEATED_PARAM_CLASS_NAME), List(t))
         }
       }
-     varDecl(in.currentPos, Modifiers(Flags.JAVA | Flags.PARAM, typeNames.EMPTY, anns), t, ident().toTermName)
+      if (in.token == THIS) {
+        in.nextToken()
+        EmptyTree
+      } else {
+        val pos = in.currentPos
+        val name = ident()
+        if (in.token == DOT) {
+          in.nextToken()
+          accept(THIS)
+          EmptyTree
+        } else varDecl(pos, Modifiers(Flags.JAVA | Flags.PARAM, typeNames.EMPTY, anns), t, name.toTermName)
+      }
     }
 
     /** Type parameters of the enclosing classes, innermost first. */
@@ -754,12 +770,18 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
         in.nextToken()
         if (in.token == IDENTIFIER) { // if there's an ident after the comma ...
           val name = ident()
+          // ... the ident may have array brackets of its own, as in `int a, b[]`. An empty pair of brackets can also
+          // end a type argument in the initializer of the previous var def, `new C<A, B[]>()`, but that is followed
+          // by `>` or `,`. An index expression, `f(x), y[0]`, has something between the brackets.
+          val tpt1 =
+            if (in.token == LBRACKET && in.lookaheadToken == RBRACKET) optArrayBrackets(tpt.duplicate)
+            else tpt.duplicate
           if (in.token == EQUALS || in.token == SEMI) { // ... followed by a `=` or `;`, we know it's a real variable definition
             buf ++= maybe
-            buf += varDecl(in.currentPos, mods, tpt.duplicate, name.toTermName)
+            buf += varDecl(in.currentPos, mods, tpt1, name.toTermName)
             maybe.clear()
           } else if (in.token == COMMA) { // ... if there's a comma after the ident, it could be a real vardef or not.
-            maybe += varDecl(in.currentPos, mods, tpt.duplicate, name.toTermName)
+            maybe += varDecl(in.currentPos, mods, tpt1, name.toTermName)
           } else { // ... if there's something else we were still in the initializer of the
                    // previous var def; skip to next comma or semicolon.
             skipTo(COMMA, SEMI)
@@ -1224,12 +1246,12 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
       val l = in.token match {
         case TRUE      => !negate
         case FALSE     => negate
-        case CHARLIT   => in.name.charAt(0)
+        case CHARLIT   => in.strVal.charAt(0)
         case INTLIT    => in.intVal(negate).toInt
         case LONGLIT   => in.intVal(negate)
         case FLOATLIT  => in.floatVal(negate).toFloat
         case DOUBLELIT => in.floatVal(negate)
-        case STRINGLIT => in.name.toString
+        case STRINGLIT => in.strVal
         case _         => null
       }
       if (l == null) None

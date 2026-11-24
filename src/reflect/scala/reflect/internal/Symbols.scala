@@ -287,6 +287,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     // Update the surrounding scopes
     protected[this] def changeNameInOwners(name: Name): Unit = {
       if (owner.isClass) {
+        scopeRewritten()
         var ifs = owner.infos
         while (ifs != null) {
           ifs.info.decls.rehash(this, name)
@@ -924,7 +925,9 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     def deprecationMessage     = getAnnotation(DeprecatedAttr) flatMap (_ stringArg 0)
     def deprecationVersion     = getAnnotation(DeprecatedAttr).flatMap(_.stringArg(1)) match {
                                    case v @ Some(_) => v
-                                   case _ => getAnnotation(JavaDeprecatedAttr).flatMap(_.stringArg(0))
+                                   case _ => getAnnotation(JavaDeprecatedAttr).flatMap(_.assocs.collectFirst {
+                                     case (nme.since, LiteralAnnotArg(Constant(since: String))) => since
+                                   })
                                  }
     def deprecatedParamName    = getAnnotation(DeprecatedNameAttr).flatMap(ann => ann.symbolArg(0).orElse(ann.stringArg(0).map(newTermName)).orElse(Some(nme.NO_NAME)))
     def deprecatedParamVersion = getAnnotation(DeprecatedNameAttr) flatMap (_ stringArg 1)
@@ -1610,6 +1613,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     def info_=(info: Type): Unit = {
       assert(info ne null, "Can't assign a null type")
       if (infos ne null) {
+        if (isClass && infos.info.isComplete) classInfoReplaced()
         infos.reset(currentPeriod, info)
       } else
         infos = TypeHistory(currentPeriod, info, null)
@@ -1655,6 +1659,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     }
 
     def hasRawInfo: Boolean = infos ne null
+    /** Has the latest info of this symbol been completed? Unlike `hasCompleteInfo`, never adapts the info to the current phase. */
+    private[internal] final def hasCompletedInfo: Boolean = (infos ne null) && infos.info.isComplete
     def hasCompleteInfo = hasRawInfo && rawInfo.isComplete
 
     // does not run adaptToNewRun, which is prone to trigger cycles (scala/bug#8029)
@@ -1869,6 +1875,9 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
           if (sym.isPublic && !sym.isConstructor) {
             oldsymbuf += sym
             newsymbuf += (
+              // TODO scala/scala review Z5: a class is abstracted to a type member, but its companion module is cloned
+              // with its real module class, whose members (`apply`, `unapply`) still refer to this class's `this`.
+              // Typing a pattern `y.P(_)` through such a module is rejected in `typedConstructorPattern`.
               if (sym.isClass)
                 tp.typeSymbol.newAbstractType(sym.name.toTypeName, sym.pos).setInfo(sym.existentialBound)
               else
@@ -2111,8 +2120,6 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
     /** Internal method to clone a symbol's implementation with the given flags and no info. */
     def cloneSymbolImpl(owner: Symbol, newFlags: Long): TypeOfClonedSymbol
-
-    def flipped: Symbol = this
 
 // ------ access to related symbols --------------------------------------------------
 
@@ -3496,14 +3503,6 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
         clone.thisSym setName thisSym.name
       }
       clone.associatedFile = _associatedFile
-      clone
-    }
-
-    override lazy val flipped: ClassSymbol = {
-      val clone = cloneSymbol(owner)
-      clone.rawInfo.typeParams.foreach { sym =>
-        if (sym.isContravariant) sym.resetFlag(Flag.CONTRAVARIANT).setFlag(Flag.COVARIANT)
-      }
       clone
     }
 

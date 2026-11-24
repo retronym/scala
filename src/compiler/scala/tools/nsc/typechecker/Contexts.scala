@@ -1864,6 +1864,46 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
       case bad              => throw new FatalError(s"symbol ${tree.symbol} has bad type: ${bad}")
     }
 
+    // Names that `qual.tpe` was found not to have as members. Every unqualified reference that is not
+    // bound more locally probes the enclosing wildcard imports in turn, so the same misses recur many
+    // times per unit (`Int` or `List` through `import global._`, say). The misses hold in the same run
+    // and phase while `qual.tpe` still denotes the same class, until a member may have been added: for
+    // a package, until its scope gains an entry; otherwise, until any class gains a member (see
+    // `classMembersEpoch`). A qualifier whose type is not a class (say, an abstract type, whose bounds
+    // could be reassigned) is not memoized.
+    private[this] var missNames: java.util.HashSet[Name] = null
+    private[this] var missPeriod: Period = NoPeriod
+    private[this] var missClass: Symbol = NoSymbol
+    private[this] var missEpoch: Int = 0
+    private[this] var missElems: ScopeEntry = null
+
+    private def missesHold(cls: Symbol): Boolean =
+      (cls eq missClass) && missPeriod == currentPeriod && (
+        if (cls.hasPackageFlag) missEpoch == scopeRewritesEpoch && (missElems eq cls.info.decls.elems)
+        else missEpoch == classMembersEpoch)
+
+    private def isKnownMiss(tp: Type, name: Name): Boolean =
+      (missNames ne null) && missNames.contains(name) && missesHold(tp.typeSymbol)
+
+    private def recordMiss(tp: Type, name: Name): Unit = {
+      val cls = tp.typeSymbol
+      if (cls.isClass) {
+        if ((missNames eq null) || !missesHold(cls)) {
+          if (missNames eq null) missNames = new java.util.HashSet[Name]() else missNames.clear()
+          missPeriod = currentPeriod
+          missClass = cls
+          if (cls.hasPackageFlag) {
+            missEpoch = scopeRewritesEpoch
+            missElems = cls.info.decls.elems
+          } else {
+            missEpoch = classMembersEpoch
+            missElems = null
+          }
+        }
+        missNames.add(name)
+      }
+    }
+
     /** Is name imported explicitly, not via wildcard? */
     def isExplicitImport(name: Name): Boolean = tree.selectors.exists(_.introduces(name))
 
@@ -1890,7 +1930,12 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
             if (sym.hasPackageFlag && analyzer.packageObjects.deferredOpen.remove(sym))
               openPackageModule(sym)
           }
-          tp.nonLocalMember(nom)
+          if (isKnownMiss(tp, nom)) NoSymbol
+          else {
+            val sym = tp.nonLocalMember(nom)
+            if (sym eq NoSymbol) recordMiss(tp, nom)
+            sym
+          }
         }
       while ((selectors ne Nil) && result == NoSymbol) {
         if (current.introduces(name))
