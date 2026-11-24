@@ -441,16 +441,31 @@ object NumericRange {
       def check(t: T): T =
         if (num.gt(t, limit)) throw new IllegalArgumentException("More than Int.MaxValue elements.")
         else t
+      // The quotient of a difference with the same sign as the step is non-negative,
+      // unless the division overflows, as quot(Long.MinValue, -1L) does.
+      def checkedQuot(diff: T): T = {
+        val q = num.quot(diff, step)
+        if (num.lt(q, zero)) throw new IllegalArgumentException("More than Int.MaxValue elements.")
+        else check(q)
+      }
       // If the range crosses zero, it might overflow when subtracted
       val startside = num.sign(start)
       val endside = num.sign(end)
       num.toInt{
         if (num.gteq(num.times(startside, endside), zero)) {
-          // We're sure we can subtract these numbers.
+          // We're sure we can subtract these numbers, except 0 - start when start is the type's MinValue
+          // (e.g. Long.MinValue to 0). For end == 0 use quot(-start, step) == -quot(start, step) instead.
           // Note that we do not use .rem because of different conventions for Long and BigInt
-          val diff = num.minus(end, start)
-          val quotient = check(num.quot(diff, step))
-          val remainder = num.minus(diff, num.times(quotient, step))
+          val (quotient, remainder) =
+            if (endside == zero) {
+              val q = num.quot(start, step)
+              if (num.lt(q, num.negate(limit))) throw new IllegalArgumentException("More than Int.MaxValue elements.")
+              (num.negate(q), num.minus(num.times(q, step), start))
+            } else {
+              val diff = num.minus(end, start)
+              val q = checkedQuot(diff)
+              (q, num.minus(diff, num.times(q, step)))
+            }
           if (!isInclusive && zero == remainder) quotient else check(num.plus(quotient, one))
         }
         else {
@@ -482,7 +497,7 @@ object NumericRange {
             else {
               // There is a last piece
               val enddiff = num.minus(end,waypointB)
-              val endq    = check(num.quot(enddiff, step))
+              val endq    = checkedQuot(enddiff)
               val last    = if (endq == zero) waypointB else num.plus(waypointB, num.times(endq, step))
               // Now we have to tally up all the pieces
               //   1 for the initial value
