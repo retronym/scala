@@ -84,11 +84,13 @@ sealed class NumericRange[T](
     else locationAfterN(length - 1)
   override def init: NumericRange[T] =
     if (isEmpty) Nil.init
+    else if (crossesTheEndAfterN(1)) newEmptyRange(start) // `end - step` may overflow
     else new NumericRange(start, end - step, step, isInclusive)
 
   override def head: T = if (isEmpty) Nil.head else start
   override def tail: NumericRange[T] =
     if (isEmpty) Nil.tail
+    else if (crossesTheEndAfterN(1)) newEmptyRange(end) // `start + step` may overflow
     else if(isInclusive) new NumericRange.Inclusive(start + step, end, step)
     else new NumericRange.Exclusive(start + step, end, step)
 

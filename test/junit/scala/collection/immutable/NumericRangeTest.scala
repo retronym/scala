@@ -69,6 +69,28 @@ class NumericRangeTest {
     }
   }
 
+  // `start + step` in tail and `end - step` in init wrap around for a one-element range at the type's bound
+  @Test
+  def tailInitOfOneElementRangeAtBound(): Unit = {
+    def check[T](r: NumericRange[T]): Unit = {
+      val xs = r.toList
+      assertEquals(s"$r.tail", xs.tail, r.tail.toList)
+      assertEquals(s"$r.init", xs.init, r.init.toList)
+      assertEquals(s"$r.tails", xs.tails.toList, r.tails.map(_.toList).toList)
+      assertEquals(s"$r.inits", xs.inits.toList, r.inits.map(_.toList).toList)
+    }
+    check(NumericRange.inclusive(Int.MaxValue, Int.MaxValue, 1))
+    check(NumericRange.inclusive(Int.MinValue, Int.MinValue, 1))
+    check(NumericRange.inclusive(Int.MinValue, Int.MinValue, -1))
+    check(NumericRange.inclusive(Long.MinValue, Long.MinValue, 1L))
+    check(NumericRange.inclusive(Long.MaxValue, Long.MaxValue, 1L))
+    check(NumericRange.inclusive(Int.MaxValue - 1, Int.MaxValue, 2))
+    check(NumericRange.inclusive(Int.MaxValue - 3, Int.MaxValue, 2))
+    check(NumericRange(Int.MinValue, Int.MinValue + 1, 3))
+    check(NumericRange.inclusive(Int.MinValue + 3, Int.MinValue, -2))
+    check(NumericRange.inclusive[Byte](120, Byte.MaxValue, 5))
+  }
+
   @Test
   def numericRangeIsEmpty(): Unit = {
     //Test Positive Step
