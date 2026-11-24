@@ -1675,6 +1675,8 @@ trait Implicits extends splain.SplainData {
           case RefinedType(parents, decls) => // !!! not yet: if !full || decls.isEmpty =>
             // refinement is not generated yet
             if (hasLength(parents, 1)) findManifest(parents.head)
+            // the element class of `Array[Int with Object]`, see `isPrimitiveValueClassWithObject`
+            else if (erasure.isPrimitiveValueClassWithObject(tp1)) manifestFactoryCall("classType", tp, gen.mkClassOf(ObjectTpe))
             else if (full) manifestFactoryCall("intersectionType", tp, parents map findSubManifest: _*)
             else mot(erasure.intersectionDominator(parents), from, to)
           case ExistentialType(_, _) =>

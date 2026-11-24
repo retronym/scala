@@ -305,11 +305,30 @@ trait Erasure {
       intersectionDominator(parents)
   }
 
+  /** Is `tp` an intersection of a primitive value class and `Object`, such as `Int with Object`?
+   *
+   *  A Java `T[]` is modelled as `Array[T with Object]` (in `ClassfileParser` and `RestrictJavaArraysMap`),
+   *  a reference array whatever `T` is. When `T` is instantiated to a primitive value class, as in
+   *  `Y.arr(1, 2)` for `<T> T[] arr(T... ts)`, `intersectionDominator` picks the value class, so the array
+   *  would erase to `int[]` although the Java method returns an `Object[]` of boxed values.
+   *  No unboxed value inhabits `Int with Object`; an array of it erases to `Object[]`.
+   *
+   *  Everything that derives the class of an array element from its type must agree: the element
+   *  type of an `ArrayValue` in erasure, and the runtime class of a `ClassTag` or `Manifest` of
+   *  `Int with Object` (`reifyRuntimeClass`, `manifestOfType`), which is `Object`. The value type
+   *  `Int with Object` itself still erases to `Int`.
+   */
+  def isPrimitiveValueClassWithObject(tp: Type): Boolean = tp.dealiasWiden match {
+    case RefinedType(parents, _) =>
+      parents.exists(p => isPrimitiveValueClass(p.typeSymbol)) && parents.exists(_.typeSymbol == ObjectClass)
+    case _ => false
+  }
+
   trait Scala2JavaArrayErasure { self: ErasureMap =>
 
     def eraseArray(arrayRef: Type, pre: Type, args: List[Type]): Type =
       if (unboundedGenericArrayLevel(arrayRef) == 1) ObjectTpe
-      else if (args.head.typeSymbol.isBottomClass) arrayType(ObjectTpe)
+      else if (args.head.typeSymbol.isBottomClass || isPrimitiveValueClassWithObject(args.head)) arrayType(ObjectTpe)
       else typeRef(self(pre), ArrayClass, args map applyInArray)
 
   }
