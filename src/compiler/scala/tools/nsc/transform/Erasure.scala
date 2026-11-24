@@ -287,13 +287,19 @@ abstract class Erasure extends InfoTransform
           def argSig(tp: Type): Unit =
             if (existentiallyBound contains tp.typeSymbol) {
               val bounds = tp.typeSymbol.info.bounds
+              // The bound of a higher-kinded existential is a type function over its type parameters (`G[x] <: List[x]`).
+              // They are declared nowhere in the class file, so they become wildcards rather than type variables.
+              def boundSig(bound: Type): Unit = bound match {
+                case PolyType(tparams, restpe) => jsig(restpe, tparams, toplevel = false, unboxedVCs = false)
+                case _                         => boxedSig(bound)
+              }
               if (!(AnyRefTpe <:< bounds.hi)) {
                 builder.append('+')
-                boxedSig(bounds.hi)
+                boundSig(bounds.hi)
               }
               else if (!(bounds.lo <:< NullTpe)) {
                 builder.append('-')
-                boxedSig(bounds.lo)
+                boundSig(bounds.lo)
               }
               else builder.append('*')
             } else tp match {
