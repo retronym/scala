@@ -114,6 +114,9 @@ abstract class SymbolPairs {
       */
     protected def skipOwnerPair(lowClass: Symbol, highClass: Symbol): Boolean = false
 
+    /** Even if `low` and `high` match, should the cursor skip this pair? By default, decided by their owners. */
+    protected def skipPair(low: Symbol, high: Symbol): Boolean = skipOwnerPair(low.owner, high.owner)
+
     protected def bases: List[Symbol] = base.info.baseClasses
 
     /** The scope entries that have already been visited as highSymbol
@@ -181,7 +184,7 @@ abstract class SymbolPairs {
           val isMatch = matches(high) && { visited addEntry nextEntry ; true } // side-effect visited on all matches
 
           // Advance if no match, or if the particular cursor is not interested in this pair
-          if (!isMatch || skipOwnerPair(low.owner, high.owner)) advanceNextEntry()
+          if (!isMatch || skipPair(low, high)) advanceNextEntry()
           else highSymbol = high
         }
       }

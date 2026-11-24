@@ -86,5 +86,13 @@ abstract class OverridingPairs extends SymbolPairs {
     // Correctness of bridge generation relies on visiting each such class only once.
     override def skipOwnerPair(lowClass: Symbol, highClass: Symbol): Boolean =
       nonTraitParent.isNonBottomSubClass(lowClass) && nonTraitParent.isNonBottomSubClass(highClass)
+
+    // The parent class has only considered the pair if the two members match there, too. They might only match in
+    // `base`: `def m(t: T)` and `def m(s: String)` are overloads in `P[T]` and a pair in `class C extends P[String]`.
+    override def skipPair(low: Symbol, high: Symbol): Boolean =
+      super.skipPair(low, high) && {
+        val parentSite = nonTraitParent.thisType
+        parentSite.memberType(low).matches(parentSite.memberType(high))
+      }
   }
 }
