@@ -472,17 +472,16 @@ final class Dependency(val global: CallbackGlobal) extends LocateClassFile with 
     private def traverseAnnotations(tree: Tree): Unit = tree match {
       case md: MemberDef if md.symbol != null && md.symbol != NoSymbol =>
         val annotations = md.symbol.annotations
-        if (annotations.nonEmpty) atOwner(md.symbol) {
-          annotations.foreach { annot =>
-            if (annot.original != EmptyTree) traverse(annot.original)
-            else {
-              addTypeDependencies(annot.atp)
-              annot.args.foreach(traverse)
-            }
-          }
-        }
+        if (annotations.nonEmpty) atOwner(md.symbol)(annotations.foreach(traverseAnnotation))
       case _ =>
     }
+
+    private def traverseAnnotation(annot: AnnotationInfo): Unit =
+      if (annot.original != EmptyTree) traverse(annot.original)
+      else {
+        addTypeDependencies(annot.atp)
+        annot.args.foreach(traverse)
+      }
 
     private def traverseTree(tree: Tree): Unit = tree match {
       case Import(expr, selectors) =>
@@ -550,7 +549,13 @@ final class Dependency(val global: CallbackGlobal) extends LocateClassFile with 
         traverseTrees(body)
 
       case Literal(value) if value.tag == ClazzTag =>
-        addTypeDependencies(value.typeValue)
+        val tpe = value.typeValue
+        addTypeDependencies(tpe)
+        // The type of `classOf[C @ann]` is the only place its annotations live.
+        tpe.foreach {
+          case AnnotatedType(annotations, _) => annotations.foreach(traverseAnnotation)
+          case _                             =>
+        }
 
       /* Original type trees have to be traversed because typer is very
        * aggressive when expanding explicit user-defined types. For instance,
