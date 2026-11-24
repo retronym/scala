@@ -589,13 +589,13 @@ trait JavaScanners extends ast.parser.ScannersCommon {
                 return
 
               case _ =>
-                if (Character.isUnicodeIdentifierStart(in.ch)) {
-                  putChar(in.ch)
-                  in.next()
+                val cp = codePoint
+                if (Character.isJavaIdentifierStart(cp)) {
+                  putCodePoint(cp)
                   getIdentRest()
                 } else {
-                  syntaxError("illegal character: "+in.ch.toInt)
-                  in.next()
+                  syntaxError("illegal character: "+cp)
+                  skipCodePoint(cp)
                 }
                 return
             }
@@ -635,6 +635,28 @@ trait JavaScanners extends ast.parser.ScannersCommon {
 
 // Identifiers ---------------------------------------------------------------
 
+    /** The code point at the current position, which takes two chars if it is a supplementary character. */
+    private def codePoint: Int =
+      if (Character.isHighSurrogate(in.ch)) {
+        val lookahead = in.copy
+        lookahead.next()
+        if (Character.isLowSurrogate(lookahead.ch)) Character.toCodePoint(in.ch, lookahead.ch) else in.ch
+      } else in.ch
+
+    private def skipCodePoint(cp: Int): Unit = {
+      in.next()
+      if (Character.isSupplementaryCodePoint(cp)) in.next()
+    }
+
+    private def putCodePoint(cp: Int): Unit = {
+      putChar(in.ch)
+      in.next()
+      if (Character.isSupplementaryCodePoint(cp)) {
+        putChar(in.ch)
+        in.next()
+      }
+    }
+
     private def getIdentRest(): Unit = {
       while (true) {
         (in.ch: @switch) match {
@@ -665,9 +687,11 @@ trait JavaScanners extends ast.parser.ScannersCommon {
             token = JavaScannerConfiguration.name2token(name)
             return
           case _ =>
-            if (Character.isUnicodeIdentifierPart(in.ch)) {
-              putChar(in.ch)
-              in.next()
+            val cp = codePoint
+            if (Character.isIdentifierIgnorable(cp)) {
+              skipCodePoint(cp) // not part of the name (JLS 3.8), javac drops it as well
+            } else if (Character.isJavaIdentifierPart(cp)) {
+              putCodePoint(cp)
             } else {
               setName()
               token = JavaScannerConfiguration.name2token(name)
