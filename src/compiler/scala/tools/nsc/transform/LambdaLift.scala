@@ -212,6 +212,11 @@ abstract class LambdaLift extends InfoTransform {
               sym setFlag (PrivateLocal | FINAL)
             } else if (sym.isPrimaryConstructor) {
               symSet(called, sym) += sym.owner
+            } else if (sym.isConstructor && sym.owner.isLocalToBlock) {
+              // scala/bug#9536 An auxiliary constructor takes the free variables of the constructors it calls.
+              // Conversely, give its own free variables to the primary constructor, and so to all constructors,
+              // so that the added parameters do not make two constructors have the same signature.
+              symSet(called, sym.owner.primaryConstructor) += sym
             }
           case Ident(name) =>
             if (sym == NoSymbol) {
