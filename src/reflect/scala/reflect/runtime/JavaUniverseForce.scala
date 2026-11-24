@@ -88,6 +88,7 @@ trait JavaUniverseForce { self: runtime.JavaUniverse  =>
     this.DiscardedExpr
     this.BooleanParameterType
     this.ForceMatchDesugar
+    this.LocalClassDiscriminator
     // inaccessible: this.posAssigner
     this.ConsoleWriter
     this.RefTree

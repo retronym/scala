@@ -2643,6 +2643,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
         // don't set FINAL -- methods not marked final by user should not end up final in bytecode
         // inliner will know it's effectively final (notPRIVATE non-deferred method)
         if (!isStaticModule && !isClassConstructor) {
+          nme.chooseLocalClassDiscriminators(base)
           expandName(base)
           if (isModule) moduleClass.makeNotPrivate(base)
         }
