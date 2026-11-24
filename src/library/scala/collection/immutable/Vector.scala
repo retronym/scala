@@ -2292,6 +2292,7 @@ private final class NewVectorIterator[A](v: Vector[A], private[this] var totalLe
   }
 
   private[this] def advance(): Unit = {
+    if(!hasNext) Iterator.empty.next()
     val pos = i1-len1+totalLength
     if(pos == sliceEnd) advanceSlice()
     if(sliceDim > 1) {
