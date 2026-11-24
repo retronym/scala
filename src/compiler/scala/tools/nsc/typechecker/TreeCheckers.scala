@@ -229,6 +229,16 @@ abstract class TreeCheckers extends AbstractAnalyzer {
     // with predictably unfortunate results.
     override protected def finishMethodSynthesis(templ: Template, clazz: Symbol, context: Context): Template = templ
 
+    // Erasure represents the injection `new VC(e)` of a value into a value class by `e` with its type set to
+    // `ErasedValueType(VC, U)` (`InjectDerivedValue` in `Erasure.Eraser.typed1`). Retyping `e` gives `U`;
+    // accept that where the erased value type is expected.
+    override protected def adapt(tree: Tree, mode: Mode, pt: Type, original: Tree = EmptyTree): Tree = pt match {
+      case ErasedValueType(_, underlying) if mode.inExprMode && !tree.tpe.isInstanceOf[ErasedValueType] && tree.tpe <:< underlying =>
+        tree.setType(pt)
+      case _ =>
+        super.adapt(tree, mode, pt, original)
+    }
+
     // XXX check for tree.original on TypeTrees.
     private def treesDiffer(t1: Tree, t2: Tree): Unit = {
       def len1 = t1.toString.length
