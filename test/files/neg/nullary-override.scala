@@ -59,3 +59,15 @@ class Mark12b extends AMR[String]("", false) with Ref1 with Ref2 { override def 
 
 class Mark21a extends AMR[String]("", false) with Ref2 with Ref1 { override def getReference   = "21a" }
 class Mark21c extends AMR[String]("", false) with Ref2 with Ref1 { override def getReference() = "21b" }
+
+// the same for polymorphic methods
+class PA { def f[T]: List[T] = Nil; def g[T](): List[T] = Nil }
+class PB extends PA {
+  override def f[T](): List[T] = Nil
+  override def g[T]: List[T] = Nil
+}
+
+trait PT1 { def m[T]: Option[T] }
+trait PT2 { def m[T](): Option[T] = None }
+class PMix12 extends PT1 with PT2
+class PMix21 extends PT2 with PT1
