@@ -203,25 +203,29 @@ sealed class NumericRange[T](
       so we take two steps smaller than zero to ensure unsafeRangeLength won't overflow (taking one step may overflow depending on the step).
       Same thing happens for MaxValue from zero, so we take one step further to ensure the safety of unsafeRangeLength.
       After performing such operation, there are some elements remaining in between and around zero,
-      which their length is represented by carry.
+      which are listed in gap; carry counts those that are not past the end.
        */
-      val (l: NumericRange[T], r: NumericRange[T], carry: Int) =
+      val (l: NumericRange[T], r: NumericRange[T], gap: List[T]) =
         if (num.lt(start, num.zero)) {
           if (walksOnZero) {
             val twoStepsAfterLargestNegativeNumber = num.plus(closestToZero, num.times(step, num.fromInt(2)))
-            (NumericRange(start, closestToZero, step), copy(twoStepsAfterLargestNegativeNumber, end, step), 2)
+            (NumericRange(start, closestToZero, step), copy(twoStepsAfterLargestNegativeNumber, end, step), List(closestToZero, num.zero))
           } else {
-            (NumericRange(start, closestToZero, step), copy(num.plus(closestToZero, step), end, step), 1)
+            (NumericRange(start, closestToZero, step), copy(num.plus(closestToZero, step), end, step), List(closestToZero))
           }
         } else {
           if (walksOnZero) {
             val twoStepsAfterZero = num.times(step, num.fromInt(2))
-            (copy(twoStepsAfterZero, end, step), NumericRange.inclusive(start, -step, step), 2)
+            (copy(twoStepsAfterZero, end, step), NumericRange.inclusive(start, -step, step), List(num.zero, step))
           } else {
             val twoStepsAfterSmallestPositiveNumber = num.plus(closestToZero, num.times(step, num.fromInt(2)))
-            (copy(twoStepsAfterSmallestPositiveNumber, end, step), NumericRange.inclusive(start, closestToZero, step), 2)
+            (copy(twoStepsAfterSmallestPositiveNumber, end, step), NumericRange.inclusive(start, closestToZero, step), List(num.plus(closestToZero, step)))
           }
         }
+      val carry = gap.count { x =>
+        val beforeEnd = if (num.gt(step, num.zero)) num.lt(x, end) else num.gt(x, end)
+        beforeEnd || isInclusive && num.equiv(x, end)
+      }
 
       val leftLength = unsafeRangeLength(l)
       val rightLength = unsafeRangeLength(r)
