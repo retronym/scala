@@ -222,7 +222,12 @@ abstract class TailCalls extends Transform {
           case Select(qual, _)  => qual
           case _                => EmptyTree
         }
-        def receiverIsSame    = ctx.enclosingType.widen =:= receiver.tpe.widen
+        // The receiver may have the class's own type rather than its self type: `o.f()` with `o: C` in
+        // `trait C { self: D => ... }`. It is an instance of the same class either way.
+        def receiverIsSame    = {
+          val receiverTpe = receiver.tpe.widen
+          ctx.enclosingType.widen =:= receiverTpe || ctx.method.enclClass.tpe_* =:= receiverTpe
+        }
         def receiverIsSuper   = ctx.enclosingType.widen <:< receiver.tpe.widen
         def isRecursiveCall   = (ctx.method eq fun.symbol) && ctx.tailPos
         def transformedArgs   = if (transformArgs) noTailTransforms(args) else args
@@ -251,7 +256,13 @@ abstract class TailCalls extends Transform {
             val args = mapWithIndex(transformedArgs) { (arg, i) =>
               mkAttributedCastHack(arg, ctx.label.info.params(i + 1).tpe)
             }
-            Apply(Ident(ctx.label), noTailTransform(recv) :: args)
+            // the label's `this` parameter has the self type, which the receiver may not conform to
+            val thisTpe = ctx.label.info.params.head.tpe
+            val newThis = noTailTransform(recv) match {
+              case r if (r.tpe eq null) || r.tpe <:< thisTpe => r // `This(currentClass)` is not typed yet
+              case r                      => mkAttributedCastHack(r, thisTpe)
+            }
+            Apply(Ident(ctx.label), newThis :: args)
           }
         }
 
