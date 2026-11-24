@@ -65,10 +65,12 @@ abstract class TailCalls extends Transform {
    *   the method has `@specialized` annotated type parameters, the recursive
    *   call must contain these parameters as type arguments.
    *   Recursive calls on a different instance are optimized.
-   *   Since 'this' is not a local variable, a dummy local val
-   *   is added and used as a label parameter. The backend knows to load
+   *   Since 'this' is not a local variable, if the method contains such a call,
+   *   a dummy local val is added and used as a label parameter. The backend knows to load
    *   the corresponding argument in the 'this' (local at index 0). This dummy local
    *   is never used and should be cleaned up by dead code elimination (when enabled).
+   *   Otherwise, the label has no such parameter, so that the method does not refer to
+   *   'this' unless its body does. (A local method that does not is lifted to a static method.)
    * </p>
    * <p>
    *   This phase runs after pattern matching, uncurry and fields, so it
@@ -106,6 +108,7 @@ abstract class TailCalls extends Transform {
       def methodPos: Position     // default position for failure reporting
       def tailPos: Boolean        // context is in tail position
       def label: Symbol           // new label, tail call target
+      def labelHasThis: Boolean   // does the label take a new `this` as its first parameter?
       def tailLabels: Set[Symbol]
 
       def enclosingType = method.enclClass.typeOfThis
@@ -138,6 +141,7 @@ abstract class TailCalls extends Transform {
       def methodPos  = NoPosition
       def tailPos    = false
       def label      = NoSymbol
+      def labelHasThis = false
       def tailLabels = Set.empty[Symbol]
     }
 
@@ -147,7 +151,19 @@ abstract class TailCalls extends Transform {
       def methodPos = dd.pos
       def tailPos   = true
 
-      lazy val label      = mkLabel()
+      private[this] var labelCreated = false
+      lazy val label      = { labelCreated = true; mkLabel() }
+      override def isTransformed = labelCreated && super.isTransformed
+
+      /** Does the label need a parameter for `this`, as some recursive call has a receiver other than `this`? */
+      lazy val labelHasThis = {
+        def hasOtherReceiver(fun: Tree): Boolean = fun match {
+          case TypeApply(fn, _)   => hasOtherReceiver(fn)
+          case Select(qual, _)    => !(qual.isInstanceOf[This] && qual.symbol == method.enclClass)
+          case _                  => false
+        }
+        recursiveCalls(dd.rhs).exists { case Apply(fun, _) => hasOtherReceiver(fun) case _ => false }
+      }
       lazy val tailLabels = {
         // labels are local to a method, so only traverse the rhs of a defdef
         val collector = new TailPosLabelsTraverser
@@ -157,8 +173,10 @@ abstract class TailCalls extends Transform {
 
       private def mkLabel() = {
         val label     = method.newLabel(newTermName("_" + method.name), method.pos)
-        val thisParam = method.newSyntheticValueParam(currentClass.typeOfThis)
-        label setInfo MethodType(thisParam :: method.tpe.params, method.tpe_*.finalResultType)
+        val params    =
+          if (labelHasThis) method.newSyntheticValueParam(currentClass.typeOfThis) :: method.tpe.params
+          else method.tpe.params
+        label setInfo MethodType(params, method.tpe_*.finalResultType)
         if (isEligible)
           label.substInfo(method.tpe.typeParams, tparams)
 
@@ -187,6 +205,7 @@ abstract class TailCalls extends Transform {
       def methodPos  = that.methodPos
       def tailLabels = that.tailLabels
       def label      = that.label
+      def labelHasThis = that.labelHasThis
     }
 
     private var ctx: TailContext = EmptyTailContext
@@ -248,10 +267,11 @@ abstract class TailCalls extends Transform {
           debuglog(s"Rewriting tail recursive call: [${fun.pos.lineContent.trim}]")
           accessed += ctx.label
           typedPos(fun.pos) {
+            val thisArgs = if (ctx.labelHasThis) noTailTransform(recv) :: Nil else Nil
             val args = mapWithIndex(transformedArgs) { (arg, i) =>
-              mkAttributedCastHack(arg, ctx.label.info.params(i + 1).tpe)
+              mkAttributedCastHack(arg, ctx.label.info.params(i + thisArgs.length).tpe)
             }
-            Apply(Ident(ctx.label), noTailTransform(recv) :: args)
+            Apply(Ident(ctx.label), thisArgs ::: args)
           }
         }
 
@@ -296,13 +316,16 @@ abstract class TailCalls extends Transform {
                     failPositions(newCtx) = remaining.pos
                   tailrecFailure(newCtx)
                 }
-              val newThis = newCtx.newThis(tree.pos)
               val vpSyms  = vparamss.flatten.map(_.symbol)
+              val body    = mkAttributedCastHack(newRHS, newCtx.label.tpe.resultType)
 
-              typedPos(tree.pos)(Block(
-                List(ValDef(newThis, This(currentClass))),
-                LabelDef(newCtx.label, newThis :: vpSyms, mkAttributedCastHack(newRHS, newCtx.label.tpe.resultType))
-              ))
+              typedPos(tree.pos) {
+                if (newCtx.labelHasThis) {
+                  val newThis = newCtx.newThis(tree.pos)
+                  Block(List(ValDef(newThis, This(currentClass))), LabelDef(newCtx.label, newThis :: vpSyms, body))
+                }
+                else LabelDef(newCtx.label, vpSyms, body)
+              }
             }
             else {
               if (newCtx.isMandatory) {
