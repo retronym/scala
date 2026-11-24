@@ -123,6 +123,10 @@ abstract class ZipArchive(override val file: JFile, release: Option[String]) ext
 
   /** ''Note:  This library is considered experimental and should not be used unless you know what you are doing.'' */
   class DirEntry(path: String) extends Entry(path) {
+    /** The members of this directory. A file is keyed by its base name, a subdirectory by its base name
+     *  followed by `/`, so that an archive containing both a file `p/q` and a directory `p/q/` (which the
+     *  zip format allows) keeps both.
+     */
     val entries = mutable.HashMap[String, Entry]()
 
     override def isDirectory = true
@@ -139,7 +143,7 @@ abstract class ZipArchive(override val file: JFile, release: Option[String]) ext
         case null =>
           val parent = ensureDir(dirName(path))
           val dir = new DirEntry(path)
-          parent.entries(baseName(path)) = dir
+          parent.entries(baseName(path) + "/") = dir
           dirs.put(path, dir)
           dir
         case dir => dir
@@ -151,7 +155,8 @@ abstract class ZipArchive(override val file: JFile, release: Option[String]) ext
   @volatile private[this] var lastDirName: String = RootEntry
   private def dirNameUsingLast(name: String): String = {
     val last = lastDirName
-    if (name.length > last.length + 1 && name.startsWith(last) && name.charAt(last.length) == '/' && name.indexOf('/', last.length + 1) == -1) {
+    // `last` ends in '/', so `name` is directly in that directory if it has no further '/'.
+    if (name.length > last.length && name.startsWith(last) && name.indexOf('/', last.length) == -1) {
       // OPT: Avoid string allocation when reading successive entries in a zip index from the same directory.
       lastDirName
     } else {
