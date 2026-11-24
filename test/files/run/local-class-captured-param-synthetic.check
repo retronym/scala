@@ -1,0 +1,3 @@
+descriptor: scala.collection.immutable.List, int
+generic: scala.collection.immutable.List<java.lang.String>
+parameters: scala.collection.immutable.List<java.lang.String>, int
