@@ -2192,10 +2192,12 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
         remainingAccessors match {
           case Nil => foundAccessors.sortBy(_._2).map(_._1)
           case acc :: remainingAccessors =>
-            def nameStartsWithOrigDollar(name: Name, prefix: Name) =
-              name.startsWith(prefix) && name.length > prefix.length + 1 && name.charAt(prefix.length) == '$'
+            // the accessor of a non-public parameter `p` at index `i` is named `p$access$i` (see SyntheticMethods)
+            def isAccessNameFor(name: Name, prefix: Name, i: Int) =
+              name.startsWith(prefix) && name.length > prefix.length + 1 && name.charAt(prefix.length) == '$' &&
+                name.toString == s"$prefix${nme.CASE_ACCESSOR}$$$i"
             remainingNames.collectFirst {
-              case (name, i) if acc.name == name || nameStartsWithOrigDollar(acc.name, name) => i
+              case (name, i) if acc.name == name || isAccessNameFor(acc.name, name, i) => i
             } match {
               case Some(i) => loop(remainingAccessors, (acc, i) :: foundAccessors, remainingNames.filter(_._2 != i))
               case x => throw new MatchError(x)
