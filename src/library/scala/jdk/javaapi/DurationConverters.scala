@@ -41,12 +41,16 @@ object  DurationConverters {
       FiniteDuration(originalNanos, TimeUnit.NANOSECONDS)
     } else {
       try {
-        val secondsAsNanos = Math.multiplyExact(originalSeconds, 1000000000)
-        val totalNanos = secondsAsNanos + originalNanos
-        if ((totalNanos < 0 && secondsAsNanos < 0) || (totalNanos > 0 && secondsAsNanos > 0))
-          FiniteDuration(totalNanos, TimeUnit.NANOSECONDS)
-        else
-          throw new ArithmeticException()
+        // The nanos are never negative, so a negative duration has seconds rounded towards negative infinity.
+        // Move one second into the nanos so that both parts have the same sign, and only a total that is
+        // out of range overflows.
+        val (seconds, nanos) =
+          if (originalSeconds < 0) (originalSeconds + 1, originalNanos - 1000000000L)
+          else (originalSeconds, originalNanos.toLong)
+        val totalNanos = Math.addExact(Math.multiplyExact(seconds, 1000000000L), nanos)
+        // FiniteDuration's range is symmetric
+        if (totalNanos == Long.MinValue) throw new ArithmeticException()
+        FiniteDuration(totalNanos, TimeUnit.NANOSECONDS)
       } catch {
         case _: ArithmeticException =>
           throw new IllegalArgumentException(s"Java duration $duration cannot be expressed as a Scala duration")
