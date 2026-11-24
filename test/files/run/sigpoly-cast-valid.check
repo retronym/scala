@@ -1,0 +1,10 @@
+sigpoly-cast-valid.scala:18: warning: the cast does not set the result type of signature polymorphic method invoke, the call returns Object;
+use a type ascription instead: `(... : String)`
+    println(mh.invoke(c).asInstanceOf[String])
+                     ^
+sigpoly-cast-valid.scala:22: warning: the cast does not set the result type of signature polymorphic method getVolatile, the call returns Object;
+use a type ascription instead: `(... : Long)`
+    println(vh.getVolatile(arr, 0).asInstanceOf[Long])
+                          ^
+1
+42
