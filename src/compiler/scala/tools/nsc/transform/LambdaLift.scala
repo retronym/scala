@@ -106,6 +106,12 @@ abstract class LambdaLift extends InfoTransform {
      */
     private val proxyNames       = mutable.HashMap[Symbol, Name]()
 
+    /** Overrides `proxyNames` for the proxy of a free variable (`_2`) in a particular owner (`_1`), see `computeFreeVars`. */
+    private val ownerProxyNames  = mutable.HashMap[(Symbol, Symbol), Name]()
+
+    private def proxyNameIn(owner: Symbol, fv: Symbol): Name =
+      ownerProxyNames.getOrElse((owner, fv), proxyNames.getOrElse(fv, fv.name))
+
     /** A flag to indicate whether new free variables have been found */
     private var changedFreeVars: Boolean = _
 
@@ -285,13 +291,26 @@ abstract class LambdaLift extends InfoTransform {
         else renameSym(sym)
       }
 
+      // scala/bug#5252 The proxy of a free variable in a trait is an abstract getter. Mixin implements it with a field
+      // of the same name in each class that mixes in the trait. If that class captures the same variable, its own
+      // proxy field needs a different name, as does the corresponding parameter of its primary constructor (the
+      // constructors phase matches parameter accessors to constructor parameters by name).
+      for ((owner, freeValues) <- free if owner.isClass && !owner.isTrait) {
+        val mixinFree = owner.mixinClasses.filter(_.isTrait).flatMap(free.get)
+        for (fv <- freeValues if mixinFree.exists(_.contains(fv))) {
+          val name = unit.freshTermName(s"${fv.name}${nme.NAME_JOIN_STRING}")
+          ownerProxyNames((owner, fv)) = name
+          ownerProxyNames((owner.primaryConstructor, fv)) = name
+        }
+      }
+
       afterOwnPhase {
         for ((owner, freeValues) <- free.toList) {
           val newFlags = SYNTHETIC | (if (owner.isClass) PARAMACCESSOR else PARAM)
 
           proxies(owner) =
             for (fv <- freeValues.toList) yield {
-              val proxyName = proxyNames.getOrElse(fv, fv.name)
+              val proxyName = proxyNameIn(owner, fv)
               debuglog(s"new proxy $proxyName in ${owner.fullLocationString}")
               val proxy =
                 if (owner.isTrait) {
@@ -324,8 +343,9 @@ abstract class LambdaLift extends InfoTransform {
           throw new IllegalArgumentException("Could not find proxy for "+ sym.defString +" in "+ sym.ownerChain +" (currentOwner= "+ currentOwner +" )")
         debuglog("searching for " + sym + "(" + sym.owner + ") in " + enclosure + " " + logicallyEnclosingMember(enclosure))
 
-        val proxyName = proxyNames.getOrElse(sym, sym.name)
-        val ps = (proxies get logicallyEnclosingMember(enclosure)).toList.flatten find (_.name == proxyName)
+        val member = logicallyEnclosingMember(enclosure)
+        val proxyName = proxyNameIn(member, sym)
+        val ps = (proxies get member).toList.flatten find (_.name == proxyName)
         ps getOrElse searchIn(enclosure.skipConstructor.owner)
       }
       debuglog("proxy %s from %s has logical enclosure %s".format(
