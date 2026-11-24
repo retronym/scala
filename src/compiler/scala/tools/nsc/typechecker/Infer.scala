@@ -89,7 +89,7 @@ trait Infer extends Checkable {
       val samInfoWithTVars = ptVars.memberInfo(sam)
 
       // use function type subtyping, not method type subtyping (the latter is invariant in argument types)
-      funTp <:< functionType(samInfoWithTVars.paramTypes, samInfoWithTVars.finalResultType)
+      funTp <:< samMethodToFunctionType(samInfoWithTVars)
 
       // solve constraints tracked by tvars
       val targs = solvedTypes(tvars, tparams, variances.varianceInType(sam.info), upper = false, lubDepth(sam.info :: Nil))
