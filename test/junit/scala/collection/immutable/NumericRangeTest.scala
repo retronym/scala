@@ -69,6 +69,24 @@ class NumericRangeTest {
     }
   }
 
+  // The endpoint checks of t11152 pass, but BigDecimal arithmetic uses start's MathContext (2 digits),
+  // so 0.100 + 0.001 rounds back to 0.10 in the middle of the range. Either reject the range up front,
+  // or produce `length` distinct, increasing elements.
+  @Test
+  def bigDecimalSmallMathContextMidRange(): Unit = {
+    val start = BigDecimal(0, new java.math.MathContext(2))
+    val r =
+      try Some(start to BigDecimal(1) by BigDecimal("0.001")).filter(_.length >= 0)
+      catch { case _: IllegalArgumentException => None }
+    r.foreach { r =>
+      val viaIterator = r.iterator.take(r.length + 1).toList
+      assertEquals(r.length, viaIterator.length)
+      val viaApply = (0 until r.length).map(r(_)).toList
+      assertEquals(viaApply, viaIterator)
+      assertTrue(viaIterator.zip(viaIterator.tail).forall { case (a, b) => a < b })
+    }
+  }
+
   @Test
   def numericRangeIsEmpty(): Unit = {
     //Test Positive Step
