@@ -1,0 +1,21 @@
+S.scala:11: error: class S needs to be abstract.
+private[package a] def foo(): Unit (defined in class J) has package access, so it is not implemented by
+def foo(): Unit (defined in class S); only a method of a class in package a can implement it
+  class S extends a.J { def foo(): Unit = () }
+        ^
+S.scala:19: error: class S5 needs to be abstract.
+private[package a] def foo(): Unit (defined in class J) has package access, so it is not implemented by
+def foo(): Unit (defined in trait TA); only a method of a class in package a can implement it
+  class S5 extends a.TA
+        ^
+S.scala:22: error: object creation impossible.
+private[package a] def foo(): Unit (defined in class J) has package access, so it is not implemented by
+def foo(): Unit (defined in class S6); only a method of a class in package a can implement it
+  object O extends S6
+         ^
+S.scala:30: error: class S10 needs to be abstract.
+private[package a] def foo(): Unit (defined in class K3) has package access, so it is not implemented by
+def foo(): Unit (defined in class S10); only a method of a class in package a can implement it
+  class S10 extends a.K3 { def foo(): Unit = () }
+        ^
+4 errors
