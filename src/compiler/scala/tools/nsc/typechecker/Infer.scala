@@ -818,7 +818,10 @@ trait Infer extends Checkable {
           case mt@MethodType(_, _)       => isApplicableToMethod(undetparams, mt, argtpes0, pt)
           case NullaryMethodType(restpe) => isApplicable(undetparams, restpe, argtpes0, pt)
           case PolyType(_, mt: MethodType) if !arityAdmitsApplication(mt, argtpes0) => false
-          case PolyType(tparams, restpe) => createFromClonedSymbols(tparams, restpe)((tps1, res1) => isApplicable(tps1 ::: undetparams, res1, argtpes0, pt))
+          case PolyType(tparams, restpe) =>
+            if (needsFreshTypeParams(tparams, undetparams))
+              createFromClonedSymbols(tparams, restpe)((tps1, res1) => isApplicable(tps1 ::: undetparams, res1, argtpes0, pt))
+            else isApplicable(tparams ::: undetparams, restpe, argtpes0, pt)
           case ErrorType                 => true
           case _                         => false
         }
@@ -845,6 +848,38 @@ trait Infer extends Checkable {
         else numParams
       def canTuple = !argtpes0.exists(isRepeatedParamType) && eligibleForTupleConversion(paramTypes, numArgs)
       numFormals == numArgs || mt.params.exists(_.hasDefault) || canTuple
+    }
+
+    /** Whether `isApplicable` must infer `tparams` through clones rather than the polymorphic
+     *  method's own type params.
+     *
+     *  Inference mutates the infos of the type params it leaves undetermined: `enhanceBounds`
+     *  substitutes the solved type args into their bounds (scala/bug#10528). On the method's own
+     *  type params that would rewrite its signature, so clone when a type param's info mentions
+     *  another of `tparams`. A bound that mentions only the type param itself (`A <: Ordered[A]`)
+     *  is safe: a type param is never both solved and undetermined.
+     *
+     *  Also clone when the type params are already being inferred (in `undetparams`), so the two
+     *  inference problems don't share type vars. That does not happen today: `adapt` clones a
+     *  method's type params before they become undetermined, method bodies see type skolems, and
+     *  `OverloadedArgProto` replaces the alternatives' type params with wildcards.
+     */
+    private def needsFreshTypeParams(tparams: List[Symbol], undetparams: List[Symbol]): Boolean = {
+      def mentionsSibling(tparam: Symbol) = tparam.info.exists { tp =>
+        val sym = tp.typeSymbolDirect
+        (sym ne tparam) && isOneOf(sym, tparams)
+      }
+      tparams.exists(mentionsSibling) || (undetparams.nonEmpty && tparams.exists(isOneOf(_, undetparams)))
+    }
+
+    /** `syms.contains(sym)`, by reference, without boxed equality. */
+    private def isOneOf(sym: Symbol, syms: List[Symbol]): Boolean = {
+      var rest = syms
+      while (!rest.isEmpty) {
+        if (rest.head eq sym) return true
+        rest = rest.tail
+      }
+      false
     }
 
     /**
