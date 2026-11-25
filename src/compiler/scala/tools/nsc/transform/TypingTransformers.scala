@@ -45,7 +45,7 @@ trait TypingTransformers extends TypeAssigners {
 
     private[this] var _localTyper: analyzer.Typer = initLocalTyper
     // Without an initial typer, the unit to make the root typer for.
-    protected[this] var rootUnit: CompilationUnit = _
+    private[this] var rootUnit: CompilationUnit = _
     // The frames below `materialized` have their context made, and `parentContexts(i)` is the context that frame
     // `i`'s was made from, restored when it exits.
     private[this] var parentContexts = new Array[AnyRef](16)
@@ -62,13 +62,12 @@ trait TypingTransformers extends TypeAssigners {
     }
 
     /** The owner of `localTyper`'s context, without making it. */
-    protected def localTyperOwner: Symbol =
+    override protected def enclosingOwner: Symbol =
       if (materialized < frames) frameOwners(frames - 1).asInstanceOf[Symbol]
       else if (_localTyper eq null) rootMirror.RootClass
       else _localTyper.context.owner
 
-    override protected def enclosingOwner: Symbol = localTyperOwner
-    override protected def fallbackTyper(why: String): analyzer.Typer = localTyper
+    override protected def fallbackTyper: analyzer.Typer = localTyper
 
     /** The typer to start from, made when first needed if the transformer was given none. */
     protected def initialTyper(): analyzer.Typer = newRootLocalTyper(rootUnit)
@@ -84,10 +83,17 @@ trait TypingTransformers extends TypeAssigners {
       }
     }
 
-    /** The context of frame `i`, made now if it was not. A typer on it stays valid while the frame is entered. */
-    protected def frameContext(i: Int): analyzer.Context = {
-      materialize()
-      if (i + 1 < frames) parentContexts(i + 1).asInstanceOf[analyzer.Context] else _localTyper.context
+    /** The context of the innermost frame entered with `owner`, made now if it was not, or `NoContext`.
+     *  A typer on it stays valid while the frame is entered.
+     */
+    protected def enclosingContext(owner: Symbol): analyzer.Context = {
+      var i = frames - 1
+      while (i >= 0 && (frameOwners(i) ne owner)) i -= 1
+      if (i < 0) analyzer.NoContext
+      else {
+        materialize()
+        if (i + 1 < frames) parentContexts(i + 1).asInstanceOf[analyzer.Context] else _localTyper.context
+      }
     }
 
     currentOwner = if (_localTyper eq null) rootMirror.RootClass else _localTyper.context.owner

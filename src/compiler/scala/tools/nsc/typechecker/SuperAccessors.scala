@@ -414,21 +414,13 @@ abstract class SuperAccessors extends transform.Transform with transform.TypingT
       }
     }
 
-    // What `enterOwner` replaced, by frame. There is no typer per owner: `TypingTransformer` makes a context
-    // only when `localTyper` is read, and `typerOf` makes a typer for an enclosing class when an accessor needs one.
-    private[this] var frameOwnerSyms = new Array[Symbol](16)
+    // `validCurrentOwner` from before each frame was entered, restored when the frame exits.
     private[this] var savedValidCurrentOwner = new Array[Boolean](16)
-    private[this] var depth = 0
 
     override protected def enterOwner(tree: Tree, owner: Symbol): Int = {
       val i = super.enterOwner(tree, owner)
-      if (i == frameOwnerSyms.length) {
-        frameOwnerSyms = java.util.Arrays.copyOf(frameOwnerSyms, i * 2)
-        savedValidCurrentOwner = java.util.Arrays.copyOf(savedValidCurrentOwner, i * 2)
-      }
-      frameOwnerSyms(i) = owner
+      if (i == savedValidCurrentOwner.length) savedValidCurrentOwner = java.util.Arrays.copyOf(savedValidCurrentOwner, i * 2)
       savedValidCurrentOwner(i) = validCurrentOwner
-      depth = i + 1
       if (owner.isClass) validCurrentOwner = true
       i
     }
@@ -436,16 +428,13 @@ abstract class SuperAccessors extends transform.Transform with transform.TypingT
     override protected def exitOwner(i: Int): Unit = {
       super.exitOwner(i)
       validCurrentOwner = savedValidCurrentOwner(i)
-      frameOwnerSyms(i) = null
-      depth = i
     }
 
-    /** A typer for the innermost frame entered with `clazz` as its owner. */
+    /** A typer for the enclosing class `clazz`, made when an accessor is stored there. */
     private def typerOf(clazz: Symbol): analyzer.Typer = {
-      var i = depth - 1
-      while (i >= 0 && (frameOwnerSyms(i) ne clazz)) i -= 1
-      if (i < 0) abort(s"no typer for $clazz")
-      analyzer.newTyper(frameContext(i))
+      val context = enclosingContext(clazz)
+      if (context eq analyzer.NoContext) abort(s"no typer for $clazz")
+      analyzer.newTyper(context)
     }
 
     private def withInvalidOwner[A](trans: => A): A = {

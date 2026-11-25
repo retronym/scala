@@ -1617,7 +1617,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
         val qual1                     = transform(qual)
         def copySelect                = treeCopy.Select(tree, qual1, name)
         def newSelect(member: Symbol) = atPos(tree.pos)(Select(qual1, member))
-        def typedOp(member: Symbol)   = typedFun(newSelect(member)) // as `localTyper.typedOperator`
+        def typedOp(member: Symbol)   = typedOperator(newSelect(member))
         def typedTree(member: Symbol) = localTyper typed newSelect(member)
 
         val ignoreEnv = specializedTypeVars(symbol.info).isEmpty || name == nme.CONSTRUCTOR

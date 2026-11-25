@@ -286,6 +286,12 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
     // requiring both the ACCESSOR and the SYNTHETIC bits to trigger the exemption
     private def isSyntheticAccessor(sym: Symbol) = sym.isAccessor && (!sym.isLazy || isPastTyper)
 
+    // when type checking during erasure, generate erased types in spots that aren't transformed by erasure
+    // (it erases in TypeTrees, but not in, e.g., the type a Function node)
+    def phasedAppliedType(sym: Symbol, args: List[Type]) = {
+      val tp = appliedType(sym, args)
+      if (phase.erasedTypes) erasure.specialScalaErasureFor(sym)(tp) else tp
+    }
 
     def typedDocDef(docDef: DocDef, mode: Mode, pt: Type): Tree =
       typed(docDef.definition, mode, pt)
@@ -3640,7 +3646,9 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
           // less expensive than including them in inferMethodAlternative (see below).
           def shapeType(arg: Tree): Type = arg match {
             case Function(vparams, body) =>
-              // We don't get here after typer: overloading resolution happens during type checking.
+              // No need for phasedAppliedType, as we don't get here during erasure --
+              // overloading resolution happens during type checking.
+              // During erasure, the condition above (fun.symbol.isOverloaded) is false.
               functionType(vparams.map(_ => AnyTpe), shapeType(body))
             case Match(EmptyTree, _) => // A partial function literal
               appliedType(PartialFunctionClass, AnyTpe :: NothingTpe :: Nil)

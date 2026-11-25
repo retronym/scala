@@ -38,7 +38,7 @@ trait PostErasure extends InfoTransform with TypingTransformers with scala.refle
        * is from java.lang.Integer.
        */
       def binop(lhs: Tree, op: Symbol, rhs: Tree) =
-        finish(typed(Apply(Select(lhs, primitiveOp(lhs.tpe, op.name, rhs.tpe)) setPos tree.pos, rhs :: Nil) setPos tree.pos, WildcardType))
+        finish(typed(Apply(Select(lhs, primitiveOp(lhs.tpe, op.name, rhs.tpe)) setPos tree.pos, rhs :: Nil) setPos tree.pos))
 
       /* The member `name` of `lhs` that takes an `rhs`, as `Typer` resolves the overload: the one
        * whose parameter type is `rhs`, else the only one that accepts it.

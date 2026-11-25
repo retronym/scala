@@ -17,7 +17,6 @@ import scala.reflect.internal.Mode
 import scala.reflect.internal.Mode._
 
 trait TypeAssigners { self: TypingTransformers =>
-  import global._
 
   /** Types trees after typer whose symbols are already bound, from the infos of their symbols
    *  and the types of their children, as `Typer` would type them, but without name resolution,
@@ -25,6 +24,9 @@ trait TypeAssigners { self: TypingTransformers =>
    *
    *  Tree shapes outside that grammar, or that would need any of those, go to `localTyper`
    *  (`fallback`), with a dev warning.
+   *
+   *  Its methods have the names and signatures of the `Typer` methods they stand in for. The only
+   *  modes are those of an expression, a qualifier and the function of an application.
    *
    *  A subclass hooks in at three points: `enter` (on entering an original tree), `adapt`
    *  (adapting a typed tree to its expected type) and `typed1`/`typedCore` (special cases).
@@ -49,10 +51,10 @@ trait TypeAssigners { self: TypingTransformers =>
 
     private[this] var rootTyper: analyzer.Typer = null
 
-    /** A `Typer` for what the assigner cannot do itself, `why`: one in the root context of the unit,
+    /** A `Typer` for what the assigner cannot do itself: one in the root context of the unit,
      *  made when first needed, with no context for the owners entered.
      */
-    protected def fallbackTyper(why: String): analyzer.Typer = {
+    protected def fallbackTyper: analyzer.Typer = {
       if (rootTyper eq null) rootTyper = newRootLocalTyper(currentUnit)
       rootTyper
     }
@@ -65,12 +67,11 @@ trait TypeAssigners { self: TypingTransformers =>
 
     /** Adapts a typed tree to its expected type. Before erasure, as `Typer.adapt` does for the
      *  trees the assigner types: a reference to a nullary method gets the method's result type,
-     *  and an expression with a constant type becomes a literal. `funMode` is set for the
-     *  function of an application.
+     *  and an expression with a constant type becomes a literal.
      */
-    protected def adapt(tree: Tree, pt: Type, funMode: Boolean): Tree =
+    protected def adapt(tree: Tree, mode: Mode, pt: Type): Tree =
       if (phase.erasedTypes) tree
-      else if (funMode) skolemized(tree)
+      else if (mode.inFunMode) skolemized(tree)
       else tree.tpe match {
         case ct @ FoldableConstantType(value) if ct <:< pt =>
           tree match {
@@ -83,7 +84,7 @@ trait TypeAssigners { self: TypingTransformers =>
           val restpe1 =
             if (sym.isAccessor && sym.hasFlag(scala.reflect.internal.Flags.STABLE) && treeInfo.isExprSafeToInline(tree)) restpe
             else restpe.deconst
-          adapt(tree setType restpe1, pt, funMode)
+          adapt(tree setType restpe1, mode, pt)
         case _ => skolemized(tree)
       }
 
@@ -106,7 +107,7 @@ trait TypeAssigners { self: TypingTransformers =>
 
     /** A tree shape the assigner does not know: type it with `localTyper`. */
     protected def fallback(tree: Tree, pt: Type, why: String): Tree = {
-      val localTyper = fallbackTyper(why)
+      val localTyper = fallbackTyper
       devWarning(tree.pos, s"$phase: typing $why with ${localTyper.getClass.getSimpleName}")
       localTyper.typed(beforeFallback(tree), pt)
     }
@@ -118,12 +119,9 @@ trait TypeAssigners { self: TypingTransformers =>
       def mayPack(sym: Symbol) = (sym ne NoSymbol) &&
         (sym.hasTransOwner(owner) || sym.hasAllFlags(symtab.Flags.EXISTENTIAL | symtab.Flags.CAPTURED) || existentialsAndSkolems.isRawParameter(sym))
       if (tree.tpe.exists(t => t.isInstanceOf[AnnotatedType] || mayPack(t.typeSymbol) || mayPack(t.termSymbol)))
-        fallbackTyper("Function").packedType(tree, owner)
+        fallbackTyper.packedType(tree, owner)
       else tree.tpe
     }
-
-    /** The typer's mode for an expression, or for the qualifier of a selection. */
-    protected final def exprMode(qualMode: Boolean): Mode = if (qualMode) EXPRmode | QUALmode else EXPRmode
 
     /** The type of a conditional, match or try whose branches have types `tpes`: `pt` if it is
      *  fully defined, else the branches' lub, or their weak lub if that differs, as in
@@ -136,66 +134,67 @@ trait TypeAssigners { self: TypingTransformers =>
         if (glbLubs.sameWeakLubAsLub(tpes1)) lub(tpes1) else glbLubs.weakLub(tpes1)
       }
 
-    /** Analogue of `Typer.typed`. */
-    def typed(tree: Tree, pt: Type): Tree = typedMode(tree, pt, qualMode = false, funMode = false)
-
-    protected final def typedQualifier(tree: Tree, pt: Type = WildcardType): Tree = typedMode(tree, pt, qualMode = true, funMode = false)
-
-    /** The function of an application. */
-    protected final def typedFun(tree: Tree): Tree = typedMode(tree, WildcardType, qualMode = false, funMode = true)
-
-    /** A tree with a type is not retyped. */
-    private def typedMode(tree: Tree, pt: Type, qualMode: Boolean, funMode: Boolean): Tree = {
+    /** Analogue of `Typer.typed`. A tree with a type is not retyped. */
+    def typed(tree: Tree, mode: Mode, pt: Type): Tree = {
       val tree0 = enter(tree)
-      val tree1 = if (tree0.tpe ne null) tree0 else typed1(tree0, pt, qualMode)
+      val tree1 = if (tree0.tpe ne null) tree0 else typed1(tree0, mode, pt)
       if (tree1.isEmpty) tree1
-      else if (!funMode && !phase.erasedTypes && tree1.tpe.isInstanceOf[OverloadedType])
+      else if (!mode.inFunMode && !phase.erasedTypes && tree1.tpe.isInstanceOf[OverloadedType])
         // An overloaded member selected by name and not applied, such as a name-based `isEmpty`:
         // `Typer.adapt` resolves it against `pt`.
         fallback(tree1, pt, "overloaded-expr")
-      else adapt(tree1, pt, funMode)
+      else adapt(tree1, mode, pt)
     }
 
+    def typed(tree: Tree, pt: Type): Tree = typed(tree, EXPRmode, pt)
+    def typed(tree: Tree): Tree = typed(tree, EXPRmode, WildcardType)
+    def typedPos(pos: Position)(tree: Tree): Tree = typed(atPos(pos)(tree))
+
+    protected final def typedQualifier(tree: Tree, pt: Type): Tree = typed(tree, PolyQualifierModes, pt)
+    protected final def typedQualifier(tree: Tree): Tree = typedQualifier(tree, WildcardType)
+
+    /** The function of an application. */
+    protected final def typedOperator(tree: Tree): Tree = typed(tree, OperatorModes, WildcardType)
+
     /** Analogue of `Typer.typed1`. */
-    protected def typed1(tree: Tree, pt: Type, qualMode: Boolean): Tree = typedCore(tree, pt, qualMode)
+    protected def typed1(tree: Tree, mode: Mode, pt: Type): Tree = typedCore(tree, mode, pt)
 
     /** A stable identifier or selection in a context that requires it gets its singleton type,
-     *  as with `Typer.stabilize`. After erasure, as `ErasureRetyper` has it, it keeps its
-     *  underlying type.
+     *  as with `Typer.stabilize`. After erasure, as `Eraser` has it, it keeps its underlying type.
      */
-    private def stabilized(tree: Tree, pre: Type, qualMode: Boolean, pt: Type): Tree =
+    private def stabilize(tree: Tree, pre: Type, mode: Mode, pt: Type): Tree =
       if (phase.erasedTypes) tree
       else {
         val sym = tree.symbol
         // Without these, `stabilize` needs no `Typer`: it reports no error and resolves no overload.
-        val needsTyper = tree.isErrorTyped || sym.isOverloaded || !sym.isValue && !qualMode
-        analyzer.stabilize(tree, pre, exprMode(qualMode), pt, if (needsTyper) fallbackTyper("stabilize") else null)
+        val needsTyper = tree.isErrorTyped || sym.isOverloaded || !sym.isValue && !mode.inQualMode
+        analyzer.stabilize(tree, pre, mode, pt, if (needsTyper) fallbackTyper else null)
       }
 
     /** Analogue of `Typer.typed1` for the tree shapes that synthesised trees, and erased trees, have. */
-    protected def typedCore(tree: Tree, pt: Type, qualMode: Boolean): Tree = tree match {
+    protected def typedCore(tree: Tree, mode: Mode, pt: Type): Tree = tree match {
       case tree: Ident =>
         val sym = tree.symbol
         if (sym == NoSymbol) return fallback(tree, pt, "Ident-nosym")
         val pre = if (sym.isTopLevel) sym.owner.thisType else NoPrefix
-        stabilized(tree setType pre.memberType(sym), pre, qualMode, pt)
+        stabilize(tree setType pre.memberType(sym), pre, mode, pt)
 
       case sel @ Select(qual, _) =>
-        typedSelect(sel, typedQualifier(qual), qualMode, pt)
+        typedSelect(sel, typedQualifier(qual), mode, pt)
 
       case Apply(blk @ Block(stats, expr), args) =>
         val ap1 = treeCopy.Apply(tree, expr, args).clearType().setPos(tree.pos.makeTransparent)
-        typedCore(treeCopy.Block(blk, stats, ap1).clearType(), pt, qualMode)
+        typedCore(treeCopy.Block(blk, stats, ap1).clearType(), mode, pt)
 
       case Apply(fun, _) =>
-        typedApply(tree.asInstanceOf[Apply], typedFun(fun), pt, qualMode)
+        typedApply(tree.asInstanceOf[Apply], typedOperator(fun), mode, pt)
 
       case ta @ TypeApply(fun, _) =>
-        typedTypeApply(treeCopy.TypeApply(ta, typedFun(fun), ta.args), pt)
+        typedTypeApply(treeCopy.TypeApply(ta, typedOperator(fun), ta.args), pt)
 
       case ReferenceToBoxed(ident) =>
         // Typer.typedReferenceToBoxed
-        val ident1 = typed1(ident, pt, qualMode)
+        val ident1 = typed1(ident, mode, pt)
         treeCopy.ReferenceToBoxed(tree, ident1.asInstanceOf[Ident]) setType capturedVariables.capturedVariableType(ident.symbol, erasedTypes = phase.erasedTypes)
 
       case Literal(value) =>
@@ -203,11 +202,11 @@ trait TypeAssigners { self: TypingTransformers =>
 
       case tree: This =>
         // Typer.typedThis
-        tree.symbol orElse fallbackTyper("This-nosym").qualifyingClass(tree, tree.qual, packageOK = false, immediate = true) match {
+        tree.symbol orElse fallbackTyper.qualifyingClass(tree, tree.qual, packageOK = false, immediate = true) match {
           case NoSymbol => tree setType ErrorType // reported by qualifyingClass
           case clazz =>
             tree setSymbol clazz setType clazz.thisType.underlying
-            if (analyzer.isStableContext(tree, exprMode(qualMode), pt)) tree setType clazz.thisType else tree
+            if (analyzer.isStableContext(tree, mode, pt)) tree setType clazz.thisType else tree
         }
 
       case sup: Super =>
@@ -215,7 +214,7 @@ trait TypeAssigners { self: TypingTransformers =>
 
       case Typed(expr, tpt0) =>
         // A `TypeTree` comes typed; another type tree is typed here.
-        val tpt = if (tpt0.tpe eq null) typed(tpt0, WildcardType) else tpt0
+        val tpt = if (tpt0.tpe eq null) typed(tpt0) else tpt0
         val expr1 = typed(expr, tpt.tpe.deconst)
         treeCopy.Typed(tree, expr1, tpt) setType tpt.tpe
 
@@ -236,7 +235,7 @@ trait TypeAssigners { self: TypingTransformers =>
         }
 
       case Match(selector, cases) =>
-        val selector1 = typed(selector, WildcardType)
+        val selector1 = typed(selector)
         val selectorTp = selector1.tpe.widen
         val cases1 = typedCases(cases, selectorTp, pt)
         treeCopy.Match(tree, selector1, cases1) setType branchesType(pt, cases1.map(_.tpe))
@@ -258,7 +257,7 @@ trait TypeAssigners { self: TypingTransformers =>
         tree setType tpt.tpe
 
       case Assign(lhs, rhs) =>
-        val lhs1 = typed(lhs, WildcardType)
+        val lhs1 = typed(lhs)
         val varsym = lhs1.symbol
         if (varsym == null || treeInfo.mayBeVarGetter(varsym)) return fallback(treeCopy.Assign(tree, lhs1, rhs), pt, "Assign-setter")
         treeCopy.Assign(tree, lhs1, typed(rhs, lhs1.tpe)) setType UnitTpe
@@ -290,11 +289,11 @@ trait TypeAssigners { self: TypingTransformers =>
 
       case ddef @ DefDef(_, _, tparams, vparamss, tpt, rhs) =>
         val meth = ddef.symbol
-        val vparamss1 = vparamss.mapConserve(_.mapConserve(vd => typed(vd, WildcardType).asInstanceOf[ValDef]))
+        val vparamss1 = vparamss.mapConserve(_.mapConserve(vd => typed(vd).asInstanceOf[ValDef]))
         val savedResult = enclMethodResult
         enclMethodResult = tpt.tpe
         val rhs1 = try atOwner(ddef, meth) {
-          if (ddef.name == nme.CONSTRUCTOR && !meth.hasStaticFlag) typed(rhs, WildcardType)
+          if (ddef.name == nme.CONSTRUCTOR && !meth.hasStaticFlag) typed(rhs)
           else typed(rhs, tpt.tpe)
         } finally enclMethodResult = savedResult
         treeCopy.DefDef(ddef, ddef.mods, ddef.name, tparams, vparamss1, tpt, rhs1) setType NoType
@@ -302,7 +301,7 @@ trait TypeAssigners { self: TypingTransformers =>
       case cdef @ ClassDef(_, _, tparams, impl) =>
         val savedResult = enclMethodResult
         enclMethodResult = NoType
-        val impl1 = try atOwner(cdef, cdef.symbol)(typed(impl, WildcardType)).asInstanceOf[Template]
+        val impl1 = try atOwner(cdef, cdef.symbol)(typed(impl)).asInstanceOf[Template]
         finally enclMethodResult = savedResult
         treeCopy.ClassDef(cdef, cdef.mods, cdef.name, tparams, impl1) setType NoType
 
@@ -310,15 +309,15 @@ trait TypeAssigners { self: TypingTransformers =>
         val clazz = currentOwner
         val body1 = atOwner(templ, clazz) {
           body mapConserve { stat =>
-            if (stat.isDef) typed(stat, WildcardType)
-            else atOwner(stat, templ.symbol)(typed(stat, WildcardType))
+            if (stat.isDef) typed(stat)
+            else atOwner(stat, templ.symbol)(typed(stat))
           }
         }
         treeCopy.Template(templ, parents, noSelfType, body1) setType clazz.tpe_*
 
       case pdef @ PackageDef(pid, stats) =>
         val pid1 = typedQualifier(pid).asInstanceOf[RefTree]
-        val stats1 = atOwner(pdef, pdef.symbol)(stats mapConserve (stat => typed(stat, WildcardType)))
+        val stats1 = atOwner(pdef, pdef.symbol)(stats mapConserve (stat => typed(stat)))
         treeCopy.PackageDef(pdef, pid1, stats1) setType NoType
 
       case fun @ Function(vparams, body) if !phase.erasedTypes =>
@@ -326,8 +325,8 @@ trait TypeAssigners { self: TypingTransformers =>
         // function or SAM type, which would give its body an expected type.
         if (pt ne WildcardType) return fallback(tree, pt, "Function-pt")
         if (fun.symbol == NoSymbol) fun.symbol = enclosingOwner.newAnonymousFunctionValue(fun.pos)
-        val vparams1 = vparams.mapConserve(vd => typed(vd, WildcardType).asInstanceOf[ValDef])
-        val body1 = atOwner(fun, fun.symbol)(typed(body, WildcardType))
+        val vparams1 = vparams.mapConserve(vd => typed(vd).asInstanceOf[ValDef])
+        val body1 = atOwner(fun, fun.symbol)(typed(body))
         val resTp = packedType(body1, fun.symbol).resultType.deconst match {
           case ct: ConstantType => ct.widen
           case tp => tp
@@ -340,13 +339,13 @@ trait TypeAssigners { self: TypingTransformers =>
     }
 
     /** `sel` on its typed qualifier `qual1`: `Typer.typedSelect`. */
-    protected final def typedSelect(sel: Select, qual1: Tree, qualMode: Boolean, pt: Type): Tree = {
+    protected final def typedSelect(sel: Select, qual1: Tree, mode: Mode, pt: Type): Tree = {
       val sym = sel.symbol orElse qual1.tpe.member(sel.name)
       if (sym == NoSymbol) return fallback(treeCopy.Select(sel, qual1, sel.name), pt, "Select-nosym")
       // `qual1` is tested first: `alternatives` allocates a list for a non-overloaded symbol.
       if (qual1.symbol != null && qual1.symbol.hasPackageFlag && sym.alternatives.head.owner.isPackageObjectClass)
         // As `Typer.typedSelect`, select a package object's member from the package object.
-        return typedSelect(sel, typedQualifier(atPos(qual1.pos.focus)(Select(qual1, nme.PACKAGE))), qualMode, pt)
+        return typedSelect(sel, typedQualifier(atPos(qual1.pos.focus)(Select(qual1, nme.PACKAGE))), mode, pt)
       if (phase.erasedTypes && qual1.isInstanceOf[Super]) {
         // After erasure, a selection from `super` is typed against the member's owner, or the accessible class
         // in the `QualTypeSymAttachment` (scala/bug#7936): see the comment in `Erasure.preErase`.
@@ -359,18 +358,18 @@ trait TypeAssigners { self: TypingTransformers =>
       // An overloaded member, as `Typer.makeAccessible` types it, for `typedApply` to resolve.
       val owntype = if (sym.isOverloaded) OverloadedType(qual1.tpe, sym.alternatives) else qual1.tpe.memberType(sym)
       val sel1 = treeCopy.Select(sel, qual1, sel.name).setSymbol(sym).setType(owntype)
-      if (sym.isOverloaded) sel1 else stabilized(sel1, qual1.tpe, qualMode, pt)
+      if (sym.isOverloaded) sel1 else stabilize(sel1, qual1.tpe, mode, pt)
     }
 
     /** `app` with its typed function `fun1`: types the arguments against the parameter types. */
-    protected final def typedApply(app: Apply, fun1: Tree, pt: Type, qualMode: Boolean): Tree = {
+    protected final def typedApply(app: Apply, fun1: Tree, mode: Mode, pt: Type): Tree = {
       // Typer.normalTypedApply
       val fun2 = {
         val sym = fun1.symbol
-        if ((sym ne null) && sym.isMethod && sym.isStable) analyzer.stabilizeFun(fun1, exprMode(qualMode), pt)
+        if ((sym ne null) && sym.isMethod && sym.isStable) analyzer.stabilizeFun(fun1, mode, pt)
         else fun1
       }
-      def typedArgs = app.args.mapConserve(typed(_, WildcardType))
+      def typedArgs = app.args.mapConserve(typed(_))
       fun2.tpe match {
         case _ if treeInfo.isWildcardStarArgList(app.args) =>
           fallback(treeCopy.Apply(app, fun2, app.args), pt, "Apply-star")
@@ -395,7 +394,7 @@ trait TypeAssigners { self: TypingTransformers =>
           alts.filter(matches) match {
             case alt :: Nil =>
               val fun3 = fun2.setSymbol(alt).setType(pre.memberType(alt))
-              typedApply(treeCopy.Apply(app, fun3, args1), fun3, pt, qualMode)
+              typedApply(treeCopy.Apply(app, fun3, args1), fun3, mode, pt)
             case _ =>
               fallback(treeCopy.Apply(app, fun2, args1), pt, "Apply-overloaded")
           }
@@ -407,7 +406,7 @@ trait TypeAssigners { self: TypingTransformers =>
           val args1 = typedArgs
           val targs = tparams.map(tparam => args1(params.indexWhere(_.tpe.typeSymbolDirect == tparam)).tpe.widen)
           val fun3 = typedTypeApply(TypeApply(fun2, targs.map(TypeTree(_))).setPos(fun2.pos), pt)
-          typedApply(treeCopy.Apply(app, fun3, args1), fun3, pt, qualMode)
+          typedApply(treeCopy.Apply(app, fun3, args1), fun3, mode, pt)
         case _ =>
           fallback(treeCopy.Apply(app, fun2, app.args), pt, "Apply-" + fun2.tpe.getClass.getSimpleName)
       }
@@ -419,7 +418,7 @@ trait TypeAssigners { self: TypingTransformers =>
      */
     protected final def typedSyntheticCast(tree: Tree, pt: Type): Tree = gen.mkCast(tree, pt) match {
       case app @ Apply(ta @ TypeApply(sel: Select, _), Nil) if sel.tpe ne null =>
-        typedApply(app, typedTypeApply(ta, WildcardType), WildcardType, qualMode = false)
+        typedApply(app, typedTypeApply(ta, WildcardType), EXPRmode, WildcardType)
       case _ =>
         gen.mkAttributedCast(tree, pt) // another shape than `mkCast` builds after uncurry
     }
@@ -436,7 +435,7 @@ trait TypeAssigners { self: TypingTransformers =>
     }
 
     private def typedSuper(tree: Super): Tree = {
-      val qual1 = typed(tree.qual, WildcardType)
+      val qual1 = typed(tree.qual)
       val clazz = qual1 match {
         case This(_) => qual1.symbol
         case _ => qual1.tpe.typeSymbol
@@ -451,7 +450,7 @@ trait TypeAssigners { self: TypingTransformers =>
     }
 
     private def typedStats(stats: List[Tree]): List[Tree] =
-      stats mapConserve (stat => typed(stat, WildcardType))
+      stats mapConserve (stat => typed(stat))
 
     private def typedCases(cases: List[CaseDef], pattpe: Type, pt: Type): List[CaseDef] =
       cases mapConserve { cdef =>
@@ -476,19 +475,10 @@ trait TypeAssigners { self: TypingTransformers =>
           pat.symbol.setInfo(body1.tpe)
           treeCopy.Bind(pat, name, body1) setType body1.tpe
         case _ =>
-          val localTyper = fallbackTyper("pattern")
+          val localTyper = fallbackTyper
           devWarning(pat.pos, s"$phase: typing pattern ${pat.getClass.getSimpleName} with ${localTyper.getClass.getSimpleName}")
           localTyper.typedPattern(beforeFallback(pat), pt)
       }
     }
   }
-
-  /** A `TypeAssigner` typing in the context of `typer`. */
-  final class TypeAssignerIn(typer: analyzer.Typer) extends TypingTransformer(typer) {
-    def typedStable(tree: Tree): Tree = typedQualifier(tree)
-  }
-
-  /** `tree`, synthesised after typer, typed with a `TypeAssigner` in the context of `typer`. */
-  def assignTypes(typer: analyzer.Typer, tree: Tree, pt: Type = WildcardType): Tree =
-    new TypeAssignerIn(typer).typed(tree, pt)
 }

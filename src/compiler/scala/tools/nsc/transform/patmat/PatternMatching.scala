@@ -113,11 +113,10 @@ trait PatternMatching extends Transform
     }
 
     def translator(selectorPos: Position): MatchTranslator with CodegenCore = {
-      new OptimizingMatchTranslator(this, localTyperOwner, selectorPos, inForceDesugar)
+      new OptimizingMatchTranslator(this, enclosingOwner, selectorPos, inForceDesugar)
     }
 
-    /** `tree`, a stable reference substituted for a binder, typed with its singleton type. */
-    def typedStable(tree: Tree): Tree = typedQualifier(tree)
+    def typedStableRef(tree: Tree): Tree = typedQualifier(tree)
 
   }
 
@@ -129,7 +128,7 @@ trait PatternMatching extends Transform
       with MatchAnalyzer
       with Solver {
     lazy val typer: analyzer.Typer = transformer.localTyper
-    protected def typedStableRef(tree: Tree): Tree = transformer.typedStable(tree)
+    protected def typedStableRef(tree: Tree): Tree = transformer.typedStableRef(tree)
   }
 }
 
@@ -155,9 +154,7 @@ trait Interface extends ast.TreeDSL {
     def typer: Typer
     val matchOwner: Symbol
 
-    /** A stable reference `tree` substituted for a binder, typed in the context of `typer`, with its
-     *  singleton type.
-     */
+    /** `tree`, a stable reference substituted for a binder, typed with its singleton type. */
     protected def typedStableRef(tree: Tree): Tree
 
     def reportUnreachable(pos: Position) = typer.context.warning(pos, "unreachable code", WarningCategory.OtherMatchAnalysis)

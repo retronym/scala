@@ -31,9 +31,9 @@ abstract class TailCalls extends Transform with TypingTransformers {
   // Types the trees this phase synthesises as `typer` would, without its contexts.
   private object assigner extends TypeAssigner {
     override protected def enclosingOwner: Symbol = typer.context.owner
-    override protected def fallbackTyper(why: String): analyzer.Typer = typer
+    override protected def fallbackTyper: analyzer.Typer = typer
   }
-  private def typedPos(pos: Position)(tree: Tree): Tree = assigner.typed(atPos(pos)(tree), WildcardType)
+  import assigner.typedPos
 
   val phaseName: String = "tailcalls"
 

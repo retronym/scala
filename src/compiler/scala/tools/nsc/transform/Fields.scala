@@ -559,8 +559,6 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
   def castHack(tree: Tree, pt: Type) = gen.mkAsInstanceOf(tree, pt)
 
   class FieldsTransformer(unit: CompilationUnit) extends TypeAssigner with CheckedAccessorTreeSynthesis {
-    protected def typedPos(pos: Position)(tree: Tree): Tree = typed(atPos(pos)(tree), WildcardType)
-
     def mkTypedUnit(pos: Position) = typedPos(pos)(CODE.UNIT)
     // TODO: clean up. this method is not used
     def deriveUnitDef(stat: Tree)  = deriveDefDef(stat)(_ => mkTypedUnit(stat.pos))

@@ -428,8 +428,7 @@ abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis w
     // A typer for the template being transformed, made when `localTyper` is next read.
     private val typers = new erasure.erasureAnalyzer.TyperStack(erasure.erasureAnalyzer.newTyper(rootContext))
     private def localTyper: erasure.erasureAnalyzer.Typer = typers.typer
-    override protected def fallbackTyper(why: String): analyzer.Typer = localTyper.asInstanceOf[analyzer.Typer]
-    protected def typedPos(pos: Position)(tree: Tree): Tree = typed(atPos(pos)(tree), WildcardType)
+    override protected def fallbackTyper: analyzer.Typer = localTyper.asInstanceOf[analyzer.Typer]
 
     private val nullables = mutable.HashMap[Symbol, Map[Symbol, List[Symbol]]]()
 

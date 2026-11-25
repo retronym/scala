@@ -456,7 +456,6 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
     with    fields.CheckedAccessorTreeSynthesis
   {
     override protected def initialTyper(): analyzer.Typer = outer.localTyper
-    protected def typedPos(pos: Position)(tree: Tree): Tree = typed(atPos(pos)(tree), WildcardType)
 
     private[this] val typeAdapter = new TypeAdapter {
       def typedPos(pos: Position)(tree: Tree): Tree = TemplateTransformer.this.typedPos(pos)(tree)
@@ -464,8 +463,8 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
     }
 
     /** As the `Eraser` that typed these trees did: box, unbox or cast to the expected type. */
-    override protected def adapt(tree: Tree, pt: Type, funMode: Boolean): Tree =
-      if (phase.erasedTypes) typeAdapter.adaptToType(tree, pt) else super.adapt(tree, pt, funMode)
+    override protected def adapt(tree: Tree, mode: Mode, pt: Type): Tree =
+      if (phase.erasedTypes) typeAdapter.adaptToType(tree, pt) else super.adapt(tree, mode, pt)
 
     override val clazz                = impl.symbol.owner  // the transformed class
     private val stats                 = impl.body          // the transformed template body

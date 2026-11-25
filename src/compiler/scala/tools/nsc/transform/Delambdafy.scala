@@ -66,8 +66,6 @@ abstract class Delambdafy extends Transform with TypingTransformers with ast.Tre
     new DelambdafyTransformer(unit)
 
   class DelambdafyTransformer(unit: CompilationUnit) extends TypeAssigner {
-    private def typedPos(pos: Position)(tree: Tree): Tree = typed(atPos(pos)(tree), WildcardType)
-
     // we need to know which methods refer to the 'this' reference so that we can determine which lambdas need access to it
     // TODO: this looks expensive, so I made it a lazy val. Can we make it more pay-as-you-go / optimize for common shapes?
     private[this] lazy val methodReferencesThis: collection.Set[Symbol] =
