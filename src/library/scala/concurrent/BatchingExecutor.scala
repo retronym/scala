@@ -199,7 +199,13 @@ private[concurrent] trait BatchingExecutor extends Executor {
       if(this.size > 0)
         submitForExecution(cloneAndClear()) // If this throws then we have bigger problems
 
-      parentBlockContext.blockOn(thunk) // Now delegate the blocking to the previous BC
+      // A task submitted by `thunk` must not be added to this batch either: it could not run before `thunk` returns.
+      // The previous value is `null` when `thunk` runs within the `thunk` of an enclosing `blocking`.
+      val tl = _tasksLocal
+      val b = tl.get
+      tl.set(null)
+      try parentBlockContext.blockOn(thunk) // Now delegate the blocking to the previous BC
+      finally tl.set(b)
     }
   }
 
