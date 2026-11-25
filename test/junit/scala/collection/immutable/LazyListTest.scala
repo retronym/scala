@@ -175,6 +175,21 @@ class LazyListTest {
     AssertUtil.assertThrows[java.io.InvalidClassException](deserialize(decoder.decode(LazyListTest.partlyEvaluated_2_13_18)), _.contains("serialVersionUID"))
   }
 
+  // The state function of an unevaluated cell is written before `_head` is read. Here the cell is evaluated in
+  // between, by an object that the state function captures, as another thread might do.
+  @Test
+  def serializationOfCellEvaluatedMeanwhile(): Unit = {
+    import sd._
+    val trigger = new LazyListTest.ForceOnWrite
+    val l = LazyList.from(1).map(_ + trigger.zero)
+    trigger.toForce = l
+    val Array(c1: LazyList[Int @unchecked], c2) = serializeDeserialize(Array[AnyRef](l, l)): @unchecked
+    assertEquals(1, trigger.forced)
+    assertSame(c1, c2)
+    assertEquals(List(1, 2, 3), c1.take(3).toList)
+    assertEquals(List(1, 2, 3), l.take(3).toList)
+  }
+
   @Test
   def t6727_and_t6440_and_8627(): Unit = {
     assertTrue(LazyList.continually(()).filter(_ => true).take(2) == Seq((), ()))
@@ -569,6 +584,16 @@ object LazyListTest {
   // Written by Scala 2.13.18, see `serializedBy2_13_18IsRejected`
   val unevaluated_2_13_18 = "rO0ABXNyACNzY2FsYS5jb2xsZWN0aW9uLmltbXV0YWJsZS5MYXp5TGlzdAAAAAAAAAAEAgACTAAFX3RhaWx0ABJMamF2YS9sYW5nL09iamVjdDtMACpzY2FsYSRjb2xsZWN0aW9uJGltbXV0YWJsZSRMYXp5TGlzdCQkX2hlYWRxAH4AAXhwc3IAIWphdmEubGFuZy5pbnZva2UuU2VyaWFsaXplZExhbWJkYW9h0JQsKTaFAgAKSQAOaW1wbE1ldGhvZEtpbmRbAAxjYXB0dXJlZEFyZ3N0ABNbTGphdmEvbGFuZy9PYmplY3Q7TAAOY2FwdHVyaW5nQ2xhc3N0ABFMamF2YS9sYW5nL0NsYXNzO0wAGGZ1bmN0aW9uYWxJbnRlcmZhY2VDbGFzc3QAEkxqYXZhL2xhbmcvU3RyaW5nO0wAHWZ1bmN0aW9uYWxJbnRlcmZhY2VNZXRob2ROYW1lcQB+AAZMACJmdW5jdGlvbmFsSW50ZXJmYWNlTWV0aG9kU2lnbmF0dXJlcQB+AAZMAAlpbXBsQ2xhc3NxAH4ABkwADmltcGxNZXRob2ROYW1lcQB+AAZMABNpbXBsTWV0aG9kU2lnbmF0dXJlcQB+AAZMABZpbnN0YW50aWF0ZWRNZXRob2RUeXBlcQB+AAZ4cAAAAAZ1cgATW0xqYXZhLmxhbmcuT2JqZWN0O5DOWJ8QcylsAgAAeHAAAAABc3IAMnNjYWxhLmNvbGxlY3Rpb24uZ2VuZXJpYy5EZWZhdWx0U2VyaWFsaXphdGlvblByb3h5AAAAAAAAAAMDAAFMAAdmYWN0b3J5dAAaTHNjYWxhL2NvbGxlY3Rpb24vRmFjdG9yeTt4cHNyACpzY2FsYS5jb2xsZWN0aW9uLkl0ZXJhYmxlRmFjdG9yeSRUb0ZhY3RvcnkAAAAAAAAAAwIAAUwAB2ZhY3Rvcnl0ACJMc2NhbGEvY29sbGVjdGlvbi9JdGVyYWJsZUZhY3Rvcnk7eHBzcgAmc2NhbGEucnVudGltZS5Nb2R1bGVTZXJpYWxpemF0aW9uUHJveHkAAAAAAAAAAQIAAUwAC21vZHVsZUNsYXNzcQB+AAV4cHZyACBzY2FsYS5jb2xsZWN0aW9uLmltbXV0YWJsZS5MaXN0JAAAAAAAAAADAgAAeHB3BP////9zcgARamF2YS5sYW5nLkludGVnZXIS4qCk94GHOAIAAUkABXZhbHVleHIAEGphdmEubGFuZy5OdW1iZXKGrJUdC5TgiwIAAHhwAAAAAXNxAH4AFAAAAAJzcQB+ABQAAAADc3EAfgAQdnIAJnNjYWxhLmNvbGxlY3Rpb24uZ2VuZXJpYy5TZXJpYWxpemVFbmQkAAAAAAAAAAMCAAB4cHh2cgAkc2NhbGEuY29sbGVjdGlvbi5pbW11dGFibGUuTGF6eUxpc3QkAAAAAAAAAAQCAAB4cHQAD3NjYWxhL0Z1bmN0aW9uMHQABWFwcGx5dAAUKClMamF2YS9sYW5nL09iamVjdDt0ACRzY2FsYS9jb2xsZWN0aW9uL2ltbXV0YWJsZS9MYXp5TGlzdCR0AA8kYW5vbmZ1biRmcm9tJDF0AEYoTHNjYWxhL2NvbGxlY3Rpb24vSXRlcmFibGVPbmNlOylMc2NhbGEvY29sbGVjdGlvbi9pbW11dGFibGUvTGF6eUxpc3Q7dAAnKClMc2NhbGEvY29sbGVjdGlvbi9pbW11dGFibGUvTGF6eUxpc3Q7c3EAfgAQdnIAMnNjYWxhLmNvbGxlY3Rpb24uaW1tdXRhYmxlLkxhenlMaXN0JFVuaW5pdGlhbGl6ZWQk3kMMM7uLcp8CAAB4cA=="
   val partlyEvaluated_2_13_18 = "rO0ABXNyADZzY2FsYS5jb2xsZWN0aW9uLmltbXV0YWJsZS5MYXp5TGlzdCRTZXJpYWxpemF0aW9uUHJveHkAAAAAAAAABAMAAHhwc3IAEWphdmEubGFuZy5JbnRlZ2VyEuKgpPeBhzgCAAFJAAV2YWx1ZXhyABBqYXZhLmxhbmcuTnVtYmVyhqyVHQuU4IsCAAB4cAAAAAFzcQB+AAIAAAACc3IAJnNjYWxhLnJ1bnRpbWUuTW9kdWxlU2VyaWFsaXphdGlvblByb3h5AAAAAAAAAAECAAFMAAttb2R1bGVDbGFzc3QAEUxqYXZhL2xhbmcvQ2xhc3M7eHB2cgAmc2NhbGEuY29sbGVjdGlvbi5nZW5lcmljLlNlcmlhbGl6ZUVuZCQAAAAAAAAAAwIAAHhwc3IAI3NjYWxhLmNvbGxlY3Rpb24uaW1tdXRhYmxlLkxhenlMaXN0AAAAAAAAAAQCAAJMAAVfdGFpbHQAEkxqYXZhL2xhbmcvT2JqZWN0O0wAKnNjYWxhJGNvbGxlY3Rpb24kaW1tdXRhYmxlJExhenlMaXN0JCRfaGVhZHEAfgAMeHBzcgAhamF2YS5sYW5nLmludm9rZS5TZXJpYWxpemVkTGFtYmRhb2HQlCwpNoUCAApJAA5pbXBsTWV0aG9kS2luZFsADGNhcHR1cmVkQXJnc3QAE1tMamF2YS9sYW5nL09iamVjdDtMAA5jYXB0dXJpbmdDbGFzc3EAfgAHTAAYZnVuY3Rpb25hbEludGVyZmFjZUNsYXNzdAASTGphdmEvbGFuZy9TdHJpbmc7TAAdZnVuY3Rpb25hbEludGVyZmFjZU1ldGhvZE5hbWVxAH4AEEwAImZ1bmN0aW9uYWxJbnRlcmZhY2VNZXRob2RTaWduYXR1cmVxAH4AEEwACWltcGxDbGFzc3EAfgAQTAAOaW1wbE1ldGhvZE5hbWVxAH4AEEwAE2ltcGxNZXRob2RTaWduYXR1cmVxAH4AEEwAFmluc3RhbnRpYXRlZE1ldGhvZFR5cGVxAH4AEHhwAAAABnVyABNbTGphdmEubGFuZy5PYmplY3Q7kM5YnxBzKWwCAAB4cAAAAAJzcQB+AAIAAAADcQB+AAR2cgAkc2NhbGEuY29sbGVjdGlvbi5pbW11dGFibGUuTGF6eUxpc3QkAAAAAAAAAAQCAAB4cHQAD3NjYWxhL0Z1bmN0aW9uMHQABWFwcGx5dAAUKClMamF2YS9sYW5nL09iamVjdDt0ACRzY2FsYS9jb2xsZWN0aW9uL2ltbXV0YWJsZS9MYXp5TGlzdCR0AA8kYW5vbmZ1biRmcm9tJDJ0ACkoSUkpTHNjYWxhL2NvbGxlY3Rpb24vaW1tdXRhYmxlL0xhenlMaXN0O3QAJygpTHNjYWxhL2NvbGxlY3Rpb24vaW1tdXRhYmxlL0xhenlMaXN0O3NxAH4ABnZyADJzY2FsYS5jb2xsZWN0aW9uLmltbXV0YWJsZS5MYXp5TGlzdCRVbmluaXRpYWxpemVkJN5DDDO7i3KfAgAAeHB4"
+
+  class ForceOnWrite extends Serializable {
+    @transient var toForce: LazyList[Int] = null
+    @transient var forced = 0
+    def zero = 0
+    private def writeObject(out: java.io.ObjectOutputStream): Unit = {
+      if (toForce != null) { toForce.head; forced += 1 }
+      out.defaultWriteObject()
+    }
+  }
 
   object sd {
     import java.io._
