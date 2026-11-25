@@ -36,6 +36,22 @@ class LazyListGCTest {
     assertTrue(msg == msgSuccessGC)                                 // exception, or one with different message
   }
 
+  /** Like `assertLazyListOpAllowsGC`, for operations that call no function of the caller's on the elements: the
+    * elements are computed by a function that collects garbage and checks whether the head has been collected.
+    */
+  def assertTraversalAllowsGC(op: (=> LazyList[Int]) => Any): Unit = {
+    val msgSuccessGC = "GC success"
+    var ref: WeakReference[LazyList[Int]] = null
+    def gcAndThrowIfCollected(): Unit = {
+      System.gc()
+      Thread.sleep(10)
+      if (ref.get.isEmpty) throw new RuntimeException(msgSuccessGC)
+    }
+    ref = WeakReference(LazyList.tabulate(500) { i => if (i > 0) gcAndThrowIfCollected(); i })
+    val res = Try { op(ref()) }.failed
+    assertEquals(msgSuccessGC, res.map(_.getMessage).getOrElse("GC failure"))
+  }
+
   @Test
   def foreach_allowsGC(): Unit = {
     assertLazyListOpAllowsGC(_.foreach(_), _ => ())
@@ -121,5 +137,30 @@ class LazyListGCTest {
   def foldLeft(): Unit = {
     // fails when using `/:` instead of `foldLeft`
     assertLazyListOpAllowsGC((ll, check) => ll.foldLeft(0){ case (s, x) => check(x); s + x}, _ => ())
+  }
+
+  @Test
+  def exists_allowsGC(): Unit = {
+    assertLazyListOpAllowsGC((ll, check) => ll.exists(i => { check(i); false }), _ => ())
+  }
+
+  @Test
+  def forall_allowsGC(): Unit = {
+    assertLazyListOpAllowsGC((ll, check) => ll.forall(i => { check(i); true }), _ => ())
+  }
+
+  @Test
+  def contains_allowsGC(): Unit = {
+    assertTraversalAllowsGC(_.contains(-1))
+  }
+
+  @Test
+  def lengthCompare_allowsGC(): Unit = {
+    assertTraversalAllowsGC(_.lengthCompare(1000))
+  }
+
+  @Test
+  def last_allowsGC(): Unit = {
+    assertTraversalAllowsGC(_.last)
   }
 }

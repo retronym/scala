@@ -659,6 +659,63 @@ final class LazyList[+A] private (lazyState: AnyRef /* EmptyMarker.type | () => 
       else tail.find(p)
     }
 
+  // The traversals below are overridden so that no frame keeps the head of the lazy list reachable while the rest is
+  // evaluated. The inherited implementations in `LinearSeqOps` loop over a local, but the receiver stays in the
+  // trait method's frame and in the mixin forwarder's frame, which are live until the traversal ends in interpreted
+  // code. The `@tailrec` methods replace `this` with `tail` at each step, as `foreach` does. The others loop in
+  // their own frame, whose receiver is dead once the loop has been compiled.
+
+  @tailrec
+  override def exists(p: A => Boolean): Boolean =
+    if (isEmpty) false
+    else if (p(head)) true
+    else tail.exists(p)
+
+  @tailrec
+  override def forall(p: A => Boolean): Boolean =
+    if (isEmpty) true
+    else if (!p(head)) false
+    else tail.forall(p)
+
+  @tailrec
+  override def contains[A1 >: A](elem: A1): Boolean =
+    if (isEmpty) false
+    else if (head == elem) true
+    else tail.contains(elem)
+
+  @tailrec
+  override def lengthCompare(len: Int): Int =
+    if (len < 0) 1
+    else if (isEmpty) { if (len == 0) 0 else -1 }
+    else tail.lengthCompare(len - 1)
+
+  @tailrec
+  override def last: A = {
+    if (isEmpty) throw new NoSuchElementException("LinearSeq.last")
+    val rest = tail
+    if (rest.isEmpty) head else rest.last
+  }
+
+  override def length: Int = {
+    var these = this
+    var len = 0
+    while (!these.isEmpty) {
+      len += 1
+      these = these.tail
+    }
+    len
+  }
+
+  override def count(p: A => Boolean): Int = {
+    var these = this
+    var res = 0
+    while (!these.isEmpty) {
+      if (p(these.head)) res += 1
+      these = these.tail
+    }
+    res
+  }
+
   /** @inheritdoc
     *
     * $preservesLaziness
