@@ -15,7 +15,7 @@ package doc
 package model
 
 import scala.collection.immutable
-import scala.reflect.internal.util.{RangePosition, SourceFile}
+import scala.reflect.internal.util.SourceFile
 
 /** The goal of this trait is, using makeTree,
   * to browse a tree to
@@ -36,7 +36,7 @@ trait TreeFactory { thisTreeFactory: ModelFactory with TreeFactory =>
     var refs = new immutable.TreeMap[Int, (Entity, Int)] // start, (Entity to be linked to , end)
 
     rhs.pos match {
-      case pos: RangePosition => {
+      case pos if pos.isRange => {
         val source: SourceFile = pos.source
         val firstIndex = pos.start
         val lastIndex = pos.end
