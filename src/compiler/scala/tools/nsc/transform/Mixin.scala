@@ -272,26 +272,32 @@ abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis {
         resetFlag DEFERRED
     )
 
+    /* Add a forwarder in `clazz` to `member`, a concrete method of a trait or of a Java interface. A default
+     * method of a Java interface can only be invoked if the interface is a direct parent of `clazz`, or through
+     * the superclass if that inherits the method (see `addNewDefs`).
+     */
+    def genForwarder(member: Symbol, required: Boolean): Unit = {
+      val owner = member.owner
+      val isJavaInterface = owner.isJavaDefined && owner.isInterface
+      val isDirectParent  = clazz.parentSymbolsIterator.contains(owner)
+      if (isJavaInterface && !isDirectParent && !clazz.superClass.isNonBottomSubClass(owner)) {
+        if (required) {
+          val text = s"Unable to implement a mixin forwarder for $member in $clazz unless interface ${owner.name} is directly extended by $clazz."
+          reporter.error(clazz.pos, text)
+        }
+      } else {
+        if (isJavaInterface && isDirectParent)
+          erasure.requiredDirectInterfaces.getOrElseUpdate(clazz, mutable.Set.empty) += owner
+        cloneAndAddMixinMember(owner, member).asInstanceOf[TermSymbol] setAlias member
+      }
+    }
+
     /* Mix in members of implementation class mixinClass into class clazz */
     def mixinTraitForwarders(mixinClass: Symbol): Unit = {
       def isMemberOfClass(member: Symbol): Boolean =
         clazz.info.findMember(member.name, 0, 0L, stableOnly = false).alternatives.contains(member)
       for (member <- mixinClass.info.decls)
         if (isImplementedStatically(member) && member.overridingSymbol(clazz) == NoSymbol && isMemberOfClass(member)) {
-          def genForwarder(required: Boolean): Unit = {
-            val owner = member.owner
-            val isJavaInterface = owner.isJavaDefined && owner.isInterface
-            if (isJavaInterface && !clazz.parentSymbolsIterator.contains(owner)) {
-              if (required) {
-                val text = s"Unable to implement a mixin forwarder for $member in $clazz unless interface ${owner.name} is directly extended by $clazz."
-                reporter.error(clazz.pos, text)
-              }
-            } else {
-              if (isJavaInterface)
-                erasure.requiredDirectInterfaces.getOrElseUpdate(clazz, mutable.Set.empty) += owner
-              cloneAndAddMixinMember(mixinClass, member).asInstanceOf[TermSymbol] setAlias member
-            }
-          }
 
           // `member` is a concrete method defined in `mixinClass`, which is a base class of
           // `clazz`, and the method is not overridden in `clazz`. A forwarder is needed if:
@@ -337,11 +343,31 @@ abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis {
           }
 
           if (existsCompetingMethod(clazz.baseClasses) || generateJUnitForwarder || generateSerializationForwarder)
-            genForwarder(required = true)
+            genForwarder(member, required = true)
           else if (settings.mixinForwarderChoices.isTruthy)
-            genForwarder(required = false)
+            genForwarder(member, required = false)
         }
     }
+
+    /* A deferred method of `mixinClass` can redeclare a concrete method of one of its base traits:
+     *   trait A { def f = 1 }; trait B extends A { def f: Int }; class C extends B
+     * The member `f` of C is still A.f, as a concrete member is preferred to a deferred one. But B.f is the
+     * more specific of the two interface methods, so the JVM selects it for `C.f` (jvms-5.4.3.3) and throws an
+     * AbstractMethodError. A forwarder to A.f is needed in C unless C or one of its superclasses has one.
+     *
+     * `mixinTraitForwarders` does not add it if the forwarder is not forced, or if `A` is inherited by the
+     * superclass of C, which need not have a forwarder either: A might be a Java interface, or the superclass
+     * compiled without them.
+     */
+    def mixinRedeclaredForwarders(mixinClass: Symbol): Unit =
+      for (decl <- mixinClass.info.decls)
+        if (decl.isMethod && decl.isDeferred && !decl.hasFlag(ACCESSOR | SUPERACCESSOR)) {
+          val member = decl.matchingSymbol(clazz.thisType)
+          if (member.exists && isImplementedStatically(member) && mixinClass.isNonBottomSubClass(member.owner))
+            // Not `required`, which would be an error for a Java default method that can't be invoked from `clazz`.
+            // That program is accepted today, and fails only if the method is called.
+            genForwarder(member, required = false)
+        }
 
     /* Mix in members of trait mixinClass into class clazz.
      */
@@ -413,6 +439,8 @@ abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis {
       mixinTraitMembers(mc)
       mixinTraitForwarders(mc)
     }
+    for (mc <- clazz.mixinClasses if mc.isTrait)
+      mixinRedeclaredForwarders(mc)
   }
 
 // --------- term transformation -----------------------------------------------
@@ -566,7 +594,14 @@ abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis {
         else if (!sym.isMacro) { // forwarder
           assert(sym.alias != NoSymbol, (sym, sym.debugFlagString, clazz))
           // debuglog("New forwarder: " + sym.defString + " => " + sym.alias.defString)
-          addDefDef(sym, Apply(SuperSelect(clazz, sym.alias), sym.paramss.head.map(Ident(_))))
+          val alias = sym.alias
+          val superSelect =
+            if (alias.owner.isJavaDefined && alias.owner.isInterface && !clazz.parentSymbolsIterator.contains(alias.owner))
+              // The default method can't be invoked directly, the interface is not a direct parent. It is inherited
+              // by the superclass (see `genForwarder`), so invoke it as a method of the superclass.
+              Select(Super(clazz, tpnme.EMPTY), alias).updateAttachment(new QualTypeSymAttachment(clazz.superClass))
+            else SuperSelect(clazz, alias)
+          addDefDef(sym, Apply(superSelect, sym.paramss.head.map(Ident(_))))
         }
       }
 
