@@ -273,6 +273,8 @@ trait TypeComparers {
       case LiteralType(c1)            => tp2 match { case LiteralType(c2)            => c1 == c2                                             ; case _ => false }
       case NullaryMethodType(res1)    => tp2 match { case NullaryMethodType(res2)    => res1 =:= res2                                        ; case _ => false }
       case TypeBounds(lo1, hi1)       => tp2 match { case TypeBounds(lo2, hi2)       => lo1 =:= lo2 && hi1 =:= hi2                           ; case _ => false }
+      case ErasedValueType(c1, u1)    => tp2 match { case ErasedValueType(c2, u2)    => (c1 eq c2) && u1 =:= u2                              ; case _ => false }
+      case SuperType(this1, super1)   => tp2 match { case SuperType(this2, super2)   => this1 =:= this2 && super1 =:= super2                 ; case _ => false }
       case _                          => false
     }
 
@@ -605,6 +607,8 @@ trait TypeComparers {
           case _ =>
             false
         }
+      case _: ErasedValueType =>
+        isSameType(tp1, tp2) // invariant
       case _ =>
         fourthTry
     }
