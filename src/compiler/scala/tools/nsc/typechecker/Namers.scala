@@ -25,7 +25,7 @@ import scala.util.chaining._
  *  @author Martin Odersky
  */
 trait Namers extends MethodSynthesis {
-  self: Analyzer =>
+  self: AbstractAnalyzer =>
 
   import global._
   import definitions._
@@ -50,6 +50,10 @@ trait Namers extends MethodSynthesis {
     case Template(_, _, _) => true
     case Import(_, _)      => isTemplateContext(ctx.outer)
     case _                 => false
+  }
+
+  private object javaConstantFolder extends javac.JavaConstantFolder {
+    val global: Namers.this.global.type = Namers.this.global
   }
 
   private class NormalNamer(context: Context) extends Namer(context)
@@ -754,13 +758,43 @@ trait Namers extends MethodSynthesis {
         enterDefaultGetters(tree.symbol, tree, tree.vparamss, tree.tparams)
     }
 
+    private def enterJavaClass(tree: ClassDef): Unit = {
+      val clazz = tree.symbol
+      val source = clazz.pos.source
+      patmat.javaClassesByUnit.get(source).foreach(_.addOne(clazz))
+      if (clazz.isSealed && !clazz.hasJavaEnumFlag) {
+        val permitted = tree.getAndRemoveAttachment[PermittedSubclasses] match {
+          case Some(PermittedSubclasses(permits)) =>
+            val typer = namerOf(clazz).typer
+            new PermittedSubclassSymbols(permits.map(t => enteringTyper(typer.typed(t, Mode.NOmode).symbol)), declared = true)
+          case _ =>
+            def unitClasses: List[Symbol] = {
+              // completing a class or its companion enters the nested classes
+              val classes = patmat.javaClassesByUnit.getOrElse(source, mutable.Set.empty[Symbol])
+              val seen = mutable.LinkedHashSet.empty[Symbol]
+              @tailrec def loop(): Unit = classes.find(!seen(_)) match {
+                case Some(c) =>
+                  seen += c
+                  c.initialize.companionSymbol.moduleClass.initialize
+                  loop()
+                case _ =>
+              }
+              loop()
+              seen.toList
+            }
+            new PermittedSubclassSymbols(unitClasses, declared = false)
+        }
+        clazz.updateAttachment(permitted)
+      }
+    }
+
     def enterClassDef(tree: ClassDef): Unit = {
       val ClassDef(mods, _, _, impl) = tree
       val primaryConstructorArity = treeInfo.firstConstructorArgs(impl.body).size
       tree.symbol = enterClassSymbol(tree)
       tree.symbol setInfo completerOf(tree)
 
-      if (tree.symbol.isJava) patmat.javaClassesByUnit.get(tree.symbol.pos.source).foreach(_.addOne(tree.symbol))
+      if (tree.symbol.isJava) enterJavaClass(tree)
 
       if (mods.isCase) {
         val m = ensureCompanionObject(tree, caseModuleDef)
@@ -1062,7 +1096,7 @@ trait Namers extends MethodSynthesis {
       // Only widen if the definition can't keep its inferred singleton type,
       // (Also keep singleton type if so indicated by the expected type `pt`
       //  OPT: 99.99% of the time, `pt` will be `WildcardType`).
-      if (mayKeepSingletonType || (sym.isFinal && sym.isVal && !sym.isLazy) || ((pt ne WildcardType) && !(tpe.widen <:< pt)) || sym.isDefaultGetter) keepSingleton
+      if (mayKeepSingletonType || (sym.isFinal && sym.isVal && !sym.isLazy) || (!pt.isWildcardType && !(tpe.widen <:< pt)) || sym.isDefaultGetter) keepSingleton
       else tpe.widen
     }
 
@@ -1192,15 +1226,13 @@ trait Namers extends MethodSynthesis {
           val psym = ptpe.typeSymbol
           if (psym.isSealed) {
             val sameSourceFile = context.unit.source.file == psym.sourceFile
-            val okChild =
-              if (psym.isJava)
-                psym.attachments.get[PermittedSubclassSymbols] match {
-                  case Some(permitted) => permitted.permits.exists(_ == clazz)
-                  case _ => sameSourceFile
-                }
-              else
-                sameSourceFile
-            if (okChild)
+            if (psym.isJava) {
+              // javac checks Java subclasses, and checking them here could cycle
+              val permitted = clazz.isJava || psym.attachments.get[PermittedSubclassSymbols].exists(p => p.declared && p.symbols.contains(clazz))
+              if (!permitted)
+                pending += ParentSealedInheritanceError(tpt, psym)
+            }
+            else if (sameSourceFile)
               psym.addChild(clazz)
             else
               pending += ParentSealedInheritanceError(tpt, psym)
@@ -1212,7 +1244,11 @@ trait Namers extends MethodSynthesis {
       pending.foreach(ErrorUtils.issueTypeError)
 
       val parents = {
-        def checkParent(tpt: Tree): Type = if (tpt.tpe.isError) AnyRefTpe else tpt.tpe
+        def checkParent(tpt: Tree): Type =
+          if (tpt.tpe.isError) AnyRefTpe
+          // In Java sources, `Object` is typed as `ObjectTpeJava`. As a parent, it is `ObjectTpe`, as in `ClassfileParser`.
+          else if (tpt.tpe eq ObjectTpeJava) ObjectTpe
+          else tpt.tpe
         parentTrees map checkParent
       }
 
@@ -1275,12 +1311,6 @@ trait Namers extends MethodSynthesis {
       val res = GenPolyType(tparams0, resultType)
 
       val pluginsTp = pluginsTypeSig(res, typer, cdef, WildcardType)
-      cdef.getAndRemoveAttachment[PermittedSubclasses].foreach { permitted =>
-        clazz.updateAttachment[PermittedSubclassSymbols] {
-          PermittedSubclassSymbols(permitted.permits.map(typer.typed(_, Mode.NOmode).symbol))
-        }
-      }
-
       // Already assign the type to the class symbol (monoTypeCompleter will do it again).
       // Allows isDerivedValueClass to look at the info.
       clazz setInfo pluginsTp
@@ -1470,6 +1500,9 @@ trait Namers extends MethodSynthesis {
         val checkDependencies = new DependentTypeChecker(context)(this)
         checkDependencies check vparamSymss
       }
+
+      if (meth.isConstructor && !meth.isJavaDefined && methOwner.isNonBottomSubClass(AnnotationClass))
+        mforeach(vparamss)(vparam => if (vparam.symbol.hasDefault) addDefaultArgAnnotation(vparam))
 
       val resTp = {
         // When return type is inferred, we don't just use resTpFromOverride -- it must be packed and widened.
@@ -1667,6 +1700,25 @@ trait Namers extends MethodSynthesis {
       }
     }
 
+    /** Attach a completer for the `@defaultArg` annotation of a parameter of an annotation class's constructor.
+     *  `NamesDefaults.addDefaults` reads the annotation to inline the default into a use, so a use sees it whatever
+     *  the source order, as with a class from a classfile.
+     *
+     *  It is computed on first need, by a use or by `typedValDef`. Until then the parameter does not carry it, so code
+     *  that lists the parameter's annotations while the default is typed, such as a macro in the default, does not
+     *  force it.
+     */
+    private def addDefaultArgAnnotation(vparam: ValDef): Unit = {
+      val sym = vparam.symbol
+      def compute(): AnnotationInfo = enteringTyper {
+        val ann = typer.typedDefaultArgAnnotation(vparam)
+        sym.removeAttachment[DefaultArgAnnotationCompleter]
+        sym.addAnnotation(ann)
+        ann
+      }
+      sym.updateAttachment(new DefaultArgAnnotationCompleter(sym, vparam.rhs.pos, () => compute()))
+    }
+
     private object DefaultGetterNamerSearch {
       def apply(c: Context, meth: Symbol, initCompanionModule: Boolean) = if (meth.isConstructor) new DefaultGetterInCompanion(c, meth, initCompanionModule)
       else new DefaultMethodInOwningScope(c, meth)
@@ -1754,7 +1806,7 @@ trait Namers extends MethodSynthesis {
         }
 
         def patchSymInfo(tp: Type): Unit =
-          if (pt ne WildcardType) // no patching up to do if we didn't infer a prototype
+          if (!pt.isWildcardType) // no patching up to do if we didn't infer a prototype
             vdef.symbol.setInfo { if (isGetter) NullaryMethodType(tp) else tp }
 
         patchSymInfo(pt)
@@ -1781,11 +1833,47 @@ trait Namers extends MethodSynthesis {
         } else {
           val tptTyped = typer.typedType(tpt)
           context.unit.transformed(tpt) = tptTyped
-          tptTyped.tpe
+          vdef.attachments.get[JavaConstantInitializer] match {
+            case Some(JavaConstantInitializer(expr)) =>
+              vdef.removeAttachment[JavaConstantInitializer]
+              javaConstantType(expr, tptTyped.tpe)
+            case _ => tptTyped.tpe
+          }
         }
 //      println(s"val: $result / ${vdef.tpt.tpe} / ")
       pluginsTypeSig(result, typer, vdef, if (tpt.isEmpty) WildcardType else result)
     }
+
+    /** The type of a Java `final` field of type `declared` with initializer `expr`: a constant type
+     *  if `expr` is a constant expression, as for a field read from a classfile with a `ConstantValue`.
+     */
+    private def javaConstantType(expr: Tree, declared: Type): Type =
+      if (!(isPrimitiveValueType(declared) || declared.typeSymbol == StringClass)) declared
+      else {
+        def resolve(ref: Tree): Constant =
+          try typer.silent(_.typed(ref.duplicate, EXPRmode, WildcardType)) match {
+            case SilentResultValue(typed) => typed.tpe match {
+              case ConstantType(c) => c
+              case _               => null
+            }
+            case _ => null
+          } catch {
+            // fields whose initializers refer to each other, which javac does not treat as constants either
+            case _: CyclicReference => null
+          }
+        javaConstantFolder(expr, resolve) match {
+          case null  => declared
+          case const =>
+            // assignment conversion (JLS 5.2), e.g. an `int` constant to a `byte` field if it is in range.
+            // Unlike Scala, Java allows widening an `int` or `long` to `float` or `double` with loss of precision.
+            val converted = declared.typeSymbol match {
+              case FloatClass if const.isNumeric && const.tag <= FloatTag => Constant(const.floatValue)
+              case DoubleClass if const.isNumeric                          => Constant(const.doubleValue)
+              case _                                                       => const.convertTo(declared)
+            }
+            if (converted == null) declared else ConstantType(converted)
+        }
+      }
 
     // Pretend we're an erroneous symbol, for now, so that we match while finding the overridden symbol,
     // but are not considered during implicit search.
@@ -2133,7 +2221,7 @@ trait Namers extends MethodSynthesis {
 
     if (defnSym.isTerm) {
       // for polymorphic DefDefs, create type skolems and assign them to the tparam trees.
-      val skolems = deriveFreshSkolems(typeParams)
+      val skolems = existentialsAndSkolems.deriveFreshSkolems(typeParams)
       foreach2(tparams, skolems)(_ setSymbol _)
     }
 

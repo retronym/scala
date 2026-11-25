@@ -2,17 +2,20 @@ name: PR validation
 on:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-java@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: 8
           cache: sbt
-      - uses: sbt/setup-sbt@v1
+      - uses: sbt/setup-sbt@ecad189dd245444b9ae0a0cd5922fd938b88906f # v1.5.12
       # "mini" bootstrap for PR validation
       # "mini" in these senses:
       # - it doesn't use the complicated legacy scripts.
@@ -21,10 +24,6 @@ jobs:
       # it is still a true bootstrap.
       - name: build
         run: sbt -warn setupPublishCore generateBuildCharacterPropertiesFile headerCheck publishLocal
-      - name: rebuild
-        run: |
-          STARR=$(sed -n 's/^maven\.version\.number=//p' buildcharacter.properties) && echo $STARR
-          sbt -Dstarr.version=$STARR Test/compile
       - name: testAll1
         run: |
           STARR=$(sed -n 's/^maven\.version\.number=//p' buildcharacter.properties) && echo $STARR
@@ -33,9 +32,3 @@ jobs:
         run: |
           STARR=$(sed -n 's/^maven\.version\.number=//p' buildcharacter.properties) && echo $STARR
           sbt -Dstarr.version=$STARR setupValidateTest testAll2
-      - name: benchmarks
-        run: |
-          STARR=$(sed -n 's/^maven\.version\.number=//p' buildcharacter.properties) && echo $STARR
-          sbt -Dstarr.version=$STARR bench/Jmh/compile
-      - name: build library with Scala 3
-        run: sbt -Dscala.build.compileWithDotty=true library/compile

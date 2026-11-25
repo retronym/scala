@@ -20,7 +20,7 @@ import symtab.Flags._
  *  Namer and Typer.
  */
 trait MethodSynthesis {
-  self: Analyzer =>
+  self: AbstractAnalyzer =>
 
   import global._
   import definitions._
@@ -234,8 +234,11 @@ trait MethodSynthesis {
       }
     }
 
+    def implicitWrapperDef(classDef: ClassDef): DefDef =
+      factoryMeth(classDef.mods & (AccessFlags | FINAL) | METHOD | IMPLICIT | SYNTHETIC, classDef.name.toTermName, classDef)
+
     def enterImplicitWrapper(classDef: ClassDef): Unit = {
-      val methDef = factoryMeth(classDef.mods & (AccessFlags | FINAL) | METHOD | IMPLICIT | SYNTHETIC, classDef.name.toTermName, classDef)
+      val methDef = implicitWrapperDef(classDef)
       val methSym = enterInScope(assignMemberSymbol(methDef))
       context.unit.synthetics(methSym) = methDef
 

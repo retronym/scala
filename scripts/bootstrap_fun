@@ -9,8 +9,6 @@
 # Specifying the Scala version:
 #  - To build a release (enables publishing to sonatype):
 #    - Specify SCALA_VER_BASE and optionally SCALA_VER_SUFFIX. The version is SCALA_VER=$SCALA_VER_BASE$SCALA_VER_SUFFIX.
-#    - After building a release, the jenkins job provides an updated versions.properties file as artifact.
-#      Put this file in the Scala repo and create a pull request, also update `baseVersion in Global` in build.sbt.
 #
 # - Otherwise, an integration build is performed:
 #    - version number is read from the build.sbt, extended with -[bin|pre]-$sha
@@ -24,7 +22,7 @@
 publishPrivateTask=${publishPrivateTask-"publish"}
 publishSonatypeTaskCore=${publishSonatypeTaskCore-"publishSigned"}
 
-clean="clean" # TESTING leave empty to speed up testing (on jenkins/locally; on travis it's a fresh machine every time)
+clean="clean" # TESTING leave empty to speed up testing locally (on GitHub Actions it's a fresh machine every time)
 
 ## BUILD STEPS:
 
@@ -36,9 +34,9 @@ determineScalaVersion() {
   if [ -z "$SCALA_VER_BASE" ]; then
     echo "No SCALA_VER_BASE specified."
 
-    travis_fold_start determineScalaVersion "Determining Scala version"
+    fold_start determineScalaVersion "Determining Scala version"
     $SBT_CMD $sbtArgs 'set baseVersionSuffix in Global := "SHA"' generateBuildCharacterPropertiesFile
-    travis_fold_end determineScalaVersion
+    fold_end determineScalaVersion
     parseScalaProperties "buildcharacter.properties"
     SCALA_VER_BASE="$maven_version_base"
     SCALA_VER_SUFFIX="$maven_version_suffix"
@@ -48,9 +46,6 @@ determineScalaVersion() {
   fi
 
   SCALA_VER="$SCALA_VER_BASE$SCALA_VER_SUFFIX"
-
-  echo "version=$SCALA_VER" >> $WORKSPACE/jenkins.properties
-  echo "sbtDistVersionOverride=-Dproject.version=$SCALA_VER" >> $WORKSPACE/jenkins.properties
 
   echo "Building Scala $SCALA_VER."
 }
@@ -67,7 +62,7 @@ removeExistingBuilds() {
 
     # "module" is not a scala module, but an artifact of a bootstrap build. the variable
     # contains: "org/scala-lang/modules", "org/scala-lang/scala-compiler", "org/scala-lang/scala-library", ...
-    local scalaLangModules=`curl -s $storageApiUrl/org/scala-lang | jq -r '.children | .[] | "org/scala-lang" + .uri' | grep -v actors-migration`
+    local scalaLangModules=`curl -s $storageApiUrl/org/scala-lang | jq -r '.children | .[] | "org/scala-lang" + .uri'`
 
     for module in $scalaLangModules; do
       local artifacts=`curl -s $storageApiUrl/$module | jq -r ".children | .[] | select(.uri | endswith(\"$SCALA_VER\")) | .uri"`
@@ -95,9 +90,9 @@ buildStarr() {
     git clone "file://$(pwd)" $STARR_DIR
     cd $STARR_DIR
     git checkout $STARR_REF
-    travis_fold_start starr "Building starr"
+    fold_start starr "Building starr"
     $SBT_CMD -no-colors $sbtArgs "setupBootstrapStarr \"$BOOTSTRAP_REPO_DIR\" $STARR_VER" $clean publish
-    travis_fold_end starr
+    fold_end starr
   )
   SET_STARR=-Dstarr.version=$STARR_VER
 }
@@ -111,12 +106,12 @@ buildLocker() {
   clearIvyCache
   cd $WORKSPACE
 
-  travis_fold_start locker "Building locker"
+  fold_start locker "Building locker"
   $SBT_CMD -no-colors $sbtArgs \
     $SET_STARR \
     "setupBootstrapLocker \"$BOOTSTRAP_REPO_DIR\" $SCALA_VER" \
     $clean publish
-  travis_fold_end locker
+  fold_end locker
 }
 
 #### QUICK
@@ -126,12 +121,12 @@ invokeQuickInternal() {
   setupCmd="$1"
   shift
 
-  travis_fold_start quick "Building bootstrapped"
+  fold_start quick "Building bootstrapped"
   $SBT_CMD $sbtArgs \
       -Dstarr.version=$SCALA_VER \
       "$setupCmd" \
       "$@"
-  travis_fold_end quick
+  fold_end quick
 }
 
 invokeQuick() {
@@ -149,20 +144,4 @@ buildQuick() {
   else
     invokeQuick $clean publish
   fi
-}
-
-testStability() {
-  # Run stability tests using the just built version as "quick" and a new version as "strap"
-  travis_fold_start stab "Testing stability"
-  cd $WORKSPACE
-
-  mv build/quick quick1
-  rm -rf build/
-
-  invokeQuick $clean library/compile reflect/compile compiler/compile
-
-  mv build/quick build/strap
-  mv quick1 build/quick
-  scripts/stability-test.sh
-  travis_fold_end stab
 }

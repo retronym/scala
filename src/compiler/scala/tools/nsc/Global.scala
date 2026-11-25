@@ -47,17 +47,15 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
     with Closeable
     with CompilationUnits
     with Plugins
-    with PhaseAssembly
     with Trees
     with Printers
-    with DocComments
     with Positions
     with Reporting
     with Parsing { self =>
 
   // the mirror --------------------------------------------------
 
-  override def isCompilerUniverse = true
+  override protected def computeIsCompilerUniverse = true
   override val useOffsetPositions = !currentSettings.Yrangepos.value
 
   type RuntimeClass = java.lang.Class[_]
@@ -140,22 +138,10 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
   type ThisPlatform = JavaPlatform { val global: Global.this.type }
   lazy val platform: ThisPlatform  = new GlobalPlatform
 
-  /* Create a class path for the backend, based on the given class path.
-   * Used to make classes available to the inliner's bytecode repository.
-   *
-   * In particular, if ct.sym is used for compilation, replace it with jrt.
-   *
-   * See ReplGlobal, which appends a classpath entry containing products of previous runs.  (Fixes scala/bug#8779.)
+  /* A hook for the REPL to add a classpath entry containing products of previous runs to
+   * the inliner's bytecode repository. (Fixes scala/bug#8779.)
    */
-  def optimizerClassPath(base: ClassPath): ClassPath =
-    base match {
-      case AggregateClassPath(entries) if entries.head.isInstanceOf[CtSymClassPath] =>
-        JrtClassPath(release = None, settings.systemPathValue, unsafe = None, closeableRegistry) match {
-          case jrt :: Nil => AggregateClassPath(entries.drop(1).prepended(jrt))
-          case _ => base
-        }
-      case _ => base
-    }
+  def optimizerClassPath(base: ClassPath): ClassPath = base
 
   def classPath: ClassPath = platform.classPath
 
@@ -199,6 +185,15 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
   } with OverridingPairs
 
   type SymbolPair = overridingPairs.SymbolPair
+
+  /** Called by computePhaseDescriptors to compute phase order. */
+  def computePhaseAssembly(): List[SubComponent] =
+    new PhaseAssembly[Global.this.type](this).computePhaseAssembly(phasesSet)
+
+  val docCommentsSupport: DocComments[Global.this.type] = new DocComments[Global.this.type](this)
+  final def docComments: mutable.WeakHashMap[Symbol, DocComment] = docCommentsSupport.docComments
+  type DocComment = docCommentsSupport.DocComment
+  final lazy val DocComment: docCommentsSupport.DocComment.type = docCommentsSupport.DocComment
 
   // Components for collecting and generating output
 
@@ -288,6 +283,22 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
   /** Called every time an AST node is successfully typechecked in typerPhase.
    */
   def signalDone(context: analyzer.Context, old: Tree, result: Tree): Unit = {}
+
+  /** Whether the presentation compiler may service requests in `signalDone`. */
+  def interruptsEnabled: Boolean = false
+  def interruptsEnabled_=(enabled: Boolean): Unit = ()
+
+  /** Runs `op` without servicing presentation compiler requests in between, which would see its changes half done.
+   *
+   *  A request can retype trees that the typer is in the middle of. Every multi-step change to a scope,
+   *  `unit.synthetics`, attachments or reporting state must either run in `uninterruptible` or have the same
+   *  outcome when the tree is retyped.
+   */
+  final def uninterruptible[T](op: => T): T = {
+    val saved = interruptsEnabled
+    interruptsEnabled = false
+    try op finally interruptsEnabled = saved
+  }
 
   /** Called from parser, which signals hereby that a method definition has been parsed. */
   def signalParseProgress(pos: Position): Unit = {}
@@ -511,7 +522,7 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
   // I only changed analyzer.
   //
   // factory for phases: namer, packageobjects, typer
-  lazy val analyzer =
+  lazy val analyzer: AbstractAnalyzer with Analyzer { val global: Global.this.type } =
     if (settings.YmacroAnnotations.value) new { val global: Global.this.type = Global.this } with Analyzer with MacroAnnotationNamers
     else new { val global: Global.this.type = Global.this } with Analyzer
 
@@ -697,33 +708,36 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
 
   /** Add the internal compiler phases to the phases set.
    *  This implementation creates a description map at the same time.
+   *  The order of this list has no effect: phase order is computed from
+   *  `runsAfter` and `runsRightAfter` by phase assembly. The list is kept in run
+   *  order for the reader. It omits `flatten` and the platform phases (`jvm`),
+   *  which are added elsewhere.
    */
   protected def computeInternalPhases(): Unit =
-    // Note: this fits -Xshow-phases into 80 column width, which is
-    // desirable to preserve.
+    // Keep descriptions short enough that -Vphases output fits in 80 columns.
     List(
       syntaxAnalyzer          -> "parse source into ASTs, perform simple desugaring",
       analyzer.namerFactory   -> "resolve names, attach symbols to named trees",
       analyzer.packageObjects -> "load package objects",
-      analyzer.typerFactory   -> "the meat and potatoes: type the trees",
+      analyzer.typerFactory   -> "type the trees",
       superAccessors          -> "add super accessors in traits and nested classes",
-      patmat                  -> "translate match expressions",
-      extensionMethods        -> "add extension methods for inline classes",
+      extensionMethods        -> "add extension methods for value classes",
       pickler                 -> "serialize symbol tables",
       refChecks               -> "reference/override checking, translate nested objects",
-      uncurry                 -> "uncurry, translate function values to anonymous classes",
+      patmat                  -> "translate match expressions",
+      uncurry                 -> "uncurry, translate by-name and vararg parameters",
       fields                  -> "synthesize accessors and fields, add bitmaps for lazy vals",
       tailCalls               -> "replace tail calls by jumps",
       specializeTypes         -> "@specialized-driven class and method specialization",
       explicitOuter           -> "this refs to outer pointers",
-      erasure                 -> "erase types, add interfaces for traits",
-      postErasure             -> "clean up erased inline classes",
+      erasure                 -> "erase types, add bridge methods",
+      postErasure             -> "clean up erased value classes",
       async                   -> "transform async/await into a state machine",
       lambdaLift              -> "move nested functions to top level",
       constructors            -> "move field definitions into constructors",
       mixer                   -> "mixin composition",
-      delambdafy              -> "remove lambdas",
       cleanup                 -> "platform-specific cleanups, generate reflective calls",
+      delambdafy              -> "translate lambdas to invokedynamic",
       terminal                -> "the last phase during a compilation run"
     )
     .foreach((addToPhasesSet _).tupled)
@@ -1466,7 +1480,6 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
 
     private def showMembers() = {
       // Allows for syntax like scalac -Xshow-class Random@erasure,typer
-      @nowarn
       def splitClassAndPhase(str: String, term: Boolean): Name = {
         def mkName(s: String) = if (term) newTermName(s) else newTypeName(s)
         (str indexOf '@') match {

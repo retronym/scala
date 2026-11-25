@@ -14,7 +14,7 @@ package scala.tools.nsc
 package typechecker
 
 trait StdAttachments {
-  self: Analyzer =>
+  self: AbstractAnalyzer =>
 
   import global._
 
@@ -126,6 +126,9 @@ trait StdAttachments {
    */
   case class SuperArgsAttachment(argss: List[List[Tree]])
 
+  /** Type tests involving classes compiled in this run, checked once the children of sealed classes are known. */
+  case class CheckableRecheckAttachment(rechecks: List[() => Option[(String, Reporting.WarningCategory)]])
+
   /** Convenience method for `SuperArgsAttachment`.
    *  Compared with `MacroRuntimeAttachment` this attachment has different a usage pattern,
    *  so it really benefits from a dedicated extractor.
@@ -196,12 +199,44 @@ trait StdAttachments {
    * track of other adapted trees.
    */
   case class OriginalTreeAttachment(original: Tree)
+
+  /** Computes the `@defaultArg` annotation of an annotation class parameter. See `Namer.addDefaultArgAnnotation`.
+   *
+   *  A clone of the parameter made before then, as in the constructor type of `ann[Int]`, shares the attachment and
+   *  never gets the annotation itself, so read it through `defaultArgAnnotation`.
+   */
+  final class DefaultArgAnnotationCompleter(param: Symbol, pos: Position, compute: () => AnnotationInfo) {
+    private[this] var result: AnnotationInfo = null
+    private[this] var computing = false
+
+    def annotation: AnnotationInfo = {
+      if (result == null) {
+        if (computing)
+          throw new TypeError(pos, s"recursive default argument: annotation parameter ${param.name} is needed to type its own default")
+        computing = true
+        try result = compute()
+        finally computing = false
+      }
+      result
+    }
+  }
+
+  /** The `@defaultArg` annotation of `param`, computing it if needed. */
+  def defaultArgAnnotation(param: Symbol): Option[AnnotationInfo] =
+    param.attachments.get[DefaultArgAnnotationCompleter] match {
+      case Some(completer) => Some(completer.annotation)
+      case _               => param.getAnnotation(definitions.DefaultArgAttr)
+    }
+
+  /** Compute the `@defaultArg` annotation of `param` if pending. */
+  def completeDefaultArgAnnotation(param: Symbol): Unit =
+    param.attachments.get[DefaultArgAnnotationCompleter].foreach(_.annotation)
 }
 
 
 // imported from scalamacros/paradise
 trait MacroAnnotationAttachments {
-  self: Analyzer =>
+  self: AbstractAnalyzer =>
 
   import global._
   import scala.collection.mutable
@@ -253,6 +288,11 @@ trait MacroAnnotationAttachments {
   def unmarkExpanded(sym: Symbol): Symbol = if (sym != null && sym != NoSymbol) sym.removeAttachment[SymbolExpansionStatus] else sym
 
   case class CacheAttachment(cache: mutable.Map[String, Any])
+  /** The initializer of a `final` field in a Java source file which may be a constant expression.
+   *  The namer gives the field a constant type if the expression evaluates to a constant.
+   */
+  case class JavaConstantInitializer(expr: Tree)
+
   implicit class RichTree(tree: Tree) {
     def cached[T](key: String, op: => T): T = {
       val cache = tree.attachments.get[CacheAttachment].map(_.cache).getOrElse(mutable.Map[String, Any]())

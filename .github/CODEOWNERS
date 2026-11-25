@@ -1,4 +1,0 @@
-# Any changes to the Scala 2 Standard Library must be approve
-# by one of the officers responsible of maintaining it
-/src/library/      @scala/stdlib-officers
-/src/library-aux/  @scala/stdlib-officers

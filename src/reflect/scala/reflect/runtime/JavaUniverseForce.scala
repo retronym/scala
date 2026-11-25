@@ -49,9 +49,6 @@ trait JavaUniverseForce { self: runtime.JavaUniverse  =>
     this.perRunCaches
     this.compat
     this.treeBuild
-    this.FreshNameExtractor
-    this.FixedMirrorTreeCreator
-    this.FixedMirrorTypeCreator
     this.CompoundTypeTreeOriginalAttachment
     this.SAMFunction
     this.DelambdafyTarget
@@ -85,15 +82,12 @@ trait JavaUniverseForce { self: runtime.JavaUniverse  =>
     this.FieldTypeInferred
     this.LookupAmbiguityWarning
     this.PermittedSubclasses
-    this.PermittedSubclassSymbols
     this.NamePos
     this.UnnamedArg
     this.DiscardedValue
     this.DiscardedExpr
     this.BooleanParameterType
     this.ForceMatchDesugar
-    this.noPrint
-    this.typeDebug
     // inaccessible: this.posAssigner
     this.ConsoleWriter
     this.RefTree
@@ -175,11 +169,6 @@ trait JavaUniverseForce { self: runtime.JavaUniverse  =>
     this.Scope
     this.EmptyScope
     this.Flag
-    this.KindErrors
-    this.Kind
-    this.ProperTypeKind
-    this.TypeConKind
-    this.inferKind
     this.UnmappableTree
     this.ErrorType
     this.WildcardType
@@ -225,14 +214,10 @@ trait JavaUniverseForce { self: runtime.JavaUniverse  =>
     this.dropIllegalStarTypes
     this.wildcardExtrapolation
     this.SubstSymMap
-    this.IsDependentCollector
     this.ApproximateDependentMap
     this.identityTypeMap
     this.typeVarToOriginMap
-    this.ErroneousCollector
     this.adaptToNewRunMap
-    this.UnrelatableCollector
-    this.IsRelatableCollector
     this.SubTypePair
     this.SymbolKind
     this.NoSymbol
@@ -314,6 +299,7 @@ trait JavaUniverseForce { self: runtime.JavaUniverse  =>
     definitions.JavaUtilMap
     definitions.JavaUtilHashMap
     definitions.JavaRecordClass
+    definitions.JdkValueBasedAnnot
     definitions.ByNameParamClass
     definitions.JavaRepeatedParamClass
     definitions.RepeatedParamClass
@@ -428,6 +414,7 @@ trait JavaUniverseForce { self: runtime.JavaUniverse  =>
     definitions.Object_asInstanceOf
     definitions.Object_synchronized
     definitions.String_$plus
+    definitions.ObjectsClass
     definitions.ObjectRefClass
     definitions.VolatileObjectRefClass
     definitions.RuntimeStaticsModule
@@ -564,5 +551,13 @@ trait JavaUniverseForce { self: runtime.JavaUniverse  =>
     erasure.verifiedJavaErasure
     erasure.boxingErasure
     erasure.boxing3Erasure
+    typeDebugging.noPrint
+    typeDebugging.typeDebug
+    kinds.KindErrors
+    kinds.Kind
+    kinds.ProperTypeKind
+    kinds.TypeConKind
+    kinds.inferKind
+    freshNames.FreshNameExtractor
   }
 }

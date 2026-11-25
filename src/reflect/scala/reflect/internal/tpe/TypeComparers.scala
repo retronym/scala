@@ -34,6 +34,13 @@ trait TypeComparers {
   private[this] val _knownFalseSubTypes = new IdentityHashMap[Type, List[Type]]
   def knownFalseSubTypes = _knownFalseSubTypes
 
+  // Called on every top-level `isSubType` / `isSameType`, but the map is only populated for pathological recursive
+  // subtype checks. Guard the `clear()`, as `IdentityHashMap.clear` zeroes the entire table even when empty.
+  private def clearKnownFalseSubTypes(): Unit = {
+    val m = knownFalseSubTypes
+    if (!m.isEmpty) m.clear()
+  }
+
   final case class SubTypePair(tp1: Type, tp2: Type) {
     // scala/bug#8146 we used to implement equality here in terms of pairwise =:=.
     //         But, this was inconsistent with hashCode, which was based on the
@@ -68,17 +75,24 @@ trait TypeComparers {
   }
 
   private def isSubPre(pre1: Type, pre2: Type, sym: Symbol) =
-    if ((pre1 ne pre2) && (pre1 ne NoPrefix) && (pre2 ne NoPrefix) && pre1 <:< pre2) {
+    if ((pre1 ne pre2) && !pre1.isNoPrefix && !pre2.isNoPrefix && pre1 <:< pre2) {
       if (settings.isDebug) println(s"new isSubPre $sym: $pre1 <:< $pre2")
       true
     } else
       false
 
+  /** Distinct type members of the same name are the same type under unifiable prefixes (one may override
+   *  the other, or both may be bound in a refinement or self type), but distinct classes never are:
+   *  a class can't be overridden, so an instance of one isn't an instance of the other (scala/bug#13205).
+   */
+  private def isUnifiableSyms(sym1: Symbol, pre1: Type, sym2: Symbol, pre2: Type) =
+    !(sym1.isClass && sym2.isClass) && isUnifiable(pre1, pre2)
+
   private def equalSymsAndPrefixes(sym1: Symbol, pre1: Type, sym2: Symbol, pre2: Type): Boolean = (
     if (sym1 eq sym2)
       sym1.hasPackageFlag || sym1.owner.hasPackageFlag || phase.erasedTypes || pre1 =:= pre2
     else
-      (sym1.name == sym2.name) && isUnifiable(pre1, pre2)
+      (sym1.name == sym2.name) && isUnifiableSyms(sym1, pre1, sym2, pre2)
   )
 
   def isDifferentType(tp1: Type, tp2: Type): Boolean = try {
@@ -89,7 +103,7 @@ trait TypeComparers {
   } finally {
     subsametypeRecursions -= 1
     if (subsametypeRecursions == 0) {
-      knownFalseSubTypes.clear()
+      clearKnownFalseSubTypes()
       // undoLog.clear() // too eager, breaks #3281, #3866
     }
   }
@@ -127,15 +141,15 @@ trait TypeComparers {
   finally {
     subsametypeRecursions -= 1
     if (subsametypeRecursions == 0) {
-      knownFalseSubTypes.clear()
+      clearKnownFalseSubTypes()
       // undoLog.clear() // too eager, breaks #3281, #3866
     }
   }
 
   // @pre: at least one argument has annotations
   private def sameAnnotatedTypes(tp1: Type, tp2: Type) = (
-       annotationsConform(tp1, tp2)
-    && annotationsConform(tp2, tp1)
+       annotationCheckerSupport.annotationsConform(tp1, tp2)
+    && annotationCheckerSupport.annotationsConform(tp2, tp1)
     && (tp1.withoutAnnotations =:= tp2.withoutAnnotations)
   )
   // We flush out any AnnotatedTypes before calling isSameType2 because
@@ -322,7 +336,7 @@ trait TypeComparers {
   } finally {
     subsametypeRecursions -= 1
     if (subsametypeRecursions == 0) {
-      knownFalseSubTypes.clear()
+      clearKnownFalseSubTypes()
       // undoLog.clear() // too eager, breaks #3281, #3866
     }
   }
@@ -338,15 +352,15 @@ trait TypeComparers {
          (tp1 eq tp2)
       || isErrorOrWildcard(tp1)
       || isErrorOrWildcard(tp2)
-      || (tp1 eq NoPrefix) && tp2.typeSymbol.isPackageClass // !! I do not see how this would be warranted by the spec
-      || (tp2 eq NoPrefix) && tp1.typeSymbol.isPackageClass // !! I do not see how this would be warranted by the spec
+      || tp1.isNoPrefix && tp2.typeSymbol.isPackageClass // !! I do not see how this would be warranted by the spec
+      || tp2.isNoPrefix && tp1.typeSymbol.isPackageClass // !! I do not see how this would be warranted by the spec
     )
     // isFalse, assuming !isTrue
     def isFalse = (
-         (tp1 eq NoType)
-      || (tp2 eq NoType)
-      || (tp1 eq NoPrefix)
-      || (tp2 eq NoPrefix)
+         tp1.isNoType
+      || tp2.isNoType
+      || tp1.isNoPrefix
+      || tp2.isNoPrefix
     )
 
     if (isTrue) TriState.True
@@ -356,7 +370,7 @@ trait TypeComparers {
 
   private def isSubType1(tp1: Type, tp2: Type, depth: Depth): Boolean = typeRelationPreCheck(tp1, tp2) match {
     case state if state.isKnown                                                  => state.booleanValue
-    case _ if tp1.isInstanceOf[AnnotatedType] || tp2.isInstanceOf[AnnotatedType] => annotationsConform(tp1, tp2) && (tp1.withoutAnnotations <:< tp2.withoutAnnotations)
+    case _ if tp1.isInstanceOf[AnnotatedType] || tp2.isInstanceOf[AnnotatedType] => annotationCheckerSupport.annotationsConform(tp1, tp2) && (tp1.withoutAnnotations <:< tp2.withoutAnnotations)
     case _                                                                       => isSubType2(tp1, tp2, depth)
   }
 
@@ -443,7 +457,7 @@ trait TypeComparers {
       || (if (isNoArgStaticClassTypeRef(tp1) && isNoArgStaticClassTypeRef(tp2))
             tp1.typeSymbolDirect.isNonBottomSubClass(tp2.typeSymbolDirect) // OPT faster than comparing eta-expanded types
           else
-            isSub(tp1.withoutAnnotations, tp2.withoutAnnotations) && annotationsConform(tp1, tp2)
+            isSub(tp1.withoutAnnotations, tp2.withoutAnnotations) && annotationCheckerSupport.annotationsConform(tp1, tp2)
          )
     )
   }
@@ -477,7 +491,7 @@ trait TypeComparers {
             val pre2 = tr2.pre
             (((if (sym1 eq sym2) phase.erasedTypes || sym1.rawowner.hasPackageFlag || isSubType(pre1, pre2, depth)
             else (sym1.name == sym2.name && !sym1.isModuleClass && !sym2.isModuleClass &&
-              (isUnifiable(pre1, pre2) ||
+              (isUnifiableSyms(sym1, pre1, sym2, pre2) ||
                 isSameSpecializedSkolem(sym1, sym2, pre1, pre2) ||
                 sym2.isAbstractType && isSubPre(pre1, pre2, sym2)))) &&
               isSubArgs(tr1.args, tr2.args, sym1.typeParams, depth))
@@ -486,7 +500,7 @@ trait TypeComparers {
                 val base = tr1 baseType sym2
                 // During bootstrap, `base eq NoType` occurs about 2.5 times as often as `base ne NoType`.
                 // The extra check seems like a worthwhile optimization (about 2.5M useless calls to isSubType saved during that run).
-                (base ne tr1) && (base ne NoType) && isSubType(base, tr2, depth)
+                (base ne tr1) && !base.isNoType && isSubType(base, tr2, depth)
               }
               ||
               thirdTryRef(tr1, tr2))
@@ -495,7 +509,7 @@ trait TypeComparers {
         }
       case AnnotatedType(_, _) =>
         isSubType(tp1.withoutAnnotations, tp2.withoutAnnotations, depth) &&
-          annotationsConform(tp1, tp2)
+          annotationCheckerSupport.annotationsConform(tp1, tp2)
       case tp2: ProtoType => tp2.isMatchedBy(tp1, depth)
       case tv2 @ TypeVar(_, constr2) =>
         tp1 match {
@@ -518,7 +532,7 @@ trait TypeComparers {
       case pt: ProtoType => pt.canMatch(tp2, depth)
       case AnnotatedType(_, _) =>
         isSubType(tp1.withoutAnnotations, tp2.withoutAnnotations, depth) &&
-          annotationsConform(tp1, tp2)
+          annotationCheckerSupport.annotationsConform(tp1, tp2)
       case tv @ TypeVar(_,_) =>
         tv.registerBound(tp2, isLowerBound = false)
       case ExistentialType(_, _) => // TODO: fast initial try for tp1 and tp2 both existentials? (first try instantiating tp2's existentials to tp1's skolems?)

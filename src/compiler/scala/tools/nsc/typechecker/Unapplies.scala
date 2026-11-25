@@ -23,7 +23,7 @@ import scala.util.chaining._
  *  @author  Martin Odersky
  */
 trait Unapplies extends ast.TreeDSL {
-  self: Analyzer =>
+  self: AbstractAnalyzer =>
 
   import global._
   import definitions._
@@ -108,7 +108,7 @@ trait Unapplies extends ast.TreeDSL {
   }
   private def applyAccess(mods: Modifiers): ApplyAccess.Flags = {
     import ApplyAccess._
-    val changeModsIn3 = mods.hasFlag(PRIVATE) || (!mods.hasFlag(PROTECTED) && mods.hasAccessBoundary)
+    val changeModsIn3 = mods.hasFlag(PRIVATE) || mods.hasFlag(PROTECTED) || mods.hasAccessBoundary
     if (!changeModsIn3) Default
     else if (currentRun.sourceFeatures.caseApplyCopyAccess) Inherit
     else if (currentRun.isScala3) Warn
@@ -169,7 +169,7 @@ trait Unapplies extends ast.TreeDSL {
     val inheritedMods = constrMods(cdef)
     val access = applyAccess(inheritedMods)
     val mods =
-      if (ApplyAccess.isInherit(access)) (caseMods | (inheritedMods.flags & PRIVATE)).copy(privateWithin = inheritedMods.privateWithin)
+      if (ApplyAccess.isInherit(access)) (caseMods | (inheritedMods.flags & (PRIVATE | PROTECTED))).copy(privateWithin = inheritedMods.privateWithin)
       else caseMods
     factoryMeth(mods, nme.apply, cdef).tap(m =>
       if (ApplyAccess.isWarn(access))

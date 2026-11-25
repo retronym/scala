@@ -1,0 +1,96 @@
+name: Publish
+
+on:
+  push:
+    branches: ['2.*.x']
+  workflow_dispatch:
+    inputs:
+      SCALA_VER_BASE:
+        description: Version to release, e.g. 2.12.22. Leave empty to publish a nightly.
+      SCALA_VER_SUFFIX:
+        description: Release suffix, e.g. -RC1
+      STARR_REF:
+        description: Git ref to build a fresh STARR from, if the release needs one
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # see the comment in scripts/bootstrap_fun for the procedure
+  publish:
+    name: publish (bootstrapped) to scala-integration or sonatype
+    if: github.repository == 'scala/scala'
+    runs-on: ubuntu-latest
+    # the secrets live in an environment per release branch, which only that branch can use
+    environment: publish-${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # buildStarr clones STARR_REF from this checkout
+          fetch-depth: ${{ inputs.STARR_REF && '0' || '1' }}
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: 8
+          cache: sbt
+      - uses: sbt/setup-sbt@ecad189dd245444b9ae0a0cd5922fd938b88906f # v1.5.12
+        with:
+          # the cache is for sbt 2
+          disk-cache: false
+      - env:
+          SCALA_VER_BASE: ${{ inputs.SCALA_VER_BASE }}
+          SCALA_VER_SUFFIX: ${{ inputs.SCALA_VER_SUFFIX }}
+          STARR_REF: ${{ inputs.STARR_REF }}
+          PRIVATE_REPO_PASS: ${{ secrets.PRIVATE_REPO_PASS }}
+          PGP_SECRET: ${{ secrets.PGP_SECRET }}
+          PGP_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
+          SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
+          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
+          SCALA_REPO_TOKEN: ${{ secrets.SCALA_REPO_TOKEN }}
+        run: |
+          (cd admin && ./init.sh)
+          source scripts/common
+          source scripts/bootstrap_fun
+          determineScalaVersion
+          removeExistingBuilds $integrationRepoUrl
+          if [ ! -z "$STARR_REF" ]; then buildStarr; fi
+          buildLocker
+          buildQuick
+          triggerScalaDist
+
+  spec:
+    name: language spec
+    if: github.repository == 'scala/scala'
+    # wkhtmltopdf has no packages for newer Ubuntu releases; the jammy one works on 24.04
+    runs-on: ubuntu-24.04
+    environment: publish-${{ github.ref_name }}
+    # rsync from an older run must not finish after a newer one
+    concurrency:
+      group: spec-${{ github.ref }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ruby/setup-ruby@26e5b7d197ebf60545ee9667bcbace0be11ccaec # v1.334.0
+        with:
+          ruby-version: '3.4'
+          bundler-cache: true
+      - name: Install wkhtmltopdf
+        run: |
+          wget --quiet https://github.com/wkhtmltopdf/packaging/releases/download/0.12.6.1-3/wkhtmltox_0.12.6.1-3.jammy_amd64.deb
+          sudo apt-get update
+          sudo apt-get install -y ./wkhtmltox_0.12.6.1-3.jammy_amd64.deb
+          rm wkhtmltox_0.12.6.1-3.jammy_amd64.deb
+      - run: bundle exec jekyll build -s spec/ -d build/spec
+      - run: bundle exec jekyll build -s spec/ -d build/spec-pdf
+        env:
+          JEKYLL_ENV: spec-pdf
+      - run: scripts/generate-spec-pdf.sh
+      - run: scripts/publish-spec.sh
+        env:
+          CHARA_SPEC_SSH_KEY: ${{ secrets.CHARA_SPEC_SSH_KEY }}

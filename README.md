@@ -13,9 +13,9 @@ For coordinating broader efforts, we also use the [scala/scala-dev tracker](http
 
 To contribute here, please open a [pull request](https://help.github.com/articles/using-pull-requests/#fork--pull) from your fork of this repository.
 
-Be aware that we can't accept additions to the standard library, only modifications to existing code.  Binary compatibility forbids adding new public classes or public methods. Additions are made to [scala-library-next](https://github.com/scala/scala-library-next) instead.
+If your change affects the standard library, see CONTRIBUTING.md for remarks about what sort of changes might be accepted in Scala 2 and/or Scala 3.
 
-We require that you sign the [Scala CLA](https://contribute.akka.io/contribute/cla/scala) before we can merge any of your work, to protect Scala's future as open source software.
+We require that you sign the [Scala CLA](https://cla.scala-lang.org/scala/scala) before we can merge any of your work, to protect Scala's future as open source software.
 
 The general workflow is as follows.
 1. Find/file an issue in scala/bug (or submit a well-documented PR right away!).
@@ -125,7 +125,6 @@ We are grateful for the following OSS licenses:
   - [JProfiler Java profiler](https://www.ej-technologies.com/products/jprofiler/overview.html)
   - [YourKit Java Profiler](https://www.yourkit.com/java/profiler/)
   - [IntelliJ IDEA](https://www.jetbrains.com/idea/download/)
-  - [![Revved up by Develocity](https://img.shields.io/badge/Revved%20up%20by-Develocity-06A0CE?logo=Gradle&labelColor=02303A)](https://develocity.scala-lang.org)
 
 ## Build setup
 
@@ -218,6 +217,9 @@ Our guidelines for contributing are explained in [CONTRIBUTING.md](CONTRIBUTING.
 It contains useful information on our coding standards, testing, documentation, how
 we use git and GitHub and how to get your code reviewed.
 
+Refer to our [LLM policy](LLM_POLICY.md) for rules and guidelines regarding the use
+of LLM-based tools in your contributions.
+
 You may also want to check out the following resources:
   - The ["Scala Hacker Guide"](https://scala-lang.org/contribute/hacker-guide.html)
     covers some of the same ground as this README, but in greater detail and in a more
@@ -226,7 +228,7 @@ You may also want to check out the following resources:
 
 # Scala CI
 
-[![Build Status](https://travis-ci.com/scala/scala.svg?branch=2.13.x)](https://travis-ci.com/scala/scala)
+[![Build Status](https://github.com/scala/scala/actions/workflows/ci.yml/badge.svg?branch=2.13.x)](https://github.com/scala/scala/actions/workflows/ci.yml?query=branch%3A2.13.x)
 
 Once you submit a PR your commits will be automatically tested by the Scala CI.
 
@@ -239,13 +241,8 @@ If you see a spurious failure on Jenkins, you can post `/rebuild` as a PR commen
 The [scabot README](https://github.com/scala/scabot) lists all available commands.
 
 If you'd like to test your patch before having everything polished for review,
-you can have Travis CI build your branch (make sure you have a fork and have Travis CI
-enabled for branch builds on it first, and then push your branch).  Also
-feel free to submit a draft PR. In case your draft branch contains
-a large number of commits (that you didn't clean up / squash yet for review),
-consider adding `[ci: last-only]` to the PR title. That way only the last commit
-will be tested, saving some energy and CI-resources. Note that inactive draft PRs
-will be closed eventually, which does not mean the change is being rejected.
+feel free to submit a draft PR. Note that inactive draft PRs will be closed
+eventually, which does not mean the change is being rejected.
 
 CI performs a compiler bootstrap. The first task, `validatePublishCore`, publishes
 a build of your commit to the temporary repository

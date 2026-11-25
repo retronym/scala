@@ -143,4 +143,40 @@ class VectorMapTest {
     assertEquals(List(1 -> "a", 2 -> "b"), m.removed(4).removed(5).updated(6, "f").removed(6).init.toList)
     assertEquals(List(1 -> "a", 2 -> "b"), m.removed(5).removed(4).updated(6, "f").removed(6).init.toList)
   }
+
+  @Test
+  def builderReuseAfterClear(): Unit = {
+    val b = VectorMap.newBuilder[Int, String]
+    (1 to 5).foreach(i => b += (i -> "x"))
+    b.result()
+    b.clear()
+    b += (1 -> "a")
+    b += (1 -> "b")
+    val m = b.result()
+    assertEquals(1, m.size)
+    assertEquals(1, m.iterator.size)
+    assertEquals(List(1 -> "b"), m.toList)
+    assertTrue(m.removed(1).isEmpty)
+  }
+
+  @Test
+  def serializable(): Unit = {
+    import java.io._
+    def roundTrip[A <: AnyRef](a: A): A = {
+      val bos = new ByteArrayOutputStream
+      new ObjectOutputStream(bos).writeObject(a)
+      new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray)).readObject().asInstanceOf[A]
+    }
+    val m = VectorMap(1 -> "a", 2 -> "b", 3 -> "c") - 2
+    val r = roundTrip(m)
+    assertEquals(m.toList, r.toList)
+    assertEquals(List(1 -> "a", 3 -> "c", 4 -> "d"), (r + (4 -> "d")).toList)
+    assertTrue(roundTrip(VectorMap.empty[Int, Int]).isEmpty)
+    // SeqMap switches to VectorMap from five entries on
+    val sm = SeqMap(1 -> 1, 2 -> 2, 3 -> 3, 4 -> 4, 5 -> 5)
+    assertTrue(sm.isInstanceOf[VectorMap[_, _]])
+    assertEquals(sm.toList, roundTrip(sm).toList)
+    assertEquals(List("a", "c"), roundTrip(m.values).toList)
+    assertEquals(sm.values.toList, roundTrip(sm.values).toList)
+  }
 }

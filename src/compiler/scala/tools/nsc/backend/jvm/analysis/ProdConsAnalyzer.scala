@@ -83,7 +83,7 @@ class ProdConsAnalyzer(methodNode: MethodNode, classInternalName: InternalName) 
     producersForValueAt(insn, slot).flatMap[AbstractInsnNode](prod => {
       val outputNumber = outputValueSlots(prod).indexOf(slot)
       _consumersOfOutputsFrom.get(prod).map(v => {
-        v(outputNumber)
+        v.consumers(outputNumber)
       }).getOrElse(Set.empty)
     })
   }
@@ -100,7 +100,7 @@ class ProdConsAnalyzer(methodNode: MethodNode, classInternalName: InternalName) 
     case ParameterProducer(local)                           => consumersOfValueAt(methodNode.instructions.getFirst, local)
     case ExceptionProducer(handlerLabel, handlerStackTop)   => consumersOfValueAt(handlerLabel, handlerStackTop)
     case _ =>
-      _consumersOfOutputsFrom.get(insn).map(v => Set.from[AbstractInsnNode](v.indices.iterator.flatMap(v.apply))).getOrElse(Set.empty)
+      _consumersOfOutputsFrom.get(insn).map(v => Set.from[AbstractInsnNode](v.consumers.iterator.flatten)).getOrElse(Set.empty)
   }
 
   /**
@@ -111,21 +111,11 @@ class ProdConsAnalyzer(methodNode: MethodNode, classInternalName: InternalName) 
    * returned instead.
    */
   def initialProducersForValueAt(insn: AbstractInsnNode, slot: Int): Set[AbstractInsnNode] = {
-    def initialProducers(insn: AbstractInsnNode, producedSlot: Int): Set[AbstractInsnNode] = {
-      if (isCopyOperation(insn)) {
-        val key = (insn, producedSlot)
-        _initialProducersCache.getOrElseUpdate(key, {
-          // prevent infinite recursion if an instruction is its own producer or consumer
-          // see cyclicProdCons in ProdConsAnalyzerTest
-          _initialProducersCache(key) = Set.empty
-          val (sourceValue, sourceValueSlot) = copyOperationSourceValue(insn, producedSlot)
-          sourceValue.insns.iterator.asScala.flatMap(initialProducers(_, sourceValueSlot)).toSet
-        })
-      } else {
-        Set(insn)
-      }
+    def sources(copyOp: AbstractInsnNode, producedSlot: Int): Iterator[(AbstractInsnNode, Int)] = {
+      val (sourceValue, sourceValueSlot) = copyOperationSourceValue(copyOp, producedSlot)
+      sourceValue.insns.iterator.asScala.map((_, sourceValueSlot))
     }
-    producersForValueAt(insn, slot).flatMap(initialProducers(_, slot))
+    producersForValueAt(insn, slot).flatMap(reachedThroughCopies(_, slot, _initialProducersCache, sources))
   }
 
   /**
@@ -133,24 +123,93 @@ class ProdConsAnalyzer(methodNode: MethodNode, classInternalName: InternalName) 
    * tracked through copying operations such as SOTRE and LOAD.
    */
   def ultimateConsumersOfValueAt(insn: AbstractInsnNode, slot: Int): Set[AbstractInsnNode] = {
-    def ultimateConsumers(insn: AbstractInsnNode, consumedSlot: Int): Set[AbstractInsnNode] = {
-      if (isCopyOperation(insn)) {
-        val key = (insn, consumedSlot)
-        _ultimateConsumersCache.getOrElseUpdate(key, {
-          // prevent infinite recursion if an instruction is its own producer or consumer
-          // see cyclicProdCons in ProdConsAnalyzerTest
-          _ultimateConsumersCache(key) = Set.empty
-          for {
-            producedSlot     <- copyOperationProducedValueSlots(insn, consumedSlot)
-            consumer         <- consumersOfValueAt(insn.getNext, producedSlot)
-            ultimateConsumer <- ultimateConsumers(consumer, producedSlot)
-          } yield ultimateConsumer
-        })
+    def targets(copyOp: AbstractInsnNode, consumedSlot: Int): Iterator[(AbstractInsnNode, Int)] =
+      for {
+        producedSlot <- copyOperationProducedValueSlots(copyOp, consumedSlot).iterator
+        consumer     <- consumersOfValueAt(copyOp.getNext, producedSlot).iterator
+      } yield (consumer, producedSlot)
+    consumersOfValueAt(insn, slot).flatMap(reachedThroughCopies(_, slot, _ultimateConsumersCache, targets))
+  }
+
+  /**
+   * Returns the instructions other than copy operations that are reached from `(start, startSlot)`
+   * by following `edges` through copy operations.
+   */
+  private def reachedThroughCopies(start: AbstractInsnNode, startSlot: Int,
+                                   cache: mutable.HashMap[(AbstractInsnNode, Int), Set[AbstractInsnNode]],
+                                   edges: (AbstractInsnNode, Int) => Iterator[(AbstractInsnNode, Int)]): Set[AbstractInsnNode] = {
+    if (!isCopyOperation(start)) Set(start)
+    else cache.getOrElse((start, startSlot), {
+      cacheReachedThroughCopies((start, startSlot), cache, edges)
+      cache((start, startSlot))
+    })
+  }
+
+  /**
+   * Caches the answer of `reachedThroughCopies` for `root` and for every copy operation it reaches.
+   *
+   * Copy operations can form a cycle, for example in `var a = p; while (c) a = if (b) a else q`.
+   * All nodes of a strongly connected component reach the same instructions, so the search finds
+   * the components (Tarjan's algorithm) and caches the answer for every node once its component
+   * is complete.
+   */
+  private def cacheReachedThroughCopies(root: (AbstractInsnNode, Int),
+                                        cache: mutable.HashMap[(AbstractInsnNode, Int), Set[AbstractInsnNode]],
+                                        edges: (AbstractInsnNode, Int) => Iterator[(AbstractInsnNode, Int)]): Unit = {
+    type Node = (AbstractInsnNode, Int)
+    // `reached` is what the node reaches outside its component, until the node turns out to be the
+    // component's root: then it is what the whole component reaches.
+    final class Visited(val node: Node, val index: Int, val position: Int) {
+      val edgesLeft = edges(node._1, node._2)
+      var low = index
+      var reached = Set.empty[AbstractInsnNode]
+    }
+    val index = mutable.HashMap.empty[Node, Int]
+    // Ordered by index. A visited node that is not cached is on this stack.
+    val unfinished = mutable.ArrayBuffer.empty[Visited]
+    // The nodes being visited, innermost last, in place of recursion: a method can have thousands of copies in a row.
+    val path = mutable.ArrayBuffer.empty[Visited]
+
+    def enter(node: Node): Unit = {
+      val v = new Visited(node, index.size, unfinished.length)
+      index(node) = v.index
+      unfinished += v
+      path += v
+    }
+
+    // Without loops, every component is a single node and there is nothing to union.
+    def finish(componentRoot: Visited): Unit = {
+      var i = componentRoot.position + 1
+      while (i < unfinished.length) { componentRoot.reached ++= unfinished(i).reached; i += 1 }
+      i = componentRoot.position
+      while (i < unfinished.length) { cache(unfinished(i).node) = componentRoot.reached; i += 1 }
+      unfinished.dropRightInPlace(unfinished.length - componentRoot.position)
+    }
+
+    enter(root)
+    while (path.nonEmpty) {
+      val v = path.last
+      if (v.edgesLeft.hasNext) {
+        val next @ (insn, _) = v.edgesLeft.next()
+        if (!isCopyOperation(insn)) v.reached += insn
+        else cache.get(next) match {
+          case Some(known) => v.reached ++= known
+          case _ => index.get(next) match {
+            case Some(nextIndex) => v.low = math.min(v.low, nextIndex)
+            case _               => enter(next)
+          }
+        }
       } else {
-        Set(insn)
+        path.dropRightInPlace(1)
+        val completesComponent = v.low == v.index
+        if (completesComponent) finish(v)
+        if (path.nonEmpty) {
+          val parent = path.last
+          parent.low = math.min(parent.low, v.low)
+          if (completesComponent) parent.reached ++= v.reached
+        }
       }
     }
-    consumersOfValueAt(insn, slot).flatMap(ultimateConsumers(_, slot))
   }
 
   def initialProducersForInputsOf(insn: AbstractInsnNode): Set[AbstractInsnNode] = {
@@ -406,19 +465,27 @@ class ProdConsAnalyzer(methodNode: MethodNode, classInternalName: InternalName) 
       }
   }
 
-  /** For each instruction, a set of potential consumers of the produced values. */
-  private lazy val _consumersOfOutputsFrom: Map[AbstractInsnNode, Vector[Set[AbstractInsnNode]]] = {
-    var res = Map.empty[AbstractInsnNode, Vector[Set[AbstractInsnNode]]]
+  /** The slots a producer writes, and the consumers of the value in each. */
+  private final class Outputs(val slots: Seq[Int]) {
+    val consumers: Array[Set[AbstractInsnNode]] = Array.fill(slots.size)(Set.empty)
+  }
+
+  /** For each instruction, a set of potential consumers of the produced values.
+   *
+   *  Built in place: updating an immutable map and vector for every value consumed was most of its cost, as was
+   *  computing a producer's output slots again for each of its consumers.
+   */
+  private lazy val _consumersOfOutputsFrom: collection.Map[AbstractInsnNode, Outputs] = {
+    val res = mutable.HashMap.empty[AbstractInsnNode, Outputs]
     for {
       insn <- methodNode.instructions.iterator.asScala
       frame = frameAt(insn)
       i <- inputValueSlots(insn)
       producer <- frame.getValue(i).insns.asScala
     } {
-      val producedSlots = outputValueSlots(producer)
-      val currentConsumers = res.getOrElse(producer, Vector.fill(producedSlots.size)(Set.empty[AbstractInsnNode]))
-      val outputIndex = producedSlots.indexOf(i)
-      res = res.updated(producer, currentConsumers.updated(outputIndex, currentConsumers(outputIndex) + insn))
+      val outputs = res.getOrElseUpdate(producer, new Outputs(outputValueSlots(producer)))
+      val outputIndex = outputs.slots.indexOf(i)
+      outputs.consumers(outputIndex) += insn
     }
     res
   }
@@ -458,6 +525,21 @@ abstract class InitialProducer extends AbstractInsnNode(-1) {
 case class ParameterProducer(local: Int)                                                extends InitialProducer
 case class UninitializedLocalProducer(local: Int)                                       extends InitialProducer
 case class ExceptionProducer[V <: Value](handlerLabel: LabelNode, handlerStackTop: Int) extends InitialProducer
+
+/** A `ProdConsAnalyzer` of a method as it is now, for the method-local optimizations that need one: they share it
+ *  until one of them changes the method, rather than each analyzing the same instructions again.
+ */
+final class ProdConsCache(methodNode: MethodNode, classInternalName: InternalName) {
+  private[this] var analyzer: ProdConsAnalyzer = null
+  def get: ProdConsAnalyzer = {
+    if (analyzer == null) analyzer = new ProdConsAnalyzer(methodNode, classInternalName)
+    analyzer
+  }
+  /** The method changed: the next `get` analyzes it again. */
+  def invalidate(): Unit = analyzer = null
+  /** Whether a `get` has analyzed the method as it is now. */
+  def isAnalyzed: Boolean = analyzer != null
+}
 
 class InitialProducerSourceInterpreter extends SourceInterpreter(scala.tools.asm.Opcodes.ASM7) {
   override def newParameterValue(isInstanceMethod: Boolean, local: Int, tp: Type): SourceValue = {

@@ -232,7 +232,7 @@ sealed abstract class Range(
     if (numRangeElements <= 0 && !isEmpty)
       fail()
   }
-  private[this] def description = "%d %s %d by %s".format(start, if (isInclusive) "to" else "until", end, step)
+  private[this] def description = s"$start ${if (isInclusive) "to" else "until"} $end by $step"
   private[this] def fail() = throw new IllegalArgumentException(description + ": seqs cannot contain more than Int.MaxValue elements.")
 
   @throws[IndexOutOfBoundsException]
@@ -545,7 +545,7 @@ sealed abstract class Range(
   override def distinct: Range = this
 
   override def grouped(size: Int): Iterator[Range] = {
-    require(size >= 1, f"size=$size%d, but size must be positive")
+    require(size >= 1, s"size=$size, but size must be positive")
     if (isEmpty) {
       Iterator.empty
     } else {

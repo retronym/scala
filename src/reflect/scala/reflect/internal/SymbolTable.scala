@@ -25,42 +25,83 @@ import scala.reflect.internal.settings.MutableSettings
 import scala.reflect.internal.{TreeGen => InternalTreeGen}
 import scala.reflect.io.AbstractFile
 
+/** Flags that are constant per universe.
+ *
+ *  This is `SymbolTable`'s first mixin so that its fields are set before the initializers of the others, some of which read them.
+ */
+private[reflect] trait UniverseFlags {
+  /** Is this symbol table a part of a compiler universe? */
+  final val isCompilerUniverse: Boolean = computeIsCompilerUniverse
+
+  /** The value of `isCompilerUniverse`. An override can't refer to the state of its universe, which doesn't exist yet. */
+  protected def computeIsCompilerUniverse: Boolean = false
+
+  /** Do symbols lock in `info`, `rawInfo` and `tpe_*`? Runtime reflection's do, including in `ReflectGlobal`. */
+  final val hasSynchronizedSymbols: Boolean = computeHasSynchronizedSymbols
+
+  protected def computeHasSynchronizedSymbols: Boolean = false
+}
+
 abstract class SymbolTable extends macros.Universe
+                              with UniverseFlags
                               with Collections
                               with Names
                               with Symbols
                               with Types
-                              with Variances
-                              with Kinds
-                              with ExistentialsAndSkolems
                               with FlagSets
                               with Scopes
                               with Mirrors
                               with Definitions
                               with Constants
                               with BaseTypeSeqs
-                              with InfoTransformers
                               with transform.Transforms
                               with StdNames
                               with AnnotationInfos
-                              with AnnotationCheckers
                               with Trees
                               with Printers
                               with Positions
-                              with TypeDebugging
                               with Importers
-                              with CapturedVariables
                               with StdAttachments
-                              with StdCreators
-                              with ReificationSupport
-                              with PrivateWithin
-                              with pickling.Translations
-                              with FreshNames
                               with Internals
                               with Reporting
 {
 
   val gen = new InternalTreeGen { val global: SymbolTable.this.type = SymbolTable.this }
+
+  val reificationSupport: ReificationSupport[SymbolTable.this.type] = new ReificationSupport[SymbolTable.this.type](this)
+  val build: reificationSupport.ReificationSupportImpl = reificationSupport.build
+
+  val typeDebugging: TypeDebugging[SymbolTable.this.type] = new TypeDebugging[SymbolTable.this.type](this)
+  final val noPrint: typeDebugging.noPrint.type = typeDebugging.noPrint
+  final val typeDebug: typeDebugging.typeDebug.type = typeDebugging.typeDebug
+
+  val capturedVariables: CapturedVariables[SymbolTable.this.type] = new CapturedVariables[SymbolTable.this.type](this)
+
+  val packageAccessBoundaries: PrivateWithin[SymbolTable.this.type] = new PrivateWithin[SymbolTable.this.type](this)
+
+  val variances: Variances[SymbolTable.this.type] = new Variances[SymbolTable.this.type](this)
+  type VarianceValidator = variances.VarianceValidator
+
+  val existentialsAndSkolems: ExistentialsAndSkolems[SymbolTable.this.type] = new ExistentialsAndSkolems[SymbolTable.this.type](this)
+
+  val translations: pickling.Translations[SymbolTable.this.type] = new pickling.Translations[SymbolTable.this.type](this)
+
+  val kinds: Kinds[SymbolTable.this.type] = new Kinds[SymbolTable.this.type](this)
+
+  val infoTransformerSupport: InfoTransformers[SymbolTable.this.type] = new InfoTransformers[SymbolTable.this.type](this)
+  type InfoTransformer = infoTransformerSupport.InfoTransformer
+
+  val annotationCheckerSupport: AnnotationCheckers[SymbolTable.this.type] = new AnnotationCheckers[SymbolTable.this.type](this)
+  type AnnotationChecker = annotationCheckerSupport.AnnotationChecker
+  final def addAnnotationChecker(checker: AnnotationChecker): Unit = annotationCheckerSupport.addAnnotationChecker(checker)
+  final def removeAllAnnotationCheckers(): Unit = annotationCheckerSupport.removeAllAnnotationCheckers()
+
+  val freshNames: FreshNames[SymbolTable.this.type] = new FreshNames[SymbolTable.this.type](this)
+  // default fresh name creator used to abstract over currentUnit.fresh and runtime fresh name creator
+  def currentFreshNameCreator: FreshNameCreator
+  final def freshTermName(prefix: String = nme.FRESH_TERM_NAME_PREFIX)(implicit creator: FreshNameCreator): TermName = freshNames.freshTermName(prefix)(creator)
+  final def freshTypeName(prefix: String)(implicit creator: FreshNameCreator): TypeName = freshNames.freshTypeName(prefix)(creator)
+  type FreshNameExtractor = freshNames.FreshNameExtractor
 
   trait ReflectStats extends BaseTypeSeqsStats
                         with TypesStats
@@ -320,23 +361,32 @@ abstract class SymbolTable extends macros.Universe
   def slowButSafeEnteringPhaseNotLaterThan[T](target: Phase)(op: => T): T =
     if (isCompilerUniverse) enteringPhaseNotLaterThan(target)(op) else op
 
+  /** `nextFrom` and `next` wrap around to the head of the circular list, at `NoPhase.id`, when nothing
+   *  follows. Seen from a phase after `NoPhase`, the head is the end of the list.
+   */
+  @inline private def isEnd(it: InfoTransformer, from: Phase#Id): Boolean =
+    it.pid == NoPhase.id && from != NoPhase.id
+
   final def isValid(period: Period): Boolean =
     period != 0 && runId(period) == currentRunId && {
       val pid = phaseId(period)
-      if (phase.id > pid) nextFrom(pid).pid >= phase.id
-      else nextFrom(phase.id).pid >= pid
+      val lo = Math.min(pid, phase.id)
+      val hi = Math.max(pid, phase.id)
+      val it = nextFrom(lo)
+      isEnd(it, lo) || it.pid >= hi
     }
 
   final def isValidForBaseClasses(period: Period): Boolean = {
     @tailrec
-    def noChangeInBaseClasses(it: InfoTransformer, limit: Phase#Id): Boolean = (
-      it.pid >= limit ||
-      !it.changesBaseClasses && noChangeInBaseClasses(it.next, limit)
+    def noChangeInBaseClasses(it: InfoTransformer, from: Phase#Id, limit: Phase#Id): Boolean = (
+      isEnd(it, from) || it.pid >= limit ||
+      !it.changesBaseClasses && noChangeInBaseClasses(it.next, from, limit)
     )
     period != 0 && runId(period) == currentRunId && {
       val pid = phaseId(period)
-      if (phase.id > pid) noChangeInBaseClasses(nextFrom(pid), phase.id)
-      else noChangeInBaseClasses(nextFrom(phase.id), pid)
+      val lo = Math.min(pid, phase.id)
+      val hi = Math.max(pid, phase.id)
+      noChangeInBaseClasses(nextFrom(lo), lo, hi)
     }
   }
 
@@ -504,10 +554,6 @@ abstract class SymbolTable extends macros.Universe
   private final val MaxPhases = 256
   /** The phase which has given index as identifier. */
   final val phaseWithId: Array[Phase] = Array.fill(MaxPhases)(NoPhase)
-
-  /** Is this symbol table a part of a compiler universe?
-   */
-  def isCompilerUniverse = false
 
   @deprecated("use enteringPhase", "2.10.0") // Used in sbt 0.12.4
   @inline final def atPhase[T](ph: Phase)(op: => T): T = enteringPhase(ph)(op)

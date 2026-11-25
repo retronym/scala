@@ -20,7 +20,7 @@ import scala.collection.{immutable, mutable}
 import scala.collection.mutable.ListBuffer
 import Flags._
 import Variance._
-import util.StringContextStripMarginOps
+import util.{ReusableInstance, StringContextStripMarginOps}
 
 private[internal] trait TypeMaps {
   self: SymbolTable =>
@@ -106,7 +106,18 @@ private[internal] trait TypeMaps {
     def apply(tp: Type): Type
 
     /** Map this function over given type */
-    def mapOver(tp: Type): Type = if (tp eq null) tp else tp.mapOver(this)
+    def mapOver(tp: Type): Type = if (tp eq null) tp else mapOverType(tp)
+
+    /** `tp.mapOver(this)`. OPT: a call to `Type.mapOver` sees dozens of receiver classes, but most calls go to
+     *  `TypeRef.mapOver` (one implementation for all of TypeRef's classes, so this call binds statically) or to the
+     *  identity `Type.mapOver` of `ThisType` and `NoPrefix`.
+     */
+    final def mapOverType(tp: Type): Type = tp match {
+      case tr: TypeRef         => tr.mapOver(this)
+      case _: ThisType         => tp
+      case _ if tp eq NoPrefix => tp
+      case _                   => tp.mapOver(this)
+    }
 
     /** The index of the first symbol in `origSyms` which would have its info
       * transformed by this type map.
@@ -406,7 +417,7 @@ private[internal] trait TypeMaps {
   def isPossiblePrefix(clazz: Symbol) = clazz.isClass && !clazz.isPackageClass
 
   protected[internal] def skipPrefixOf(pre: Type, clazz: Symbol) = (
-    (pre eq NoType) || (pre eq NoPrefix) || !isPossiblePrefix(clazz)
+    pre.isNoType || pre.isNoPrefix || !isPossiblePrefix(clazz)
     )
 
   @deprecated("use new AsSeenFromMap instead", "2.12.0")
@@ -444,7 +455,7 @@ private[internal] trait TypeMaps {
       case tp @ ThisType(_)                                            => thisTypeAsSeen(tp)
       case tp @ SingleType(_, sym)                                     => if (sym.isPackageClass) tp else singleTypeAsSeen(tp)
       case tp @ TypeRef(_, sym, _) if isTypeParamOfEnclosingClass(sym) => classParameterAsSeen(tp)
-      case _                                                           => tp.mapOver(this)
+      case _                                                           => mapOverType(tp)
     }
 
     private[this] var _capturedSkolems: List[Symbol] = Nil
@@ -752,7 +763,7 @@ private[internal] trait TypeMaps {
     }
 
     def apply(tp0: Type): Type = if (from.isEmpty) tp0 else {
-      val tp                    = renameBoundSyms(tp0).mapOver(this)
+      val tp                    = mapOverType(renameBoundSyms(tp0))
       def substFor(sym: Symbol) = subst(tp, sym, from, to)
 
       tp match {
@@ -809,12 +820,12 @@ private[internal] trait TypeMaps {
 
     override def apply(tpe: Type): Type =
       if (from.isEmpty) tpe else tpe match {
-        case TypeRef(pre, sym, args) if pre ne NoPrefix =>
+        case TypeRef(pre, sym, args) if !pre.isNoPrefix =>
           val newSym = substFor(sym)
           // mapOver takes care of substituting in args
           (if (sym eq newSym) tpe else copyTypeRef(tpe, pre, newSym, args)).mapOver(this)
         // assert(newSym.typeParams.length == sym.typeParams.length, "typeParams mismatch in SubstSymMap: "+(sym, sym.typeParams, newSym, newSym.typeParams))
-        case SingleType(pre, sym) if pre ne NoPrefix =>
+        case SingleType(pre, sym) if !pre.isNoPrefix =>
           val newSym = substFor(sym)
           (if (sym eq newSym) tpe else singleType(pre, newSym)).mapOver(this)
         case tp: RefinedType =>
@@ -909,7 +920,7 @@ private[internal] trait TypeMaps {
   }
 
   // dependent method types
-  object IsDependentCollector extends TypeCollector(initial = false) {
+  class IsDependentCollector extends TypeCollector(initial = false) {
     def apply(tp: Type): Unit =
       if (tp.isImmediatelyDependent) result = true
       else if (!result) tp.dealias.foldOver(this)
@@ -1147,6 +1158,14 @@ private[internal] trait TypeMaps {
     }
   }
 
+  /** Applies `f` to the types satisfying `p`, in the order `FilterTypeCollector` collects them. */
+  class FilterForEachTypeFolder[U](p: Type => Boolean, f: Type => U) extends TypeFolder {
+    def apply(tp: Type): Unit = {
+      if (p(tp)) f(tp)
+      tp.foldOver(this)
+    }
+  }
+
   /** A map to implement the `filter` method. */
   class FindTypeCollector(p: Type => Boolean) extends TypeCollector[Option[Type]](None) {
     def apply(tp: Type): Unit =
@@ -1154,7 +1173,7 @@ private[internal] trait TypeMaps {
         if (p(tp)) result = Some(tp) else tp.foldOver(this)
   }
 
-  object ErroneousCollector extends TypeCollector(initial = false) {
+  class ErroneousCollector extends TypeCollector(initial = false) {
     def apply(tp: Type): Unit =
       if (!result) {
         result = tp.isError
@@ -1165,7 +1184,7 @@ private[internal] trait TypeMaps {
   object adaptToNewRunMap extends TypeMap {
 
     private def adaptToNewRun(pre: Type, sym: Symbol): Symbol = {
-      if (phase.flatClasses || sym.isRootSymbol || (pre eq NoPrefix) || (pre eq NoType) || sym.isPackageClass)
+      if (phase.flatClasses || sym.isRootSymbol || pre.isNoPrefix || pre.isNoType || sym.isPackageClass)
         sym
       else if (sym.isModuleClass) {
         val sourceModule1 = adaptToNewRun(pre, sym.sourceModule)
@@ -1291,7 +1310,7 @@ private[internal] trait TypeMaps {
     }
   }
 
-  object UnrelatableCollector extends CollectTypeCollector[TypeSkolem](PartialFunction.empty) {
+  class UnrelatableCollector extends CollectTypeCollector[TypeSkolem](PartialFunction.empty) {
     var barLevel: Int = 0
 
     override def apply(tp: Type): Unit = tp match {
@@ -1300,7 +1319,7 @@ private[internal] trait TypeMaps {
     }
   }
 
-  object IsRelatableCollector extends TypeCollector[Boolean](initial = true) {
+  class IsRelatableCollector extends TypeCollector[Boolean](initial = true) {
     var barLevel: Int = 0
 
     def apply(tp: Type): Unit = if (result) tp match {
@@ -1308,4 +1327,14 @@ private[internal] trait TypeMaps {
       case _ => tp.foldOver(this)
     }
   }
+
+  // These collectors carry mutable state, so runtime reflection must not share an instance between threads.
+  private[internal] val isDependentCollectorInstance: ReusableInstance[IsDependentCollector] =
+    ReusableInstance(new IsDependentCollector, enabled = isCompilerUniverse)
+  private[internal] val erroneousCollectorInstance: ReusableInstance[ErroneousCollector] =
+    ReusableInstance(new ErroneousCollector, enabled = isCompilerUniverse)
+  private[internal] val unrelatableCollectorInstance: ReusableInstance[UnrelatableCollector] =
+    ReusableInstance(new UnrelatableCollector, enabled = isCompilerUniverse)
+  private[internal] val isRelatableCollectorInstance: ReusableInstance[IsRelatableCollector] =
+    ReusableInstance(new IsRelatableCollector, enabled = isCompilerUniverse)
 }

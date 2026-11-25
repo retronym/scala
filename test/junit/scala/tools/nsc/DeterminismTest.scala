@@ -69,6 +69,63 @@ class DeterminismTest {
     test(List(code))
   }
 
+  @Test def testTryCatchExprFreshName(): Unit = {
+    def code = List[SourceFile](
+      source("a.scala",
+        """
+          |package demo
+          |
+          |class a {
+          |  def handler: PartialFunction[Throwable, String] = { case _: RuntimeException => "" }
+          |  def x = try "" catch handler
+          |  def y = try "" catch handler
+          |}
+          |
+      """.stripMargin),
+      source("b.scala",
+      """
+        |package demo
+        |
+        |class b {
+        |  def test(): Unit = {
+        |    new a().y
+        |  }
+        |}
+      """.stripMargin)
+
+    )
+    test(List(code))
+  }
+
+  @Test def testQuasiquoteFreshNameOrder(): Unit = {
+    def code = List[SourceFile](
+      source("p.scala",
+        """
+          |package demo
+          |
+          |import scala.reflect.macros.whitebox
+          |
+          |class P(val c: whitebox.Context) {
+          |  import c.universe._
+          |  def p1(f: Tree): Tree = q"$f(_)"
+          |  def p2(f: Tree): Tree = q"$f(_, _, _, _, _, _, _, _)"
+          |}
+      """.stripMargin),
+      source("q.scala",
+        """
+          |package demo
+          |
+          |import scala.reflect.macros.whitebox
+          |
+          |class Q(val c: whitebox.Context) {
+          |  import c.universe._
+          |  def pack(cons: Tree): Tree = q"$cons(_, _)"
+          |}
+      """.stripMargin)
+    )
+    test(List(code))
+  }
+
   @Test def testReify(): Unit = {
     def code = List[SourceFile](
       source("a.scala",
@@ -195,6 +252,67 @@ class DeterminismTest {
           |@Annot1("foo")
           |@Annot2(classOf[AnyRef])
           |class Test
+        """.stripMargin)
+    )
+    test(List(code))
+  }
+
+  @Test def testAnnotationLiteralArgRepickled(): Unit = {
+    // The inferred result types of `Test` carry a type annotation read from `a.scala`, either typed from source or
+    // unpickled. Its literal arguments must be pickled the same way in both cases.
+    def code = List[SourceFile](
+      source("a.scala",
+        """
+          |class Annot1(s: String, i: Int, c: Class[_]) extends scala.annotation.StaticAnnotation with scala.annotation.TypeConstraint
+          |class A {
+          |  def x: Int @Annot1("foo", 42, classOf[String]) = 1
+          |  def y: String @Annot1(null, -1, classOf[Int]) = ""
+          |}
+      """.stripMargin),
+      source("b.scala",
+        """
+          |class Test {
+          |  def x = new A().x
+          |  def y = new A().y
+          |}
+        """.stripMargin)
+    )
+    test(List(code))
+  }
+
+  @Test def testAnnotationDefaultArg(): Unit = {
+    // A use of an annotation gets the default expression of the annotation class, whether that class is typed
+    // before the use, after it, or loaded from a classfile.
+    def code = List[SourceFile](
+      source("a.scala",
+        """
+          |class Annot1(s: String = "") extends scala.annotation.StaticAnnotation
+          |class Annot2[T](x: Int = D.k, y: Int = D.i, zs: List[T] = Nil) extends scala.annotation.StaticAnnotation
+          |class Annot3(x: Int = 1)(y: Int = x + 1) extends scala.annotation.StaticAnnotation
+          |class Annot4(x: Int, y: => Int) extends scala.annotation.StaticAnnotation {
+          |  def this(s: String = "") = this(s.length, 0)
+          |}
+          |class Annot5(x: Int = 1) extends scala.annotation.ConstantAnnotation
+          |class Annot6(x: Int = 1, y: => Int = D.i, f: Int => Int = i => i + 1) extends scala.annotation.StaticAnnotation
+          |class Annot7(c: Class[_] = classOf[String], s: String = null, b: Boolean = !D.b) extends scala.annotation.StaticAnnotation
+          |class Annot8(x: 1 = 1, s: "a" = "a") extends scala.annotation.StaticAnnotation
+          |object D { final val k = 42; final val b = true; def i = 0 }
+      """.stripMargin),
+      source("b.scala",
+        """
+          |class Test {
+          |  @Annot1 def f1 = 1
+          |  @Annot1() def f2 = 2
+          |  @Annot2 def f3 = 3
+          |  @Annot2(y = 2) def f4 = 4
+          |  @Annot3()() def f5 = 5
+          |  @Annot4() def f6 = 6
+          |  @Annot5 def f7 = 7
+          |  @Annot6 def f8 = 8
+          |  @Annot7 def f9 = 9
+          |  def f10: Int @Annot1 = 10
+          |  @Annot8 def f11 = 11
+          |}
         """.stripMargin)
     )
     test(List(code))
@@ -336,6 +454,73 @@ class DeterminismTest {
       source("th.scala", "package userland; class th[T <: Throwy](cause: T = null)")
       )
     test(code :: Nil)
+  }
+
+  @Test def testJavaEnumValueOf(): Unit = {
+    // The parameter of the implicitly declared `valueOf` of a Java enum is named `name`, whether the enum is
+    // parsed from source or loaded from a classfile. The lambda body that eta-expands it takes that name.
+    def code = List[SourceFile](
+      source("E.java", "public enum E { A, B }"),
+      source("u.scala", "object U { def f(xs: List[String]) = xs.map(E.valueOf) }")
+    )
+    test(List(code))
+  }
+
+  @Test def testJavaObjectParent(): Unit = {
+    // The superclass of a Java interface is `Object`, whether it is parsed from source or loaded from a classfile.
+    // `A` inherits it as its superclass, and its pickle refers to it.
+    def code = List[SourceFile](
+      source("J.java", "public interface J { String name(); }"),
+      source("a.scala", "case class A(name: String) extends J")
+    )
+    test(List(code))
+  }
+
+  @Test def testMixinForwarderTypeParamRenaming(): Unit = {
+    // The mixin forwarder `M.compose[A$]` must not rename the type parameter of `Function1.compose`,
+    // which would change the generic signature of the static forwarder `L.compose[A]`.
+    def code = List[SourceFile](
+      source("a.scala", "class M[A] extends (Int => A) { def apply(i: Int): A = ??? }"),
+      source("b.scala", "case class L(child: String)"),
+      // `Iterable.lazyZip[B]` returns `LazyZip2[A, B, this.type]`, so the forwarder's info is an existential
+      source("c.scala", "abstract class S1 extends scala.collection.immutable.Set[String]"),
+      source("d.scala", "abstract class S2[B] extends scala.collection.immutable.Set[B]")
+    )
+    test(List(code))
+  }
+
+  @Test def testJavaThrowsClause(): Unit = {
+    // Forwarders to Java methods carry the same `throws` clause whether the Java interface is
+    // parsed from source or loaded from a classfile.
+    def code = List[SourceFile](
+      source("J.java",
+        """
+          |public interface J<X extends java.io.IOException> {
+          |  default String f() throws java.io.IOException, InterruptedException { return ""; }
+          |  default <E extends RuntimeException> void g() throws E {}
+          |  default <E extends X> void h() throws E, X {}
+          |  default void i() throws X {}
+          |}
+        """.stripMargin),
+      source("b.scala", "object O extends J[java.io.FileNotFoundException]; class C extends J[java.io.IOException]")
+    )
+    test(List(code))
+  }
+
+  @Test def testJavaConstantExpression(): Unit = {
+    // A reference to a Java constant variable is inlined whether the Java class is parsed from source
+    // or loaded from a classfile, where it has a `ConstantValue` attribute.
+    def code = List[SourceFile](
+      source("J.java",
+        """
+          |public class J {
+          |  public static final int SIZE = 4;
+          |  public static final int NUM_BYTES = SIZE * 1024;
+          |}
+        """.stripMargin),
+      source("b.scala", "class C { def f = new Array[Byte](J.NUM_BYTES) }")
+    )
+    test(List(code))
   }
 
   def source(name: String, code: String): SourceFile = new BatchSourceFile(name, code)

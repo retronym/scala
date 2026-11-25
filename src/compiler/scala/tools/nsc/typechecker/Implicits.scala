@@ -33,7 +33,7 @@ import PartialFunction.cond
  *  @author  Martin Odersky
  */
 trait Implicits extends splain.SplainData {
-  self: Analyzer =>
+  self: AbstractAnalyzer =>
 
   import global._
   import definitions._
@@ -132,12 +132,10 @@ trait Implicits extends splain.SplainData {
     if (settings.areStatisticsEnabled) statistics.stopCounter(subtypeImpl, subtypeStart)
 
     if (result.isSuccess) {
-      val rts = {
-        val infoSym = if (result.implicitInfo != null) result.implicitInfo.sym else NoSymbol
-        infoSym.orElse {
-          val rts0 = result.tree.symbol
-          if (rts0 != null) rts0 else NoSymbol
-        }
+      val infoSym = if (result.implicitInfo != null) result.implicitInfo.sym else NoSymbol
+      val rts = infoSym.orElse {
+        val rts0 = result.tree.symbol
+        if (rts0 != null) rts0 else NoSymbol
       }
       if (settings.lintImplicitRecursion) {
         val target =
@@ -186,6 +184,11 @@ trait Implicits extends splain.SplainData {
             if (doWarn)
               context.warning(result.tree.pos, s"Implicit resolves to enclosing $encl$help", WFlagSelfImplicit)
           }
+      }
+      if (infoSym.exists && infoSym.owner.isModuleClass) {
+        val companion = companionSymbolOf(infoSym.owner, context)
+        if (companion.exists && !context.isAccessible(companion, result.implicitInfo.pre.prefix))
+          context.deprecationWarning(result.tree.pos, infoSym, s"Usage of implicit $infoSym defined in $companion, which is not accessible here. In Scala 2.13.20, this implicit will no longer be found.", "2.13.19")
       }
       if (result.inPackagePrefix && currentRun.isScala3) {
         val msg =
@@ -773,7 +776,7 @@ trait Implicits extends splain.SplainData {
                 // we can't usefully prune views any further because we would need to type an application
                 // of the view to the term as is done in the computation of itree2 in typedImplicit1.
                 tvars.foreach(_.constr.stopWideningIfPrecluded())
-                val targs = solvedTypes(tvars, allUndetparams, varianceInType(wildPt), upper = false, lubDepth(tpInstantiated :: wildPt :: Nil))
+                val targs = solvedTypes(tvars, allUndetparams, variances.varianceInType(wildPt), upper = false, lubDepth(tpInstantiated :: wildPt :: Nil))
                 val adjusted = adjustTypeArgs(allUndetparams, tvars, targs)
                 val tpSubst = deriveTypeWithWildcards(adjusted.undetParams)(tp.instantiateTypeParams(adjusted.okParams, adjusted.okArgs))
                 if(!matchesPt(tpSubst, wildPt, adjusted.undetParams)) {
@@ -973,7 +976,7 @@ trait Implicits extends splain.SplainData {
             if (tvars.nonEmpty)
               typingLog("solve", ptLine("tvars" -> tvars, "tvars.constr" -> tvars.map(_.constr)))
 
-            val targs = solvedTypes(tvars, undetParams, varianceInType(pt), upper = false, lubDepth(itree3.tpe :: pt :: Nil))
+            val targs = solvedTypes(tvars, undetParams, variances.varianceInType(pt), upper = false, lubDepth(itree3.tpe :: pt :: Nil))
 
             // #2421: check that we correctly instantiated type parameters outside of the implicit tree:
             checkBounds(itree3, NoPrefix, NoSymbol, undetParams, targs, "inferred ")
@@ -1654,7 +1657,7 @@ trait Implicits extends splain.SplainData {
               val suffix = classarg :: (args map findSubManifest)
               manifestFactoryCall(
                 "classType", tp,
-                (if ((pre eq NoPrefix) || pre.typeSymbol.isStaticOwner) suffix
+                (if (pre.isNoPrefix || pre.typeSymbol.isStaticOwner) suffix
                  else findSubManifest(pre) :: suffix): _*)
             } else if (sym.isExistentiallyBound && full) {
               manifestFactoryCall("wildcardType", tp,

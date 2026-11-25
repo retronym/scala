@@ -101,7 +101,7 @@ trait MapOps[K, +V, +CC[X, +Y] <: MapOps[X, Y, CC, _], +C <: MapOps[K, V, CC, C]
   def updated[V1 >: V](key: K, value: V1): CC[K, V1]
 
   /**
-   * Update a mapping for the specified key and its current optionally mapped value
+   * Updates a mapping for the specified key and its current optionally mapped value
    * (`Some` if there is current mapping, `None` if not).
    *
    * If the remapping function returns `Some(v)`, the mapping is updated with the new value `v`.
@@ -123,7 +123,7 @@ trait MapOps[K, +V, +CC[X, +Y] <: MapOps[X, Y, CC, _], +C <: MapOps[K, V, CC, C]
   }
 
   /**
-    * Alias for `updated`
+    * Alias for `updated`.
     *
     * @param kv the key/value pair.
     * @tparam V1 the type of the value in the key/value pair.
@@ -664,7 +664,7 @@ private[immutable] final class MapBuilderImpl[K, V] extends ReusableBuilder[(K, 
   private[this] var hashMapBuilder: HashMapBuilder[K, V] = _
 
   private[immutable] def getOrElse[V0 >: V](key: K, value: V0): V0 =
-    if (hashMapBuilder ne null) hashMapBuilder.getOrElse(key, value)
+    if (switchedToHashMapBuilder) hashMapBuilder.getOrElse(key, value)
     else elems.getOrElse(key, value)
 
   override def clear(): Unit = {
