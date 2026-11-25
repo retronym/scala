@@ -131,6 +131,27 @@ class MapTest {
     assertFalse(Map("" -> 2) == scala.collection.immutable.LongMap(1L -> 2))
   }
 
+  @Test
+  def nullKeyOrElementAgainstNullHostileCollection(): Unit = {
+    val s = Set[String](null)
+    val m = Map[String, Int]((null, 1))
+    val cm = new java.util.concurrent.ConcurrentHashMap[String, Int]
+    cm.put("a", 1)
+    import scala.jdk.CollectionConverters._
+    for (that <- List[Set[String]](immutable.TreeSet("a"), mutable.TreeSet("a"), cm.asScala.keySet)) {
+      assertFalse(s == that)
+      assertFalse(that == s)
+    }
+    for (that <- List[Map[String, Int]](immutable.TreeMap("a" -> 1), mutable.TreeMap("a" -> 1), cm.asScala)) {
+      assertFalse(m == that)
+      assertFalse(that == m)
+    }
+    object E extends Enumeration { val A = Value }
+    val vs = Set[E.Value](null)
+    assertFalse(vs == E.ValueSet(E.A))
+    assertFalse(List[Set[String]](immutable.TreeSet("a")).contains(s))
+  }
+
   @Test def `map is reachable from its keyset`: Unit =
     assertFails(_.contains("held reference")) {
       val m = Map("one" -> "eins")
