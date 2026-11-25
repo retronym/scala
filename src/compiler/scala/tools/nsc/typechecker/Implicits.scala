@@ -808,7 +808,7 @@ trait Implicits extends splain.SplainData {
               else if (sym.isAbstractType) loop(tp, pt.lowerBound)
               else {
                 val ptFunctionArity = functionArity(pt)
-                ptFunctionArity > 0 && hasLength(params, ptFunctionArity) && {
+                ptFunctionArity >= 0 && hasLength(params, ptFunctionArity) && {
                   var ps = params
                   var as = args
                   if (fast) {
