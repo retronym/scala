@@ -1,0 +1,8 @@
+scala.Tuple2: _1: Object, _2: Object
+scala.Tuple2$mcII$sp: _1$mcI$sp: int, _2$mcI$sp: int
+scala.Tuple2$mcDD$sp: _1$mcD$sp: double, _2$mcD$sp: double
+scala.Tuple2$mcJI$sp: _1$mcJ$sp: long, _2$mcI$sp: int
+scala.Tuple1$mcI$sp: _1$mcI$sp: int
+Box: t: Object
+Box$mcI$sp: t$mcI$sp: int
+Box$mcJ$sp: t$mcJ$sp: long
