@@ -1,0 +1,5 @@
+apply    lz2.arr(i)       : lz2 i -> 0
+update   O2.arr(i) = v    : O2 i v -> ()
+op=      lz.arr(i) += v   : lz i v -> ()
+op=      O.arr(i) += v    : O i v -> ()
+0,1

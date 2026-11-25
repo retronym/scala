@@ -189,9 +189,11 @@ abstract class TreeGen extends scala.reflect.internal.TreeGen with TreeDSL {
    *  symbol to its packed type, and an function for creating Idents
    *  which refer to it.
    */
-  private def mkPackedValDef(expr: Tree, owner: Symbol, name: Name): (ValDef, () => Ident) = {
-    val packedType = typer.packedType(expr, owner)
-    val sym = owner.newValue(name.toTermName, expr.pos.makeTransparent, SYNTHETIC) setInfo packedType
+  private def mkPackedValDef(expr: Tree, owner: Symbol, name: Name): (ValDef, () => Ident) =
+    mkValDef(expr, owner, name, typer.packedType(expr, owner))
+
+  private def mkValDef(expr: Tree, owner: Symbol, name: Name, tpe: Type): (ValDef, () => Ident) = {
+    val sym = owner.newValue(name.toTermName, expr.pos.makeTransparent, SYNTHETIC) setInfo tpe
 
     (ValDef(sym, expr), () => Ident(sym) setPos sym.pos.focus setType expr.tpe)
   }
@@ -219,16 +221,27 @@ abstract class TreeGen extends scala.reflect.internal.TreeGen with TreeDSL {
     val vdefs = new ListBuffer[ValDef]
     val exprs1 = new ListBuffer[() => Tree]
     val used = new Array[Boolean](exprs.length)
+    // An expression left in place is evaluated after the ones that are bound to a val. That is not observable for
+    // a pure expression, but a path through a lazy val or an object is safe to inline and still runs an initializer
+    // on first use, so it is bound as well when a later expression is.
+    def initializes(expr: Tree) = expr.exists { t =>
+      val sym = t.symbol
+      sym != null && (sym.isLazy || sym.isModule && !sym.hasPackageFlag && !sym.isJavaDefined)
+    }
+    val lastBound = exprs.lastIndexWhere(!treeInfo.isExprSafeToInline(_))
     var i = 0
     for (expr <- exprs) {
-      if (treeInfo.isExprSafeToInline(expr)) {
+      val safeToInline = treeInfo.isExprSafeToInline(expr)
+      if (safeToInline && !(i < lastBound && initializes(expr))) {
         exprs1 += {
           val idx = i
           () => if (used(idx)) expr.duplicate else { used(idx) = true; expr }
         }
       }
       else {
-        val (valDef, identFn) = mkPackedValDef(expr, owner, freshTermName("ev$")(fresh))
+        val name = freshTermName("ev$")(fresh)
+        // the type of a path has nothing to pack, and packing would abstract over a local val in its prefix
+        val (valDef, identFn) = if (safeToInline) mkValDef(expr, owner, name, expr.tpe) else mkPackedValDef(expr, owner, name)
         vdefs += valDef
         exprs1 += identFn
       }
