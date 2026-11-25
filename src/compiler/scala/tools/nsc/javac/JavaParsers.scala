@@ -149,9 +149,10 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
     def makePackaging(pkg: RefTree, stats: List[Tree]): PackageDef =
       atPos(pkg.pos) {  PackageDef(pkg, stats) }
 
-    def makeTemplate(parents: List[Tree], stats: List[Tree]) =
+    /** @param defaultCtorMods the modifiers of the default constructor, which is added if `stats` declare none */
+    def makeTemplate(parents: List[Tree], stats: List[Tree], defaultCtorMods: Modifiers = Modifiers(Flags.JAVA)) =
       Template(parents, noSelfType, if (treeInfo.firstConstructor(stats) == EmptyTree)
-        makeConstructor(Nil) :: stats else stats)
+        makeConstructor(Nil, defaultCtorMods) :: stats else stats)
 
     def makeSyntheticParam(count: Int, tpt: Tree): ValDef =
       makeParam(nme.syntheticParamName(count), tpt)
@@ -160,9 +161,9 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
     def makeParam(name: TermName, tpt: Tree): ValDef =
       ValDef(Modifiers(Flags.JAVA | Flags.PARAM), name, tpt, EmptyTree)
 
-    def makeConstructor(formals: List[Tree]) = {
+    def makeConstructor(formals: List[Tree], mods: Modifiers = Modifiers(Flags.JAVA)) = {
       val vparams = mapWithIndex(formals)((p, i) => makeSyntheticParam(i + 1, p))
-      DefDef(Modifiers(Flags.JAVA), nme.CONSTRUCTOR, List(), List(vparams), TypeTree(), blankExpr)
+      DefDef(mods, nme.CONSTRUCTOR, List(), List(vparams), TypeTree(), blankExpr)
     }
 
     /** A hook for joining the comment associated with a definition.
@@ -1172,11 +1173,17 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
         case m: MemberDef => m.mods.hasFlag(Flags.DEFERRED)
         case _ => false
       }
+      // JLS 8.9.2: the constructors of an enum are private, also the default constructor
+      val privateCtor = Modifiers(Flags.JAVA | Flags.PRIVATE)
+      val body1 = body.mapConserve {
+        case dd: DefDef if dd.name == nme.CONSTRUCTOR => copyDefDef(dd)(mods = privateCtor.withAnnotations(dd.mods.annotations))
+        case t => t
+      }
       val finalFlag = if (enumIsFinal) Flags.FINAL else 0L
       val abstractFlag = if (hasAbstractMember) Flags.ABSTRACT else 0L
       addCompanionObject(consts ::: statics ::: predefs, atPos(pos) {
         ClassDef(mods | Flags.JAVA_ENUM | Flags.SEALED | abstractFlag | finalFlag, name, List(),
-                 makeTemplate(superclazz :: interfaces, body))
+                 makeTemplate(superclazz :: interfaces, body1, privateCtor))
       })
     }
 
