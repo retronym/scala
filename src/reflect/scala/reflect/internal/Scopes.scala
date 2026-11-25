@@ -409,7 +409,9 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
           case null => false
           case _    =>
             val comparableInfo = sym.info.substThis(sym.owner, e.sym.owner)
-            (e.sym.info =:= comparableInfo) || entryContainsSym(lookupNextEntry(e))
+            // a `val` and a parameterless `def` have the same info, but only the `val` can be part of a path
+            def sameStability = !sym.isTerm || e.sym.isStable == sym.isStable
+            (sameStability && (e.sym.info =:= comparableInfo)) || entryContainsSym(lookupNextEntry(e))
         }
         entryContainsSym(this lookupEntry sym.name)
       }
