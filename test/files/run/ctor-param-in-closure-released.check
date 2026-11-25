@@ -1,0 +1,6 @@
+used directly: released
+used in a lambda: released
+used in a for comprehension: released
+used in a local def: released
+used in a local lazy val: released
+used in a local class: released
