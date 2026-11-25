@@ -1,0 +1,7 @@
+Foo$Bar java.lang.Object
+  t: scala.Option<T>
+  tu: scala.Option<scala.Tuple2<T, U>>
+  tu$mcI$sp: scala.Option<scala.Tuple2<T, java.lang.Object>>
+Foo$Bar$mcI$sp {Foo<java.lang.Object>}#Foo$Bar<java.lang.Object>
+  tu: scala.Option<scala.Tuple2<java.lang.Object, java.lang.Object>>
+  tu$mcI$sp: scala.Option<scala.Tuple2<java.lang.Object, java.lang.Object>>
