@@ -53,6 +53,7 @@ final class TreeSet[A] private[immutable] (private[immutable] val tree: RB.Tree[
   private[this] def newSetOrSelf(t: RB.Tree[A, Any]) = if(t eq tree) this else new TreeSet[A](t)
 
   override def size: Int = RB.count(tree)
+  override def knownSize: Int = size
 
   override def isEmpty = size == 0
 
