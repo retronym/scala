@@ -252,18 +252,18 @@ abstract class TreeGen extends scala.reflect.internal.TreeGen with TreeDSL {
 
 
   // Construct a method to implement `fun`'s single abstract method (`apply`, when `fun.tpe` is a built-in function type)
-  def mkMethodFromFunction(localTyper: analyzer.Typer)(owner: Symbol, fun: Function) = {
+  def mkMethodFromFunction(@unused localTyper: analyzer.Typer)(owner: Symbol, fun: Function) = {
     // TODO: treat FunctionN like any other SAM -- drop `&& !isFunctionType(fun.tpe)`
     val sam = if (!isFunctionType(fun.tpe)) samOf(fun.tpe) else NoSymbol
-    if (!sam.exists) mkMethodForFunctionBody(localTyper)(owner, fun, nme.apply)()
+    if (!sam.exists) mkMethodForFunctionBody(owner, fun, nme.apply)()
     else {
       val samMethType = fun.tpe memberInfo sam
-      mkMethodForFunctionBody(localTyper)(owner, fun, sam.name.toTermName)(methParamProtos = samMethType.params, resTp = samMethType.resultType)
+      mkMethodForFunctionBody(owner, fun, sam.name.toTermName)(methParamProtos = samMethType.params, resTp = samMethType.resultType)
     }
   }
 
   // used to create the lifted method that holds a function's body
-  def mkLiftedFunctionBodyMethod(localTyper: global.analyzer.Typer)(owner: global.Symbol, fun: global.Function) = {
+  def mkLiftedFunctionBodyMethod(owner: global.Symbol, fun: global.Function) = {
     @tailrec
     def nonLocalEnclosingMember(sym: Symbol): Symbol = {
       if (sym.isLocalDummy) sym.enclClass.primaryConstructor
@@ -275,7 +275,7 @@ abstract class TreeGen extends scala.reflect.internal.TreeGen with TreeDSL {
       case x => x.dropLocal
     }
     val newName = nme.ANON_FUN_NAME.append(nme.NAME_JOIN_STRING).append(ownerName)
-    mkMethodForFunctionBody(localTyper)(owner, fun, newName)(additionalFlags = ARTIFACT)
+    mkMethodForFunctionBody(owner, fun, newName)(additionalFlags = ARTIFACT)
   }
 
 
@@ -303,8 +303,7 @@ abstract class TreeGen extends scala.reflect.internal.TreeGen with TreeDSL {
     * @param name name for the new method
     * @param additionalFlags flags to be put on the method in addition to FINAL
     */
-  private def mkMethodForFunctionBody(@unused localTyper: analyzer.Typer)
-                                     (owner: Symbol, fun: Function, name: TermName)
+  private def mkMethodForFunctionBody(owner: Symbol, fun: Function, name: TermName)
                                      (methParamProtos: List[Symbol] = fun.vparams.map(_.symbol),
                                       resTp: Type = functionResultType(fun.tpe),
                                       additionalFlags: FlagSet = NoFlags): DefDef = {
