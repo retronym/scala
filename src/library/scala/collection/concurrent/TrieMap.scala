@@ -1045,7 +1045,17 @@ object TrieMap extends MapFactory[TrieMap] {
 
   def empty[K, V]: TrieMap[K, V] = new TrieMap[K, V]
 
-  def from[K, V](it: IterableOnce[(K, V)]): TrieMap[K, V] = new TrieMap[K, V]() ++= it
+  def from[K, V](it: IterableOnce[(K, V)]): TrieMap[K, V] = it match {
+    // a snapshot is the same map in constant time, provided it hashes and compares keys as a new TrieMap would
+    case tm: TrieMap[K, V] @unchecked if tm.nonReadOnly && isDefault(tm) => tm.snapshot()
+    case _ => new TrieMap[K, V]() ++= it
+  }
+
+  private[this] val universalEquivClass: Class[_] = Equiv.universal[Any].getClass
+
+  /** Does this map have the hashing and equality of a map created with `new TrieMap()`? */
+  private def isDefault(tm: TrieMap[_, _]): Boolean =
+    (tm.hashing.getClass eq classOf[MangledHashing[_]]) && (tm.equality.getClass eq universalEquivClass)
 
   def newBuilder[K, V]: mutable.GrowableBuilder[(K, V), TrieMap[K, V]] = new GrowableBuilder(empty[K, V])
 
