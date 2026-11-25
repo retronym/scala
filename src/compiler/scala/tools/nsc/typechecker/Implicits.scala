@@ -362,6 +362,9 @@ trait Implicits extends splain.SplainData {
 
     final def isStablePrefix = pre.isStable
 
+    /** Does `that` denote the same implicit definition, possibly under another name (a renaming import)? */
+    final def isSameDefinition(that: ImplicitInfo): Boolean = (this.sym eq that.sym) && this.pre =:= that.pre
+
     override def equals(other: Any) = other match {
       case that: ImplicitInfo =>
           this.name == that.name &&
@@ -1269,8 +1272,9 @@ trait Implicits extends splain.SplainData {
       @tailrec private def rankImplicits(pending: Infos, acc: List[(SearchResult, ImplicitInfo)]): List[(SearchResult, ImplicitInfo)] = pending match {
         case Nil                          => acc
         case firstPending :: otherPending =>
+          // An implicit that is imported under two names has an info for each name: they are one candidate.
           def firstPendingImproves(alt: ImplicitInfo) =
-            firstPending == alt || (
+            firstPending == alt || firstPending.isSameDefinition(alt) || (
               try improves(firstPending, alt)
               catch {
                 case _: CyclicReference =>
