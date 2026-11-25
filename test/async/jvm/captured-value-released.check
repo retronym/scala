@@ -1,0 +1,5 @@
+local of the async block: released
+flatMap chain: released
+parameter of the enclosing method: released
+parameter of the enclosing method, two awaits: released
+value of the enclosing method: released
