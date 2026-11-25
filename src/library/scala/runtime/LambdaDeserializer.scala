@@ -53,8 +53,11 @@ object LambdaDeserializer {
                               targetMethodMap: java.util.Map[String, MethodHandle], serialized: SerializedLambda): AnyRef = {
     assert(targetMethodMap != null)
     def slashDot(name: String) = name.replaceAll("/", ".")
+    // null when the lookup class is loaded by the bootstrap loader, e.g. for a lambda in scala-library
+    // on the boot class path. Class.forName and MethodType.fromMethodDescriptorString accept that.
     val loader = lookup.lookupClass().getClassLoader
-    val implClass = loader.loadClass(slashDot(serialized.getImplClass))
+    def loadClass(name: String): Class[_] = Class.forName(slashDot(name), false, loader)
+    val implClass = loadClass(serialized.getImplClass)
     val key = LambdaDeserialize.nameAndDescriptorKey(serialized.getImplMethodName, serialized.getImplMethodSignature)
 
     def makeCallSite: CallSite = {
@@ -64,7 +67,7 @@ object LambdaDeserializer {
 
       val funcInterfaceSignature = parseDescriptor(getFunctionalInterfaceMethodSignature)
       val instantiated = parseDescriptor(getInstantiatedMethodType)
-      val functionalInterfaceClass = loader.loadClass(slashDot(getFunctionalInterfaceClass))
+      val functionalInterfaceClass = loadClass(getFunctionalInterfaceClass)
 
       val implMethodSig = parseDescriptor(getImplMethodSignature)
       // Construct the invoked type from the impl method type. This is the type of a factory

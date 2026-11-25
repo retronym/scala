@@ -93,6 +93,22 @@ public final class LambdaDeserializerTest {
         checkIllegalAccess(sl, copySerializedLambda(sl, sl.getImplMethodName(), sl.getImplMethodSignature().replace("Boolean", "Integer")));
     }
 
+    // The lookup class of a lambda in scala-library has a null class loader when scala-library is on the
+    // boot class path, as the scala launcher arranges by default. The lookup class of publicLookup, Object,
+    // has one too. The metafactory refuses such a caller, so this only checks that the classes and descriptors
+    // in the SerializedLambda are resolved: the impl method is not in the (empty) map of permitted targets,
+    // so the result is null rather than a lambda.
+    @Test
+    public void bootstrapLoaderLookupClass() {
+        MethodHandles.Lookup lookup = MethodHandles.publicLookup();
+        Assert.assertNull(lookup.lookupClass().getClassLoader());
+        SerializedLambda serialized = new SerializedLambda(Object.class,
+                "java/util/function/Function", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;",
+                MethodHandleInfo.REF_invokeStatic, "java/lang/String", "valueOf", "(Ljava/lang/Object;)Ljava/lang/String;",
+                "(Ljava/lang/Object;)Ljava/lang/String;", new Object[0]);
+        Assert.assertNull(LambdaDeserializer.deserializeLambdaOrNull(lookup, null, new HashMap<>(), serialized));
+    }
+
     private void checkIllegalAccess(SerializedLambda allowed, SerializedLambda requested) {
         try {
             HashMap<String, MethodHandle> allowedMap = createAllowedMap(LambdaHost.lookup(), allowed);
