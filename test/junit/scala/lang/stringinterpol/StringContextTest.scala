@@ -369,4 +369,22 @@ class StringContextTest {
     )
     for((lhs, rhs) <- cases) assertEquals(rhs, lhs)
   }
+
+  @Test def globHighChars(): Unit = {
+    // chars at or above U+8000 in a pattern part must match themselves
+    assertEquals(Some(Seq("abc")), StringContext.glob(Seq("\uD83D\uDE00", ""), "\uD83D\uDE00abc"))
+    assertEquals(Some(Seq("\uB098")), StringContext.glob(Seq("\uAC00", ""), "\uAC00\uB098"))
+    assertEquals(Some(Seq("y")), StringContext.glob(Seq("x\uFFFF", ""), "x\uFFFFy"))
+    // and U+FFFF is not a wildcard
+    assertEquals(None, StringContext.glob(Seq("x\uFFFF", ""), "xyz"))
+    assertEquals(None, StringContext.glob(Seq("\uFFFF", ""), "zz"))
+
+    def m(in: String): String = in match {
+      case s"\uD83D\uDE00$rest" => s"emoji $rest"
+      case s"\uAC00$rest"        => s"hangul $rest"
+      case _                     => "no match"
+    }
+    assertEquals("emoji abc", m("\uD83D\uDE00abc"))
+    assertEquals("hangul \uB098", m("\uAC00\uB098"))
+  }
 }

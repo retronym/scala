@@ -222,12 +222,12 @@ object StringContext {
     // glob-wildcard placeholders
     val patternLength = patternChunks.iterator.map(_.length).sum + numWildcards
 
-    // Convert the input pattern chunks into a single sequence of shorts; each
-    // non-negative short represents a character, while -1 represents a glob wildcard
+    // Convert the input pattern chunks into a single sequence of ints; each
+    // non-negative int represents a character, while -1 represents a glob wildcard
     val pattern = {
-      val b = new ArrayBuilder.ofShort ; b.sizeHint(patternLength)
-      patternChunks.head.foreach(c => b.addOne(c.toShort))
-      patternChunks.tail.foreach { s => b.addOne(-1) ; s.foreach(c => b.addOne(c.toShort)) }
+      val b = new ArrayBuilder.ofInt ; b.sizeHint(patternLength)
+      patternChunks.head.foreach(c => b.addOne(c.toInt))
+      patternChunks.tail.foreach { s => b.addOne(-1) ; s.foreach(c => b.addOne(c.toInt)) }
       b.result()
     }
 
