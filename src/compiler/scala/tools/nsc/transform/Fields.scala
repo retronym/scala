@@ -243,8 +243,6 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
      *
      * TODO: optimize using local variable?
      */
-    // A local method of the accessor, entered here rather than by the namer, so that the body
-    // can be typed without resolving its name.
     val computeSym = module.newMethod(nme.newLazyValSlowComputeName(module.name), module.pos.focus) setInfo MethodType(Nil, UnitTpe)
     val computeMethod = DefDef(computeSym, gen.mkSynchronized(monitorHolder)(If(needsInit, init, EmptyTree)))
     Block(computeMethod :: If(needsInit, Apply(Ident(computeSym), Nil), EmptyTree) :: Nil,
