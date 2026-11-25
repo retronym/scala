@@ -1109,9 +1109,9 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
       else if (owner == skipClass) outer.implicitssImpl(NoSymbol)
       else {
         def withOuter(is: List[ImplicitInfo]): List[List[ImplicitInfo]] = {
-          // In a constructor super call, the members of the constructed class are not in scope. We
+          // In a constructor's super or self call, the members of the constructed class are not in scope. We
           // need to skip over the context of that class when searching for implicits. See PR #8441.
-          val nextSkipClass = if (owner.isPrimaryConstructor && inSelfSuperCall) owner.owner else skipClass
+          val nextSkipClass = if (owner.isConstructor && inSelfSuperCall) owner.owner else skipClass
           is match {
             case Nil => outer.implicitssImpl(nextSkipClass)
             case _ => is :: outer.implicitssImpl(nextSkipClass)
