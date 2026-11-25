@@ -26,4 +26,19 @@ class EnumerationTest {
     }
     assertSame(Ordering[MyEnum.Value], MyEnum.ValueOrdering)
   }
+
+  // The accessors of the values defined further down return null while the enumeration is being initialized
+  @Test def nameOfValueDuringInitialization(): Unit = {
+    object Colour extends Enumeration {
+      val Red = Value
+      val default: String = Red.toString
+      val Green = Value
+      val both: String = s"$Red $Green"
+      val Blue = Value
+    }
+    assertEquals("Red", Colour.default)
+    assertEquals("Red Green", Colour.both)
+    assertEquals("Blue", Colour.Blue.toString)
+    assertEquals(Colour.Green, Colour.withName("Green"))
+  }
 }

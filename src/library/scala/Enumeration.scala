@@ -204,7 +204,8 @@ abstract class Enumeration (initial: Int) extends Serializable {
       // invoke method to obtain actual `Value` instance
       val value = m.invoke(this).asInstanceOf[Value]
       // verify that outer points to the correct Enumeration: ticket #3616.
-      if (value.outerEnum eq thisenum) {
+      // The value is null if this enumeration's initializer has not yet reached its definition; `nameOf` looks again later.
+      if (value != null && (value.outerEnum eq thisenum)) {
         val id: Int = value.id
         nmap += ((id, name))
       }
