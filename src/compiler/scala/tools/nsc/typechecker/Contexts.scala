@@ -316,9 +316,10 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
 
     private def refImpl(tpe: Type): Tree =
       implicitDictionary.find(_._1 =:= tpe) match {
-        case Some((_, (sym, _))) =>
+        // An entry without a definition is a link to a search that is still open, or that has failed.
+        case Some((_, (sym, rhs))) if rhs != EmptyTree =>
           gen.mkAttributedRef(sym) setType tpe
-        case None =>
+        case _ =>
           EmptyTree
       }
 
@@ -330,7 +331,7 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
         case Nil => (implicitDictionary, result)
         case (tp, (sym, EmptyTree)) :: tl if tp =:= tpe =>
           val ref = gen.mkAttributedRef(sym) setType tpe
-          val res = new SearchResult(ref, result.subst, result.undetparams)
+          val res = new SearchResult(ref, result.subst, result.undetparams, result.inPackagePrefix, result.implicitInfo)
           (acc reverse_::: ((tpe, (sym, result.tree)) :: tl), res)
         case hd :: tl =>
           patch(tl, hd :: acc)
