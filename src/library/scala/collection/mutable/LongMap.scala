@@ -102,8 +102,11 @@ final class LongMap[V] private[collection] (defaultEntry: Long => V, initialBuff
     (_size + _vacant) > 0.5*mask || _vacant > _size
 
   private def toIndex(k: Long): Int = {
+    // Multiply before folding the two halves, so that the high half reaches the low bits of the index
+    // even for keys built as `(i << 32) | j`, which `k ^ (k >>> 32)` alone would collapse to `i ^ j`.
+    val m = k * 0x9E3779B97F4A7C15L
+    val h = (m ^ (m >>> 32)).toInt
     // Part of the MurmurHash3 32 bit finalizer
-    val h = ((k ^ (k >>> 32)) & 0xFFFFFFFFL).toInt
     val x = (h ^ (h >>> 16)) * 0x85EBCA6B
     (x ^ (x >>> 13)) & mask
   }
