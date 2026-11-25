@@ -483,6 +483,7 @@ class BytecodeTest extends BytecodeTesting {
          |    if (t == null) acc + head
          |    else t.sum(acc + head)
          |  }
+         |  final def sumTail(acc: Int): Int = tail.sumTail(acc + head)
          |}
          """.stripMargin
 
@@ -506,6 +507,29 @@ class BytecodeTest extends BytecodeTesting {
       VarOp(ALOAD, 0),
       Field(GETFIELD, "IntList", "head", "I"),
       Op(IADD),
+      VarOp(ISTORE, 1),
+      VarOp(ASTORE, 0),
+      Jump(GOTO, Label(0)),
+    ))
+
+    // `t` in `sum` was tested by the enclosing `if`. The receiver of `sumTail` was not: the argument is
+    // evaluated first, then the receiver is tested, as the call would have done.
+    assertSameCode(getMethod(intListClass, "sumTail"), List(
+      Label(0),
+      VarOp(ILOAD, 1),
+      VarOp(ALOAD, 0),
+      Field(GETFIELD, "IntList", "head", "I"),
+      Op(IADD),
+      VarOp(ISTORE, 3),
+      VarOp(ALOAD, 0),
+      Field(GETFIELD, "IntList", "tail", "LIntList;"),
+      Jump(IFNONNULL, Label(13)),
+      Op(ACONST_NULL),
+      Op(ATHROW),
+      Label(13),
+      VarOp(ALOAD, 0),
+      Field(GETFIELD, "IntList", "tail", "LIntList;"),
+      VarOp(ILOAD, 3),
       VarOp(ISTORE, 1),
       VarOp(ASTORE, 0),
       Jump(GOTO, Label(0)),
