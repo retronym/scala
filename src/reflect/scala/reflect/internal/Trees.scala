@@ -283,6 +283,11 @@ trait Trees extends api.Trees {
 
   trait TypTree extends Tree with TypTreeApi
 
+  /** The superclass of every type tree except `SelectFromTypeTree`, which extends `RefTree`.
+   *  Testing for this class is a cheaper type test than testing for the trait `TypTree`.
+   */
+  abstract class AbstractTypTree extends TypTree
+
   abstract class SymTree extends Tree with SymTreeApi {
     override def hasSymbolField = true
     override var symbol: Symbol = NoSymbol
@@ -935,7 +940,7 @@ trait Trees extends api.Trees {
   object Annotated extends AnnotatedExtractor
 
   case class SingletonTypeTree(ref: Tree)
-        extends TypTree with SingletonTypeTreeApi {
+        extends AbstractTypTree with SingletonTypeTreeApi {
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.SingletonTypeTree(this, transformer.transform(ref))
     override def traverse(traverser: Traverser): Unit = {
@@ -958,7 +963,7 @@ trait Trees extends api.Trees {
   object SelectFromTypeTree extends SelectFromTypeTreeExtractor
 
   case class CompoundTypeTree(templ: Template)
-       extends TypTree with CompoundTypeTreeApi {
+       extends AbstractTypTree with CompoundTypeTreeApi {
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.CompoundTypeTree(this, transformer.transformTemplate(templ))
     override def traverse(traverser: Traverser): Unit = {
@@ -968,7 +973,7 @@ trait Trees extends api.Trees {
   object CompoundTypeTree extends CompoundTypeTreeExtractor
 
   case class AppliedTypeTree(tpt: Tree, args: List[Tree])
-       extends TypTree with AppliedTypeTreeApi {
+       extends AbstractTypTree with AppliedTypeTreeApi {
 
     assert(tpt.isType, tpt)
 
@@ -984,7 +989,7 @@ trait Trees extends api.Trees {
   object AppliedTypeTree extends AppliedTypeTreeExtractor
 
   case class TypeBoundsTree(lo: Tree, hi: Tree)
-       extends TypTree with TypeBoundsTreeApi {
+       extends AbstractTypTree with TypeBoundsTreeApi {
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.TypeBoundsTree(this, transformer.transform(lo), transformer.transform(hi))
     override def traverse(traverser: Traverser): Unit = {
@@ -995,7 +1000,7 @@ trait Trees extends api.Trees {
   object TypeBoundsTree extends TypeBoundsTreeExtractor
 
   case class ExistentialTypeTree(tpt: Tree, whereClauses: List[MemberDef])
-       extends TypTree with ExistentialTypeTreeApi {
+       extends AbstractTypTree with ExistentialTypeTreeApi {
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.ExistentialTypeTree(this, transformer.transform(tpt), transformer.transformMemberDefs(whereClauses))
     override def traverse(traverser: Traverser): Unit = {
@@ -1005,7 +1010,7 @@ trait Trees extends api.Trees {
   }
   object ExistentialTypeTree extends ExistentialTypeTreeExtractor
 
-  case class TypeTree() extends TypTree with TypeTreeApi {
+  case class TypeTree() extends AbstractTypTree with TypeTreeApi {
     private var orig: Tree = null
     /** Was this type tree originally empty? That is, does it now contain
       * an inferred type that must be forgotten in `resetAttrs` to
