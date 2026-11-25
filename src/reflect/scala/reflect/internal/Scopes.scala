@@ -454,6 +454,32 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
 
     override def foreach[U](p: Symbol => U): Unit = toList foreach p
 
+    // `exists`, `forall` and `count` don't depend on order, so walk the entries rather than
+    // `iterator`, which builds (and caches) `toList`. The runtime universe keeps the inherited
+    // versions, which go through the synchronized `toList`.
+    override def exists(p: Symbol => Boolean): Boolean =
+      if (!isCompilerUniverse) super.exists(p)
+      else {
+        var e = elems
+        while ((e ne null) && e.owner == this) {
+          if (p(e.sym)) return true
+          e = e.next
+        }
+        false
+      }
+    override def forall(p: Symbol => Boolean): Boolean = !exists(sym => !p(sym))
+    override def count(p: Symbol => Boolean): Int =
+      if (!isCompilerUniverse) super.count(p)
+      else {
+        var n = 0
+        var e = elems
+        while ((e ne null) && e.owner == this) {
+          if (p(e.sym)) n += 1
+          e = e.next
+        }
+        n
+      }
+
     override def filterNot(p: Symbol => Boolean): Scope = {
       val result = toList
       val filtered = result.filterNot(p)
