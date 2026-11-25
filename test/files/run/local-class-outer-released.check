@@ -1,0 +1,6 @@
+local class: released
+local case class: released
+companion of a local case class: released
+local class with a local subclass: released
+anonymous class of a local trait: released
+local class extending a local trait: released
