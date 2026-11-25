@@ -454,11 +454,28 @@ trait TypeComparers {
 
     (    (tp1.typeSymbol eq NothingClass)       // @M Nothing is subtype of every well-kinded type
       || (tp2.typeSymbol eq AnyClass)           // @M Any is supertype of every well-kinded type (@PP: is it? What about continuations plugin?)
-      || (if (isNoArgStaticClassTypeRef(tp1) && isNoArgStaticClassTypeRef(tp2))
-            tp1.typeSymbolDirect.isNonBottomSubClass(tp2.typeSymbolDirect) // OPT faster than comparing eta-expanded types
-          else
-            isSub(tp1.withoutAnnotations, tp2.withoutAnnotations) && annotationCheckerSupport.annotationsConform(tp1, tp2)
-         )
+      || {
+           // OPT no need to compare the eta-expansions of two static class type refs when the first class does not derive
+           // from the second (the answer is false), or when it hands its type parameters on to the second unchanged,
+           // as in `class Some[+A] extends Option[A]`. Deriving is not enough: given `class B[X] extends A[Int]`,
+           // `[X]B[X]` does not conform to `[X]A[X]`.
+           val staticClasses = isNoArgStaticClassTypeRef(tp1) && isNoArgStaticClassTypeRef(tp2)
+           val sym1 = tp1.typeSymbolDirect
+           val sym2 = tp2.typeSymbolDirect
+           def passesTypeParamsOn = (sym1 eq sym2) || (sym1.tpe_*.baseType(sym2) match {
+             case TypeRef(_, _, args) =>
+               (args corresponds sym1.typeParams) { (arg, tparam) =>
+                 arg match {
+                   case TypeRef(_, sym, Nil) => sym eq tparam
+                   case _                    => false
+                 }
+               }
+             case _ => false
+           })
+           if (staticClasses && !sym1.isNonBottomSubClass(sym2)) false
+           else if (staticClasses && passesTypeParamsOn) true
+           else isSub(tp1.withoutAnnotations, tp2.withoutAnnotations) && annotationCheckerSupport.annotationsConform(tp1, tp2)
+         }
     )
   }
 
