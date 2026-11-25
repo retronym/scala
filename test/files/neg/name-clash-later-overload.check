@@ -1,0 +1,25 @@
+name-clash-later-overload.scala:7: error: name clash between defined and inherited member:
+def f(x: List[Int]): String in class A and
+def f(x: List[String]): String at line 7
+have same type after erasure: (x: List): String
+  def f(x: List[String]): String = "B1.f(List[String])"
+      ^
+name-clash-later-overload.scala:13: error: name clash between defined and inherited member:
+def f(x: List[Int]): String in class A and
+def f(x: List[String]): String at line 13
+have same type after erasure: (x: List): String
+  def f(x: List[String]): String = "B2.f(List[String])"
+      ^
+name-clash-later-overload.scala:19: error: name clash between defined and inherited member:
+def f(x: List[Int]): String in class A and
+def f(x: List[String]): String at line 19
+have same type after erasure: (x: List): String
+  def f(x: List[String]): String = "B3.f(List[String])"
+      ^
+name-clash-later-overload.scala:27: error: name clash between defined and inherited member:
+def f(x: List[Int]): String in class A and
+def f(x: List[String]): String at line 27
+have same type after erasure: (x: List): String
+  def f(x: List[String]): String = "U1.f(List[String])"
+      ^
+4 errors
