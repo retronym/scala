@@ -13,7 +13,7 @@
 package scala.tools.nsc
 package ast
 
-import scala.annotation.{tailrec, unused}
+import scala.annotation.tailrec
 import scala.collection.mutable.ListBuffer
 import scala.reflect.internal.util.{FreshNameCreator, ListOfNil}
 import scala.util.chaining._
@@ -252,7 +252,7 @@ abstract class TreeGen extends scala.reflect.internal.TreeGen with TreeDSL {
 
 
   // Construct a method to implement `fun`'s single abstract method (`apply`, when `fun.tpe` is a built-in function type)
-  def mkMethodFromFunction(@unused localTyper: analyzer.Typer)(owner: Symbol, fun: Function) = {
+  def mkMethodFromFunction(owner: Symbol, fun: Function) = {
     // TODO: treat FunctionN like any other SAM -- drop `&& !isFunctionType(fun.tpe)`
     val sam = if (!isFunctionType(fun.tpe)) samOf(fun.tpe) else NoSymbol
     if (!sam.exists) mkMethodForFunctionBody(owner, fun, nme.apply)()
@@ -386,7 +386,7 @@ abstract class TreeGen extends scala.reflect.internal.TreeGen with TreeDSL {
     // Saving the original owner allows getting the source structure from the class symbol.
     defineOriginalOwner(anonClass, fun.symbol.originalOwner)
 
-    val samDef = mkMethodFromFunction(localTyper)(anonClass, fun)
+    val samDef = mkMethodFromFunction(anonClass, fun)
     anonClass.info.decls enter samDef.symbol
 
     localTyper.typedPos(fun.pos) {
