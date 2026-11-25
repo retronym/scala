@@ -1,0 +1,6 @@
+strict val read by a closure: released
+forced lazy val (LazyInt) read by a closure: released
+forced lazy val (LazyRef) read by a closure: released
+initialised local object read by a closure: released
+forced lazy val read through a local def: released
+forced lazy val read by a local class: released
