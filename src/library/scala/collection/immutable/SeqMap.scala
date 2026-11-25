@@ -205,13 +205,13 @@ object SeqMap extends MapFactory[SeqMap] {
       else {
         // Directly create the elements for performance reasons
         val fields = Vector(key1, key2, key3, key4, key)
-        val underlying: Map[K, (Int, V1)] =
+        val underlying: Map[K, SeqMapEntry[V1]] =
           HashMap(
-            (key1, (0, value1)),
-            (key2, (1, value2)),
-            (key3, (2, value3)),
-            (key4, (3, value4)),
-            (key, (4, value))
+            (key1, new SeqMapEntry(0, value1)),
+            (key2, new SeqMapEntry(1, value2)),
+            (key3, new SeqMapEntry(2, value3)),
+            (key4, new SeqMapEntry(3, value4)),
+            (key, new SeqMapEntry(4, value))
           )
         new VectorMap(fields, underlying)
       }
