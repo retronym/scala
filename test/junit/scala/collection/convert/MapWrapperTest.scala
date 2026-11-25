@@ -180,4 +180,22 @@ class MapWrapperTest {
     wrapped.updateWith(null)(_ => Some("x"))
     assertTrue(jmap.containsKey(null))
   }
+
+  // scala/bug#12978
+  @Test def `getOrElseUpdate default value may update the map`: Unit = {
+    def fib(m: collection.mutable.Map[Int, BigInt])(n: Int): BigInt =
+      if (n < 2) n else m.getOrElseUpdate(n, fib(m)(n - 1) + fib(m)(n - 2))
+    val maps = List[jutil.Map[Int, BigInt]](new jutil.HashMap, new jutil.LinkedHashMap, new jutil.TreeMap, new jutil.WeakHashMap, new jutil.Hashtable)
+    for (jm <- maps) {
+      assertEquals(jm.getClass.getName, BigInt(1548008755920L), fib(jm.asScala)(60))
+      assertEquals(jm.getClass.getName, 59, jm.size)
+    }
+  }
+
+  @Test def `getOrElseUpdate does not evaluate the default value for a key bound to null`: Unit = {
+    val jmap = new jutil.HashMap[String, String]()
+    jmap.put("a", null)
+    assertEquals(null, jmap.asScala.getOrElseUpdate("a", throw new AssertionError("evaluated")))
+    assertTrue(jmap.containsKey("a"))
+  }
 }
