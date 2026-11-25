@@ -3750,11 +3750,17 @@ trait Types
         )
 
         case skolems =>
-          val existential = existentialsAndSkolems.existentialTransform(skolems, tp)(existentialAbstraction(_, _, flipVariance = !isLowerBound))
+          val existential = existentialsAndSkolems.existentialTransform(skolems, tp) { (tparams, tpe) =>
+            val abstracted = existentialAbstraction(tparams, tpe, flipVariance = !isLowerBound)
+            // An existential type is a supertype of each of its instances, so it can stand in for a lower bound.
+            // An upper bound can only be replaced by a subtype: the abstraction must have replaced every skolem
+            // by one of its bounds, leaving nothing quantified.
+            if (isLowerBound || !tparams.exists(abstracted.contains)) abstracted else NoType
+          }
           // `isRelatable(existential)` defends against F-bounds. We've added one layer of existential abstraction to remove
           // skolems that occur immediately in the underlying type `tp`. If after this transformation, the type still
           // contains skolems from another level, it could be F-bounded, and we give up to avoid looping.
-          isRelatable(existential) &&
+          (existential ne NoType) && isRelatable(existential) &&
             registerBound(existential, isLowerBound = isLowerBound, isNumericBound = isNumericBound)
       }
     }
