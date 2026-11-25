@@ -1,0 +1,6 @@
+user readResolve CO
+true
+user readResolve PO
+true
+trait readResolve
+true
