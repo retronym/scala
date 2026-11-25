@@ -180,4 +180,21 @@ class MapWrapperTest {
     wrapped.updateWith(null)(_ => Some("x"))
     assertTrue(jmap.containsKey(null))
   }
+
+  @Test def `entrySet entry of a wrapped mutable.Map reflects setValue`: Unit = {
+    val m = scala.collection.mutable.HashMap(1 -> "a")
+    val e = m.asJava.entrySet.iterator.next()
+    assertEquals("a", e.setValue("z"))
+    assertEquals("z", m(1))
+    assertEquals("z", e.getValue)
+    assertEquals(new jutil.AbstractMap.SimpleEntry(1, "z"), e)
+    assertEquals(new jutil.AbstractMap.SimpleEntry(1, "z").hashCode, e.hashCode)
+  }
+
+  @Test def `entrySet entry of a wrapped immutable.Map keeps its value when setValue fails`: Unit = {
+    val e = scala.collection.immutable.Map(1 -> "a").asJava.entrySet.iterator.next()
+    assertThrows[UnsupportedOperationException](e.setValue("z"))
+    assertEquals("a", e.getValue)
+    assertEquals(new jutil.AbstractMap.SimpleEntry(1, "a"), e)
+  }
 }
