@@ -71,7 +71,7 @@ trait MatchCodeGen extends Interface {
     abstract class CommonCodegen extends AbsCodegen { import CODE._
       def fun(arg: Symbol, body: Tree): Tree     = Function(List(ValDef(arg)), body)
       def tupleSel(binder: Symbol)(i: Int): Tree = (REF(binder) DOT nme.productAccessorName(i)) // make tree that accesses the i'th component of the tuple referenced by binder
-      def index(tgt: Tree)(i: Int): Tree         = tgt APPLY (LIT(i))
+      def index(tgt: Tree)(i: Int): Tree         = fn(tgt, nme.apply, LIT(i))
       def drop(tgt: Tree)(n: Int): Tree          = fn(tgt, nme.drop, LIT(n))
 
       // NOTE: checker must be the target of the ==, that's the patmat semantics for ya
