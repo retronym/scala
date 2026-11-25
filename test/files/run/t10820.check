@@ -1,0 +1,61 @@
+operand(0) = 3
+statement(0) = 3
+controlThrowable(0) = body
+  finally
+withFinally(0) = body
+inHandler(0) = body
+nested(0) = inner body
+innerTry(0) = inner
+allReturn(0) = handler
+nothingTry(0) = handler
+unit(0)
+  not returned
+generic(0) = body
+primitive(0) = 3
+nothing(0) = not returned
+byNameFunction(0) = 2
+valueClass(0) = 2
+specialized(0) = 2 body
+  finally
+inMatch(0) = body
+inClosure(0) = end
+inLazyVal(0) = body
+inFinalizer(0) = body
+operand(1) = 5
+statement(1) = 5
+controlThrowable(1) = returned
+  finally
+withFinally(1) = returned
+inHandler(1) = returned
+nested(1) = returned
+innerTry(1) = returned
+allReturn(1) = returned
+nothingTry(1) = returned
+unit(1)
+  returning
+generic(1) = returned
+primitive(1) = 5
+nothing(1) = thrown
+byNameFunction(1) = 1
+valueClass(1) = 5
+specialized(1) = 5 returned
+  finally
+inMatch(1) = returned
+inClosure(1) = returned
+inLazyVal(1) = returned
+inFinalizer(1) = returned
+  finally
+enclosingFinally(false, false) = 3
+enclosingSynchronized(false, false) = 3
+  finally
+twoDepths(false, false) = 3
+  finally
+enclosingFinally(true, false) = 5
+enclosingSynchronized(true, false) = 5
+  finally
+twoDepths(true, false) = 5
+  finally
+enclosingFinally(false, true) = 9
+enclosingSynchronized(false, true) = 9
+  finally
+twoDepths(false, true) = 9
