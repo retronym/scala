@@ -209,11 +209,14 @@ abstract class FormatInterpolator {
     }
   }
 
-  val BigDecimalTpe = typeTag[BigDecimal].tpe
-  val BigIntTpe = typeTag[BigInt].tpe
-  val CalendarTpe = typeTag[java.util.Calendar].tpe
-  val DateTpe = typeTag[java.util.Date].tpe
-  val FormattableTpe = typeTag[Formattable].tpe
+  // Not `typeTag[T].tpe`: `TypeTag.apply` tests for a runtime `JavaMirror`, which loads that class in every compile
+  // that expands `f"..."`. An AOT cache then links it, and verifying it loads `SynchronizedSymbol`, whose overrides
+  // of `getFlag` and `validTo` stop C2 inlining them by class hierarchy analysis.
+  val BigDecimalTpe = getTypeMember(ScalaPackageClass, TypeName("BigDecimal")).tpe
+  val BigIntTpe = getTypeMember(ScalaPackageClass, TypeName("BigInt")).tpe
+  val CalendarTpe = rootMirror.requiredClass[java.util.Calendar].tpe
+  val DateTpe = rootMirror.requiredClass[java.util.Date].tpe
+  val FormattableTpe = rootMirror.requiredClass[Formattable].tpe
 
   object Kind extends Enumeration { val StringXn, HashXn, BooleanXn, CharacterXn, IntegralXn, FloatingPointXn, DateTimeXn, LiteralXn, ErrorXn = Value }
   import Kind.{Value => KindOf, _}
