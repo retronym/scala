@@ -28,6 +28,9 @@ ill-nested-await.scala:57: error: await must not be used under a try/catch.
 ill-nested-await.scala:62: error: await must not be used under a nested method.
     async { def foo = await(f(false)) }
                       ^
+ill-nested-await.scala:66: error: return is illegal within an async block
+    def foo(): Any = async { return false }
+                             ^
 ill-nested-await.scala:71: error: await must not be used under a lazy val initializer.
     def foo(): Any = async { val x = { lazy val y = await(f(0)); y } }
                                                     ^
@@ -43,4 +46,4 @@ ill-nested-await.scala:82: error: await must not be used under a synchronized ca
 ill-nested-await.scala:11: error: `await` must be enclosed in an `async` block
      await[Any](f(null))
      ^
-15 errors
+16 errors

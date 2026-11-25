@@ -163,6 +163,8 @@ abstract class AsyncPhase extends Transform with TypingTransformers with AnfTran
 
       val asyncPos = asyncBody.pos
 
+      reportNonLocalReturns(asyncBody)
+
       // We mark whether each sub-tree of `asyncBody` that do or do not contain an await in thus pre-processing pass.
       // The ANF transform can then efficiently query this to selectively transform the tree.
       markContainsAwait(asyncBody)

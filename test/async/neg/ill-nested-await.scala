@@ -62,9 +62,9 @@ class NakedAwait {
     async { def foo = await(f(false)) }
   }
 
-//  def returnIllegal(): Unit = {
-//    def foo(): Any = async { return false } //!!!
-//  }
+  def returnIllegal(): Unit = {
+    def foo(): Any = async { return false }
+  }
 
   def lazyValIllegal(): Unit = {
     //expectError("await must not be used under a lazy val initializer")

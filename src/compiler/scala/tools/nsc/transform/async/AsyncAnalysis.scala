@@ -28,6 +28,23 @@ trait AsyncAnalysis extends TransformUtils  {
     analyzer.traverse(tree)
   }
 
+  /**
+   * Report each `return` in an `async` block that targets the method enclosing the block. The state machine
+   * would hand the `NonLocalReturnControl` that uncurry made of it to `completeFailure`, and the enclosing
+   * method may have returned by then. A `return` from a method nested in the block is not affected.
+   */
+  def reportNonLocalReturns(tree: Tree): Unit = {
+    val applySym = currentTransformState.applySym
+    tree.foreach {
+      case t @ Throw(Apply(fun, (key: Ident) :: _)) if isNonLocalReturnKey(key.symbol) && fun.symbol.isConstructor && !key.symbol.owner.hasTransOwner(applySym) =>
+        global.reporter.error(t.pos, "return is illegal within an async block")
+      case _ =>
+    }
+  }
+
+  private def isNonLocalReturnKey(sym: Symbol) =
+    sym != null && sym.isSynthetic && sym.name.startsWith(nme.NON_LOCAL_RETURN_KEY_STRING)
+
   private class UnsupportedAwaitAnalyzer extends AsyncTraverser {
     override def nestedClass(classDef: ClassDef): Unit = {
       val kind = if (classDef.symbol.isTrait) "trait" else "class"
@@ -61,8 +78,6 @@ trait AsyncAnalysis extends TransformUtils  {
         case Try(_, _, _) if containsAwait(tree)              =>
           reportUnsupportedAwait(tree, "try/catch")
           super.traverse(tree)
-        case Throw(Apply(fun, Ident(name) :: _)) if fun.symbol.isConstructor && fun.symbol.owner == definitions.NonLocalReturnControlClass && name.startsWith(nme.NON_LOCAL_RETURN_KEY_STRING) =>
-          global.reporter.error(tree.pos, "return is illegal within a async block")
         case DefDef(mods, _, _, _, _, _) if tree.symbol.name.endsWith(nme.LAZY_SLOW_SUFFIX) && containsAwait(tree) =>
           reportUnsupportedAwait(tree, "lazy val initializer")
         case _                                                =>
