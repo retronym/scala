@@ -185,10 +185,14 @@ class ArrayDeque[A] protected (
     } else if (idx == n) {
       addAll(elems)
     } else {
-      // Get both an iterator and the length of the source (by copying the source to an IndexedSeq if needed)
+      // Get both an iterator and the length of the source (by copying the source to an IndexedSeq if needed).
+      // Unless the array is replaced, elements are shifted in place before the source is read, so a source
+      // that may be a view of this deque is copied out first as well. An immutable collection cannot be one, and
+      // a `mutable.ArraySeq` (such as a wrapped `Array`) reads only its own array; were that `array`, it would be
+      // as long as `array`, so the array would be replaced.
       val (it, srcLength) = {
         val _srcLength = elems.knownSize
-        if (_srcLength >= 0) (elems.iterator, _srcLength)
+        if (_srcLength >= 0 && (elems.isInstanceOf[immutable.Iterable[_]] || elems.isInstanceOf[mutable.ArraySeq[_]] || mustGrow(_srcLength + n))) (elems.iterator, _srcLength)
         else {
           val indexed = IndexedSeq.from(elems)
           (indexed.iterator, indexed.size)

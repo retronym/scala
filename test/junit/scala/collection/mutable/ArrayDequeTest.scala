@@ -142,6 +142,47 @@ class ArrayDequeTest {
     sut.addOne(100)
     assertThrows[java.util.ConcurrentModificationException](it.hasNext)
   }
+
+  // scala/bug#12121
+  @Test def `insertAll and patchInPlace with a source backed by the deque itself`: Unit = {
+    val init = (1 to 5).toVector
+    // enough capacity that the elements are shifted in place instead of copied to a new array
+    def sut() = new ArrayDeque[Int](64) ++= init
+    val sources: List[(String, ArrayDeque[Int] => IterableOnce[Int])] = List(
+      "self"     -> (d => d),
+      "view"     -> (d => d.view),
+      "view.map" -> (d => d.view.map(_ * 10)),
+      "iterator" -> (d => d.iterator),
+    )
+    for ((name, source) <- sources) {
+      val elems = source(sut()).iterator.toVector
+      for (idx <- 1 until init.length) {
+        val d = sut()
+        d.insertAll(idx, source(d))
+        assertEquals(s"insertAll($idx, $name)", init.patch(idx, elems, 0), d)
+        val p = sut()
+        p.patchInPlace(idx, source(p), 0)
+        assertEquals(s"patchInPlace($idx, $name, 0)", init.patch(idx, elems, 0), p)
+      }
+      for (replaced <- 0 to 2) {
+        val d = sut()
+        d.patchInPlace(0, source(d), replaced)
+        assertEquals(s"patchInPlace(0, $name, $replaced)", init.patch(0, elems, replaced), d)
+      }
+    }
+    val q = Queue(1, 2, 3)
+    q.insertAll(2, q.view.map(_ * 10))
+    assertEquals(Queue(1, 2, 10, 20, 30, 3), q)
+    val a = sut()
+    a.insertAll(2, Array(7, 8))
+    assertEquals(init.patch(2, List(7, 8), 0), a)
+    // a `mutable.ArraySeq` is read without a copy, even over the deque's own array
+    class Leaky extends ArrayDeque[String] { def ownArray = ArraySeq.make(array).asInstanceOf[ArraySeq[String]] }
+    val s = new Leaky ++= List("a", "b", "c")
+    val own = s.ownArray.toList
+    s.insertAll(1, s.ownArray)
+    assertEquals("a" :: own ::: List("b", "c"), s.toList)
+  }
 }
 
 object ArrayDequeTest {
