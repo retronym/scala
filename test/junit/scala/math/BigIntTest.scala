@@ -38,4 +38,11 @@ class BigIntTest {
   @Test def `testBit 0`: Unit = assertFalse(even.testBit(0))
 
   @Test def `BitInteger to BitInt respects null`: Unit = assertNull(null.asInstanceOf[java.math.BigInteger]: BigInt)
+
+  @annotation.nowarn("msg=bypasses cooperative equality")
+  @Test def `equals null is false`: Unit = {
+    val nbi: BigInt = null
+    assertFalse(BigInt(1).equals(null))
+    assertFalse(BigInt(1).equals(nbi))
+  }
 }
