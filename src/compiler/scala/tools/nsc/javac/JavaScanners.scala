@@ -148,7 +148,7 @@ trait JavaScanners extends ast.parser.ScannersCommon {
 
     /** Convert name to token */
     def name2token(name: Name) = {
-      val idx = name.start - kwOffset
+      val idx = name.id - kwOffset
       if (idx >= 0 && idx < kwArray.length) kwArray(idx)
       else IDENTIFIER
     }
