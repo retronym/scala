@@ -254,6 +254,9 @@ trait Implicits extends splain.SplainData {
   private val implicitsCache = new LinkedHashMap[Type, Infoss]
   private val infoMapCache = new LinkedHashMap[Symbol, InfoMap]
   private val improvesCache = perRunCaches.newMap[(ImplicitInfo, ImplicitInfo), Boolean]()
+  /** For a list of implicits (by identity) and an approximated expected type, the implicits
+   *  that `ImplicitComputation.plausibleCandidates` could not rule out. */
+  private val plausibleCache = new java.util.IdentityHashMap[Infos, java.util.HashMap[Type, Infos]]()
   private val implicitSearchId = { var id = 1 ; () => try id finally id += 1 }
 
   private val shadowerUseOldImplementation = java.lang.Boolean.getBoolean("scalac.implicit.shadow.old")
@@ -261,6 +264,7 @@ trait Implicits extends splain.SplainData {
     implicitsCache.clear()
     infoMapCache.clear()
     improvesCache.clear()
+    plausibleCache.clear()
   }
 
   /** The result of an implicit search
@@ -341,6 +345,33 @@ trait Implicits extends splain.SplainData {
     private[this] final def computeErroneous =
       try containsError(tpe)
       catch { case _: CyclicReference => true }
+
+    private[this] var couldBeViewCache: TriState = TriState.Unknown
+
+    /** False if this implicit can never be the view of a view search, whose expected type is
+     *  a `Function1`: `ImplicitSearch.isPlausiblyCompatible` rejects it for every such type.
+     *  That is the case when, under its type params and implicit param lists, it is a method
+     *  whose first param list does not have exactly one param, or a value of a class that is
+     *  not a `Function1`.
+     */
+    final def couldBeView: Boolean = {
+      if (!couldBeViewCache.isKnown)
+        couldBeViewCache = try computeCouldBeView(tpe) catch { case _: CyclicReference => true }
+      couldBeViewCache.booleanValue
+    }
+
+    // Mirrors `checkCompatibility(fast = true, tp, pt)` for `pt` a `Function1` type.
+    private[this] final def computeCouldBeView(tp: Type): Boolean = tp match {
+      case mt: MethodType            => if (mt.isImplicit) computeCouldBeView(mt.resultType) else mt.params.lengthCompare(1) == 0
+      case NullaryMethodType(restpe) => computeCouldBeView(restpe)
+      case PolyType(_, restpe)       => computeCouldBeView(restpe)
+      case ExistentialType(_, qtpe)  => computeCouldBeView(qtpe)
+      case _ =>
+        tp.dealiasWiden match {
+          case TypeRef(_, sym, _) if sym.isClass => (sym ne ByNameParamClass) && sym.isWeakSubClass(FunctionClass(1))
+          case _                                 => true
+        }
+    }
 
     final var useCountArg: Int = 0
     final var useCountView: Int = 0
@@ -504,6 +535,16 @@ trait Implicits extends splain.SplainData {
     /** The type parameters to instantiate */
     val undetParams = if (isView) Nil else context.outer.undetparams
     val wildPt = approximate(pt)
+
+    /** A view search whose expected type is a `Function1`, which `ImplicitInfo.couldBeView` is about. */
+    private val isFunction1View = isView && (wildPt match {
+      case TypeRef(_, sym, _) => sym eq FunctionClass(1)
+      case _                  => false
+    })
+
+    /** Whether `isPlausiblyCompatible(info.tpe, wildPt)`, but for accessibility, depends only on
+     *  the types, so it can be cached per `wildPt`. A type var's bounds and instance change. */
+    private lazy val isPlausibilityCacheable = !wildPt.exists(_.isInstanceOf[TypeVar])
     private[this] def functionArityOf(tp: Type): Int = {
       val dealiased = tp.dealiasWiden
       if (isFunctionTypeDirect(dealiased)) dealiased.typeArgs.length - 1 else -1
@@ -545,6 +586,10 @@ trait Implicits extends splain.SplainData {
     }
     def isPlausiblyCompatible(tp: Type, pt: Type) = checkCompatibility(fast = true, tp, pt)
     def normSubType(tp: Type, pt: Type) = checkCompatibility(fast = false, tp, pt)
+
+    /** `isPlausiblyCompatible`, except that it does not check that a member a refinement in `pt`
+     *  asks for is accessible, which depends on the context. */
+    private def isPlausiblyCompatibleIgnoringAccess(tp: Type, pt: Type) = checkCompatibility(fast = true, tp, pt, checkAccess = false)
 
     /** Does stripped core type `dtor` dominate the stripped core type `dted`?
      *  This is the case if both types are the same wrt `=:=`, or if they overlap
@@ -797,7 +842,7 @@ trait Implicits extends splain.SplainData {
      *  they are: perhaps someone more familiar with the intentional distinctions
      *  can examine the now much smaller concrete implementations below.
      */
-    private def checkCompatibility(fast: Boolean, tp0: Type, pt0: Type): Boolean = {
+    private def checkCompatibility(fast: Boolean, tp0: Type, pt0: Type, checkAccess: Boolean = true): Boolean = {
       @tailrec def loop(tp: Type, pt: Type): Boolean = tp match {
         case mt @ MethodType(params, restpe) =>
           if (mt.isImplicit)
@@ -837,7 +882,7 @@ trait Implicits extends splain.SplainData {
         case ExistentialType(_, qtpe)   => if (fast) loop(qtpe, pt) else methodToExpressionTp(tp) <:< pt // is !fast case needed??
         case _                          => (if (fast) isPlausiblySubType(tp, pt) else tp <:< pt) && {
           pt match {
-            case RefinedType(_, syms) if !syms.isEmpty =>
+            case RefinedType(_, syms) if checkAccess && !syms.isEmpty =>
               syms.reverseIterator.exists(x => context.isAccessible(tp.nonPrivateMember(x.name), tp))
             case _ =>
               true
@@ -1117,6 +1162,7 @@ trait Implicits extends splain.SplainData {
       @nowarn("cat=lint-inaccessible")
       def survives(info: ImplicitInfo, shadower: Shadower) = (
            !isIneligible(info)                      // cyclic, erroneous, shadowed, or specially excluded
+        && (!isFunction1View || info.couldBeView)   // OPT cached per info
         && isPlausiblyCompatible(info.tpe, wildPt)  // optimization to avoid matchesPt
         && !shadower.isShadowed(info.name)          // OPT rare, only check for plausible candidates
         && matchesPt(info)                          // stable and matches expected type
@@ -1179,6 +1225,39 @@ trait Implicits extends splain.SplainData {
         }
       }
 
+      /** The implicits of `is` that may survive, in order: those that `isPlausiblyCompatible`
+       *  could not rule out without knowing the context. Cached per list and `wildPt`, as the
+       *  same lists (those of a context, or Predef's) are searched for the same types many times.
+       *
+       *  Only an implicit whose symbol is initialized is ruled out here: it is then valid at any
+       *  search site (`isValid`), and computing its type completes nothing. Others are kept and
+       *  checked by every search, as `checkValid` depends on where the search is.
+       */
+      private def plausibleCandidates(is: Infos): Infos =
+        if (is.isEmpty || !isPlausibilityCacheable) is
+        else {
+          var byPt = plausibleCache.get(is)
+          if (byPt eq null) {
+            if (plausibleCache.size >= sizeLimit) plausibleCache.clear() // a long-lived run (presentation compiler) keeps making contexts
+            byPt = new java.util.HashMap[Type, Infos](4)
+            plausibleCache.put(is, byPt)
+          }
+          var result = byPt.get(wildPt)
+          if (result eq null) {
+            result = is.filter(info => !isKnownImplausible(info))
+            byPt.put(wildPt, result)
+          }
+          result
+        }
+
+      private def isKnownImplausible(info: ImplicitInfo): Boolean = {
+        val sym = info.sym
+        sym.isInitialized && !sym.hasFlag(LOCKED) && {
+          try (isFunction1View && !info.couldBeView) || !isPlausiblyCompatibleIgnoringAccess(info.tpe, wildPt)
+          catch { case _: CyclicReference => false }
+        }
+      }
+
       /** Sorted list of eligible implicits.
        */
       private def eligibleNew = {
@@ -1193,7 +1272,7 @@ trait Implicits extends splain.SplainData {
           // Collect candidates, the level at which each was found and build a set of their names
           var iss = this.iss
           while (!iss.isEmpty) {
-            var is = iss.head
+            var is = plausibleCandidates(iss.head)
             while (!is.isEmpty) {
               val info = is.head
               if (checkValid(info.sym) && survives(info, NoShadower)) {
