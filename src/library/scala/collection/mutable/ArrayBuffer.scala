@@ -178,7 +178,12 @@ class ArrayBuffer[A] private (initialElements: Array[AnyRef], initialSize: Int)
   def insertAll(@deprecatedName("n", "2.13.0") index: Int, elems: IterableOnce[A]): Unit = {
     checkWithinBounds(index, index)
     elems match {
-      case elems: collection.Iterable[A] =>
+      // The tail is shifted before `elems` is read. A view or other proxy of this buffer would then read
+      // shifted elements, so any other `elems` is copied out first. An immutable collection cannot be such
+      // a proxy, and an `ArrayBuffer` (including this one) is read in one `System.arraycopy`, see below.
+      // A `mutable.ArraySeq` (such as a wrapped `Array`) reads only its own array; were that `array`, it would
+      // be as long as `array`, so `ensureSize` would replace `array` and the shift would leave it unchanged.
+      case elems: collection.Iterable[A] if index == size0 || elems.isInstanceOf[ArrayBuffer[_]] || elems.isInstanceOf[mutable.ArraySeq[_]] || elems.isInstanceOf[immutable.Iterable[_]] =>
         val elemsLength = elems.size
         if (elemsLength > 0) {
           mutationCount += 1

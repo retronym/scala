@@ -496,6 +496,28 @@ class ArrayBufferTest {
     assertSameElements(List(1, 1, 2, 3, 2, 3), buf)
   }
 
+  // scala/bug#12121
+  @Test
+  def insertAll_viewOfSelf(): Unit = {
+    def check(expected: List[Int])(op: ArrayBuffer[Int] => Unit): Unit = {
+      val buf = ArrayBuffer(1, 2, 3)
+      op(buf)
+      assertSameElements(expected, buf)
+    }
+    check(List(1, 1, 2, 3, 2, 3))(b => b.insertAll(1, b.view))
+    check(List(1, 10, 20, 30, 2, 3))(b => b.insertAll(1, b.view.map(_ * 10)))
+    check(List(2, 3, 1, 2, 3))(b => b.prependAll(b.view.drop(1)))
+    check(List(1, 3, 1, 2, 3))(b => b.prependAll(b.view.filter(_ != 2)))
+    check(List(1, 2, 3, 1, 2, 3))(b => b.insertAll(3, b.view))
+    check(List(1, 7, 8, 2, 3))(b => b.insertAll(1, Array(7, 8)))
+    check(List(7, 8, 1, 2, 3))(b => b.prependAll(Array(7, 8)))
+    // a `mutable.ArraySeq` takes the path without a copy, even over the buffer's own array
+    val b = ArrayBuffer("a", "b", "c")
+    val own = b.array.toList.asInstanceOf[List[String]]
+    b.insertAll(1, ArraySeq.make(b.array).asInstanceOf[ArraySeq[String]])
+    assertSameElements("a" :: own ::: List("b", "c"), b)
+  }
+
   // scala/bug#12284
   @Test
   def viewConsistency(): Unit = {
