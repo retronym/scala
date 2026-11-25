@@ -294,7 +294,7 @@ abstract class Enumeration (initial: Int) extends Serializable {
     override def empty: ValueSet = ValueSet.empty
     override def knownSize: Int = nnIds.size
     override def isEmpty: Boolean = nnIds.isEmpty
-    def contains(v: Value): Boolean = nnIds contains (v.id - bottomId)
+    def contains(v: Value): Boolean = (v.outerEnum eq thisenum) && (nnIds contains (v.id - bottomId))
     def incl (value: Value): ValueSet = new ValueSet(nnIds + (value.id - bottomId))
     def excl (value: Value): ValueSet = new ValueSet(nnIds - (value.id - bottomId))
     def iterator: Iterator[Value] = nnIds.iterator map (id => thisenum.apply(bottomId + id))
