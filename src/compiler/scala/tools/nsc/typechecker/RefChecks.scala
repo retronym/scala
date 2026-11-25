@@ -85,6 +85,7 @@ abstract class RefChecks extends Transform {
 
     var localTyper: analyzer.Typer = typer
     var currentApplication: Tree = EmptyTree
+    private[this] val NamedApplyInfoTag = reflect.classTag[analyzer.NamedApplyInfo]
     var inAnnotation: Boolean = false
     var inPattern: Boolean = false
     @inline final def savingInPattern[A](body: => A): A = {
@@ -2285,6 +2286,11 @@ abstract class RefChecks extends Transform {
         }
 
         checkUnexpandedMacro(result)
+
+        // RefChecks is the last phase to consult NamedApplyInfo; dropping it here frees the typer
+        // and context chain it holds, which would otherwise be copied onto the trees of later phases.
+        if (result.hasAttachment[analyzer.NamedApplyInfo](NamedApplyInfoTag))
+          result.removeAttachment[analyzer.NamedApplyInfo](NamedApplyInfoTag)
 
         result
       } catch {
