@@ -153,12 +153,9 @@ object SeqView {
       override protected def reversed: Iterable[A] = outer
 
       override def sorted[B1 >: A](implicit ord1: Ordering[B1]): SeqView[A] =
-        if (ord1 == Sorted.this.ord) outer
-        else if (ord1.isReverseOf(Sorted.this.ord)) this
-        else new Sorted(elems, len, ord1)
+        if (ord1.isReverseOf(Sorted.this.ord)) this
+        else new Sorted(this, len, ord1)
     }
-
-    @volatile private[this] var evaluated = false
 
     private[this] lazy val _sorted: Seq[A] = {
       val res: Seq[A] = {
@@ -181,14 +178,8 @@ object SeqView {
           immutable.ArraySeq.unsafeWrapArray(arr.asInstanceOf[Array[A]])
         }
       }
-      evaluated = true
       underlying = null
       res
-    }
-
-    private[this] def elems: SomeSeqOps[A] = {
-      val orig = underlying
-      if (evaluated) _sorted else orig
     }
 
     def apply(i: Int): A = _sorted.apply(i)
@@ -204,8 +195,7 @@ object SeqView {
 
     override def sorted[B1 >: A](implicit ord1: Ordering[B1]): SeqView[A] =
       if (ord1 == this.ord) this
-      else if (ord1.isReverseOf(this.ord)) reverse
-      else new Sorted(elems, len, ord1)
+      else new Sorted(this, len, ord1)
   }
 }
 
