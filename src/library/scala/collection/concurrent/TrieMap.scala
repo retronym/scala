@@ -674,8 +674,17 @@ private[concurrent] object CNode {
 }
 
 
-private[concurrent] case class RDCSS_Descriptor[K, V](old: INode[K, V], expectedmain: MainNode[K, V], nv: INode[K, V]) {
-  @volatile var committed = false
+/** A pending replacement of the root `old` by `nv`, to happen if the main node of `old` is still `expectedmain`.
+ *
+ *  The integer state is the outcome: 0 while undecided, then 1 (committed) or -1 (aborted). It is set once, by
+ *  compare-and-set, before any thread replaces the descriptor in the root, and every thread replaces the descriptor
+ *  according to it. The thread that installed the descriptor can therefore always read the outcome once the
+ *  descriptor has left the root, whichever thread completed the swap.
+ */
+private[concurrent] case class RDCSS_Descriptor[K, V](old: INode[K, V], expectedmain: MainNode[K, V], nv: INode[K, V]) extends AtomicInteger {
+  def isDecided: Boolean = get != 0
+  def decide(commit: Boolean): Unit = compareAndSet(0, if (commit) 1 else -1)
+  def committed: Boolean = get == 1
 }
 
 
@@ -769,21 +778,12 @@ final class TrieMap[K, V] private (r: AnyRef, rtupd: AtomicReferenceFieldUpdater
       case in: INode[K, V] @uc => in
       case desc: RDCSS_Descriptor[K, V] @uc =>
         val RDCSS_Descriptor(ov, exp, nv) = desc
-        if (abort) {
-          if (CAS_ROOT(desc, ov)) ov
-          else RDCSS_Complete(abort)
-        } else {
-          val oldmain = ov.gcasRead(this)
-          if (oldmain eq exp) {
-            if (CAS_ROOT(desc, nv)) {
-              desc.committed = true
-              nv
-            } else RDCSS_Complete(abort)
-          } else {
-            if (CAS_ROOT(desc, ov)) ov
-            else RDCSS_Complete(abort)
-          }
-        }
+        // Record the outcome before replacing the descriptor: the thread that installed it reads the outcome as soon
+        // as it sees the descriptor gone, and must not find it still unset when another thread has done the swap.
+        if (!desc.isDecided) desc.decide(commit = !abort && (ov.gcasRead(this) eq exp))
+        val res = if (desc.committed) nv else ov
+        if (CAS_ROOT(desc, res)) res
+        else RDCSS_Complete(abort)
       case x => throw new MatchError(x)
     }
   }
