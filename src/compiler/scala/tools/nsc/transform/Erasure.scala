@@ -1192,7 +1192,12 @@ abstract class Erasure extends InfoTransform
                 }
 
                 qual.tpe.typeSymbol match {
-                  case UnitClass | NullClass                         => LIT(0)
+                  case UnitClass | NullClass                         =>
+                    // the hash is a constant, but the receiver is still evaluated: `sideEffect().##`
+                    qual match {
+                      case Literal(_) => LIT(0)
+                      case _          => Block(qual :: Nil, LIT(0))
+                    }
                   case IntClass | ShortClass | ByteClass | CharClass => qual
                   case BooleanClass                                  => If(qual, LIT(true.##), LIT(false.##))
                   case LongClass                                     => staticsCall(nme.longHash)

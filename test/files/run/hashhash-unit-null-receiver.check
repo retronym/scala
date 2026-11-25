@@ -1,0 +1,4 @@
+after inc().##       : n = 1, hash = 0
+after inc().hashCode : n = 2
+after last().##      : n = 12, hash = 0
+after (last(): String).##: n = 22, hash = 0
