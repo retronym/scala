@@ -68,4 +68,16 @@ class MurmurHash3Test {
       assertNotEquals(a.toIndexedSeq.hashCode(), b.toIndexedSeq.hashCode())
     }
   }
+
+  // unorderedHash folds h | 1 into its product, so {2k, 2m + 1} and {2k + 1, 2m} agree in sum, xor
+  // and product: a quarter of all two-element Set[Int]s collide with another one.
+  @Test
+  def twoElementSetsOfIntsHashApart(): Unit = {
+    assertNotEquals(Set(0, 3).##, Set(1, 2).##)
+    val n = 300
+    val hashes = for (i <- 0 until n; j <- i + 1 until n) yield Set(i, j).##
+    val collisions = hashes.size - hashes.distinct.size
+    // 44,850 sets: about 0.2 collisions expected for a random 32-bit hash
+    assertTrue(s"$collisions collisions among ${hashes.size} two-element sets", collisions < 10)
+  }
 }
