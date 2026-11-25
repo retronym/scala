@@ -407,6 +407,23 @@ class NumericRangeTest {
     assertThrows[IllegalArgumentException](NumericRange(Int.MinValue, Int.MaxValue, 1).lastIndexOf(300))
   }
 
+  @Test
+  def takeDropWholeNegativeHalfOfNarrowType(): Unit = {
+    // The length (128, 32768) exceeds T.MaxValue, so it cannot be computed in T.
+    def check[T](r: NumericRange[T]): Unit = {
+      val xs = r.toList
+      assertEquals(xs.length, r.length)
+      for (n <- List(1, 2, xs.length - 2, xs.length - 1, xs.length, xs.length + 1)) {
+        assertEquals(s"$r take $n", xs.take(n), r.take(n).toList)
+        assertEquals(s"$r drop $n", xs.drop(n), r.drop(n).toList)
+      }
+    }
+    check(NumericRange.inclusive[Byte](Byte.MinValue, -1, 1))
+    check(NumericRange.inclusive[Byte](-1, Byte.MinValue, -1))
+    check(NumericRange.inclusive[Short](Short.MinValue, -1, 1))
+    check(NumericRange.inclusive[Short](-1, Short.MinValue, -1))
+  }
+
 }
 
 object NumericRangeTest {
