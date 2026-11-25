@@ -1045,6 +1045,54 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
     )
   }
 
+  /** An override may specialize more of its type parameters than the overridden method does:
+   *
+   *    class A { def m[T, @specialized(Int) U](t: T, u: U) = .. }
+   *    class B extends A { override def m[@specialized(Int) T, @specialized(Int) U](t: T, u: U) = .. }
+   *
+   *  `A` has the normalized member `m$mIc$sp[T](t: T, u: Int)`, which callers of `A.m` with `U = Int` use.
+   *  The only normalized member of `B` is `m$mIIc$sp(t: Int, u: Int)`. This enters into `decls`, the new
+   *  scope of `clazz`, a `m$mIc$sp` that calls the generic `m`.
+   *
+   *  Only a class gets such a member. The members of a trait read from a classfile are computed here in
+   *  the same way, and a trait compiled by an earlier version does not have this one, so a mixin forwarder
+   *  to it would fail to link. Where `B` is a trait, the class that mixes it in gets the member, unless a
+   *  class or trait later in its linearization overrides `m` again.
+   */
+  private def addNormalizedForwarders(clazz: Symbol, decls: Scope): Scope = {
+    def isCandidate(m: Symbol) = m.isMethod && !m.isDeferred && m.typeParams.exists(_.isSpecialized)
+    if (!clazz.isTrait) {
+      val mixins = clazz.mixinClasses
+      for {
+        base <- clazz :: mixins
+        laterBases = if (base eq clazz) Nil else clazz :: mixins.takeWhile(_ ne base)
+        overriding <- base.info.decls
+        // as seen from `clazz`: two generic traits that both override `m` only match there
+        if isCandidate(overriding) && !laterBases.exists(overriding.matchingSymbol(_, clazz.thisType) != NoSymbol)
+        overridden <- overriding.allOverriddenSymbols
+        if overridden.typeParams.exists(_.isSpecialized)
+        normalized <- exitingSpecialize(overridden.owner.info.decls)
+        if normalized.isSpecialized && info.get(normalized).contains(NormalizedMember(overridden))
+      } {
+        val tpe = normalized.info.asSeenFrom(clazz.thisType, normalized.owner)
+        // `base` has a variant of this name and type if it specializes the same type parameters
+        def hasVariant =
+          decls.lookupAll(normalized.name).exists(_.info.matches(tpe)) ||
+            (base ne clazz) && exitingSpecialize(base.info.decl(normalized.name)).alternatives.exists(
+              _.info.asSeenFrom(clazz.thisType, base).matches(tpe))
+        if (!hasVariant) {
+          val forwarder = normalized.cloneSymbol(clazz, (normalized.flags | OVERRIDE | SPECIALIZED) & ~DEFERRED)
+          forwarder.modifyInfo(_.asSeenFrom(clazz.thisType, normalized.owner))
+          debuglog(s"forwarder $forwarder for the normalized member ${normalized.fullLocationString}: ${forwarder.info}")
+          typeEnv(forwarder) = typeEnv(normalized)
+          info(forwarder) = Forward(overriding)
+          decls.enter(forwarder)
+        }
+      }
+    }
+    decls
+  }
+
   /** For each method m that overrides an inherited method m', add a special
    *  overload method `om` that overrides the corresponding overload in the
    *  superclass. For the following example:
@@ -1316,7 +1364,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
           }
           val newScope = newScopeWith(specializeClass(clazz, typeEnv(clazz)) ++ specialOverrides(clazz): _*)
           // If tparams.isEmpty, this is just the ClassInfoType.
-          GenPolyType(tparams, ClassInfoType(parents1, newScope, clazz))
+          GenPolyType(tparams, ClassInfoType(parents1, addNormalizedForwarders(clazz, newScope), clazz))
         }
       case _ =>
         tpe
