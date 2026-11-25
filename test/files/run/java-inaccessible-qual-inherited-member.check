@@ -1,0 +1,6 @@
+method of public Base=1
+field of public Base=2
+field assignment=3
+hashCode=true
+toString=true
+explicit upcast=1

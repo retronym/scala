@@ -28,6 +28,9 @@ trait PostErasure extends InfoTransform with TypingTransformers with scala.refle
   override def changesBaseClasses = false
 
   class PostErasureTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
+    private def isJvmAccessible(cls: Symbol) =
+      erasure.isJvmAccessible(cls, localTyper.context.asInstanceOf[erasure.erasureAnalyzer.Context])
+
     override def transform(tree: Tree) = {
       def finish(res: Tree) = logResult(s"Posterasure reduction\n  Old: $tree\n  New")(res)
 
@@ -41,7 +44,10 @@ trait PostErasure extends InfoTransform with TypingTransformers with scala.refle
         finish(localTyper typed (Apply(Select(lhs, op.name) setPos tree.pos, rhs :: Nil) setPos tree.pos))
 
       super.transform(tree) setType elimErasedValueType(tree.tpe) match {
-        case AsInstanceOf(v, tpe) if v.tpe <:< tpe => finish(v)          // x.asInstanceOf[X]       ==> x
+        // x.asInstanceOf[X] ==> x. Not if the class of `x` is a Java class that is not accessible here:
+        // erasure inserts the upcast so that the backend names an accessible receiver class when a
+        // member is selected from `x` (scala/bug#10450).
+        case AsInstanceOf(v, tpe) if v.tpe <:< tpe && isJvmAccessible(v.tpe.typeSymbol) => finish(v)
         case ValueClass.BoxAndUnbox(v)             => finish(v)          // (new B(v)).unbox        ==> v
         case ValueClass.BoxAndCompare(v1, op, v2)  => binop(v1, op, v2)  // new B(v1) == new B(v2)  ==> v1 == v2
         case transformed                           => transformed
