@@ -1,0 +1,13 @@
+S.scala:11: error: Implementation restriction: object S accesses protected method m of class J, which the JVM only permits from a subclass of it.
+  def method(s: S) = s.m()
+                       ^
+S.scala:12: error: Implementation restriction: object S accesses protected variable f of class J, which the JVM only permits from a subclass of it.
+  def field(s: S) = s.f
+                      ^
+S.scala:13: error: Implementation restriction: object S accesses protected variable f of class J, which the JVM only permits from a subclass of it.
+  def assign(s: S) = { s.f = 5; 5 }
+                           ^
+S.scala:13: error: Implementation restriction: object S accesses protected variable f of class J, which the JVM only permits from a subclass of it.
+  def assign(s: S) = { s.f = 5; 5 }
+                         ^
+4 errors
