@@ -79,7 +79,7 @@ abstract class CleanUp extends Statics with Transform with ast.TreeDSL {
 
     def transformApplyDynamic(ad: ApplyDynamic) = {
       val qual0 = ad.qual
-      val params = ad.args
+      var params = ad.args
         if (settings.logReflectiveCalls.value)
           reporter.echo(ad.pos, "method invocation uses reflection")
 
@@ -359,8 +359,19 @@ abstract class CleanUp extends Statics with Transform with ast.TreeDSL {
             val sym = currentOwner.newValue(mkTerm("qual"), ad.pos) setInfo qual0.tpe
             qual = REF(sym)
 
-            BLOCK(
-              ValDef(sym, qual0),
+            // The arguments are evaluated before `qual.getClass`, which throws for a null receiver.
+            val argDefs = ListBuffer.empty[Tree]
+            params = params.mapConserve { arg =>
+              if (treeInfo.isExprSafeToInline(arg)) arg
+              else {
+                val argSym = currentOwner.newValue(mkTerm("arg"), arg.pos) setInfo arg.tpe.widen
+                argDefs += ValDef(argSym, arg)
+                REF(argSym)
+              }
+            }
+
+            Block(
+              ValDef(sym, qual0) :: argDefs.toList,
               callAsReflective(mparams map (_.tpe), resType)
             )
           }
