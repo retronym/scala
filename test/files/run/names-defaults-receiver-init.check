@@ -1,0 +1,5 @@
+positional, lazy val receiver : lz1 a b default-c -> a=1 b=2
+named, method receiver        : mk b a default-c -> a=1 b=2
+named, lazy val receiver      : lz2 b a default-c -> a=102 b=101
+positional, object receiver   : O1 a b default-c -> a=1 b=2
+named, object receiver        : O2 b a default-c -> a=1 b=2
