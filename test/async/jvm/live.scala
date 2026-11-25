@@ -110,6 +110,129 @@ package scala.async.run.live {
       block(m3())
     }
 
+    // A branch that contains an await leaves the state through its own state transition.
+
+    @Test
+    def `zero out fields before await in then branch`(): Unit = {
+      def live: Set[Any] = testingEc.live[Cell[_]].map(_.v).toSet
+
+      def m(x: Int) = async {
+        val _0: Any = await(Cell(0))
+        val _1: Cell[Int] = await(Cell(1))
+        val y = await(x)
+        val n = if (y > 0) {
+          val k = _1.v
+          val r = k + await(1)
+          assertEquals("after await in then branch", Set(0), live)
+          r
+        } else 0
+        assertEquals("after if", Set(0), live)
+        await(0)
+        identity(_0)
+        n
+      }
+      assertEquals(2, block(m(1)))
+      assertEquals(0, block(m(0)))
+    }
+
+    @Test
+    def `zero out fields before await in else branch`(): Unit = {
+      def live: Set[Any] = testingEc.live[Cell[_]].map(_.v).toSet
+
+      def m(x: Int) = async {
+        val _0: Any = await(Cell(0))
+        val _1: Cell[Int] = await(Cell(1))
+        val y = await(x)
+        val n = if (y <= 0) 0 else {
+          val k = _1.v
+          val r = k + await(1)
+          assertEquals("after await in else branch", Set(0), live)
+          r
+        }
+        assertEquals("after if", Set(0), live)
+        await(0)
+        identity(_0)
+        n
+      }
+      assertEquals(2, block(m(1)))
+      assertEquals(0, block(m(0)))
+    }
+
+    @Test
+    def `zero out fields before await in case of switch`(): Unit = {
+      def live: Set[Any] = testingEc.live[Cell[_]].map(_.v).toSet
+
+      def m(x: Int) = async {
+        val _0: Any = await(Cell(0))
+        val _1: Cell[Int] = await(Cell(1))
+        val y = await(x)
+        val n = y match {
+          case 1 =>
+            val k = _1.v
+            val r = k + await(1)
+            assertEquals("after await in case", Set(0), live)
+            r
+          case _ => 0
+        }
+        assertEquals("after match", Set(0), live)
+        await(0)
+        identity(_0)
+        n
+      }
+      assertEquals(2, block(m(1)))
+      assertEquals(0, block(m(0)))
+    }
+
+    @Test
+    def `zero out fields before await in case of pattern match`(): Unit = {
+      def live: Set[Any] = testingEc.live[Cell[_]].map(_.v).toSet
+
+      def m(x: Any) = async {
+        val _0: Any = await(Cell(0))
+        val _1: Cell[Int] = await(Cell(1))
+        val y = await(x)
+        val n = y match {
+          case s: String =>
+            val k = _1.v
+            val r = k + await(s.length)
+            assertEquals("after await in case", Set(0), live)
+            r
+          case _ => 0
+        }
+        assertEquals("after match", Set(0), live)
+        await(0)
+        identity(_0)
+        n
+      }
+      assertEquals(2, block(m("a")))
+      assertEquals(0, block(m(0)))
+    }
+
+    // The first case reaches the end of the match, which starts a state because of the await in the guard of the
+    // second case, without an async boundary.
+    @Test
+    def `zero out fields in case before await in guard`(): Unit = {
+      def live: Set[Any] = testingEc.live[Cell[_]].map(_.v).toSet
+
+      def m(x: Any) = async {
+        val _0: Any = await(Cell(0))
+        val _1: Cell[Int] = await(Cell(1))
+        val y = await(x)
+        val n = y match {
+          case s: String => _1.v + s.length
+          case i: Int if await(i) > 0 => _1.v + i
+          case _ => 0
+        }
+        assertEquals("after match", Set(0), live)
+        await(0)
+        identity(_0)
+        n
+      }
+      assertEquals(2, block(m("a")))
+      assertEquals(3, block(m(2)))
+      assertEquals(0, block(m(0)))
+    }
+
       @Test
       def `don't zero captured fields captured lambda`(): Unit = {
         def live: Set[Any] = {
