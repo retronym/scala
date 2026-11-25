@@ -1459,11 +1459,17 @@ abstract class Erasure extends InfoTransform
   /**
    * If the SAM overrides a parent method, only use LMF if it can to bridge between the two signatures.
    * Otherwise, the lambda is expanded to an anonymous class.
+   *
+   * The methods that the lambda implements are those that the SAM matches as seen from the SAM class. They need not
+   * be overridden by the SAM: `trait B extends G[Int] with I` inherits `ap(a: A): A` and `ap(a: Int): Int` from
+   * unrelated parents.
    */
-  private def lmfOverridesOk(samSym: Symbol): Boolean = {
+  private def lmfOverridesOk(tpSym: Symbol, samSym: Symbol): Boolean = {
     val samParamTypes = exitingErasure(samSym.info.paramTypes)
     val samResult = exitingErasure(samSym.info.resultType)
-    samSym.allOverriddenSymbols.forall { overridden =>
+    val site = tpSym.thisType
+    val implemented = tpSym.info.baseClasses.flatMap(samSym.matchingSymbol(_, site).alternatives).filter(_ != samSym)
+    implemented.forall { overridden =>
       val overriddenParamTypes = exitingErasure(overridden.info.paramTypes)
       val overriddenResult = exitingErasure(overridden.info.resultType)
       val (paramsOk, resultOk) = lmfAdaptationOk(samParamTypes, samResult, overriddenParamTypes, overriddenResult)
@@ -1507,7 +1513,7 @@ abstract class Erasure extends InfoTransform
 
     // we still need to check our ancestors even if the INTERFACE flag is set, as it doesn't take inheritance into account
     ok(tpSym) && tpSym.ancestors.forall(sym => (sym eq AnyClass) || (sym eq ObjectClass) || ok(sym)) &&
-    lmfOverridesOk(samSym)
+    lmfOverridesOk(tpSym, samSym)
   }
 
   final def isJvmAccessible(cls: Symbol, context: Context): Boolean = {
