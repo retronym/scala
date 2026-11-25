@@ -273,6 +273,25 @@ class BoxUnboxTest extends BytecodeTesting {
   }
 
   @Test
+  def specializedTupleGetterOfOtherType(): Unit = {
+    val code =
+      """class C {
+        |  def t(wide: Boolean): Long = {
+        |    val t = (1, 2)
+        |    val a: Any = t
+        |    if (wide) { val u = a.asInstanceOf[(Long, Long)]; u._1 + u._2 } // fails at run time in `_1$mcJ$sp`
+        |    else { val u = a.asInstanceOf[(Int, Int)]; (u._1 + u._2).toLong }
+        |  }
+        |}
+      """.stripMargin
+    val c = compileClass(code)
+    // the Tuple2$mcII$sp is not eliminated: the long getters are not extractions of its int fields
+    assertInvoke(getMethod(c, "t"), "scala/Tuple2$mcII$sp", "<init>")
+    assertInvoke(getMethod(c, "t"), "scala/Tuple2", "_1$mcJ$sp")
+    assertInvoke(getMethod(c, "t"), "scala/Tuple2", "_2$mcJ$sp")
+  }
+
+  @Test
   def tupleElimination(): Unit = {
     val code =
       """class C {
