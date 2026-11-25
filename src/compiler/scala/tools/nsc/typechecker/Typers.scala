@@ -516,7 +516,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
      *  3. Turn tree type into stable type if possible and required by context.
      *  4. Give getClass calls a more precise type based on the type of the target of the call.
      */
-    protected def stabilize(tree: Tree, pre: Type, mode: Mode, pt: Type): Tree = {
+    private[nsc] def stabilize(tree: Tree, pre: Type, mode: Mode, pt: Type): Tree = {
 
       val sym = {
         // inferExprAlternative side-effects the tree's symbol.

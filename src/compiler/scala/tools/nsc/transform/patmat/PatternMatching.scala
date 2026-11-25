@@ -15,7 +15,7 @@ package scala.tools.nsc.transform.patmat
 import scala.annotation.tailrec
 import scala.collection.{immutable, mutable}
 import scala.collection.mutable.ListBuffer
-import scala.reflect.internal.{Mode, Types}
+import scala.reflect.internal.Types
 import scala.reflect.internal.util.{SourceFile, Statistics}
 import scala.tools.nsc.Global
 import scala.tools.nsc.ast
@@ -64,6 +64,8 @@ trait PatternMatching extends Transform
 
   def newTransformer(unit: CompilationUnit): AstTransformer = new MatchTransformer(unit)
 
+  protected def typedStableRef(typer: analyzer.Typer, tree: Tree): Tree = new TypeAssignerIn(typer).typedStable(tree)
+
   class MatchTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
     private var inForceDesugar = false
 
@@ -93,7 +95,7 @@ trait PatternMatching extends Transform
           // Keep 2.12 behaviour of using wildcard expected type, recomputing the LUB, then throwing it away for the continuations plugins
           // but for the rest of us pass in top as the expected type to avoid waste.
           val pt = if (origTp <:< definitions.AnyTpe) definitions.AnyTpe else WildcardType
-          localTyper.typed(translated, pt) match {
+          assignTypes(localTyper, translated, pt) match {
             case b @ Block(_, m: Match) =>
               b.setType(origTp)
               m.setType(origTp)
@@ -144,6 +146,11 @@ trait Interface extends ast.TreeDSL {
   import global._
   import analyzer.Typer
 
+  /** A stable reference `tree` substituted for a binder, typed in the context of `typer`, with its
+   *  singleton type.
+   */
+  protected def typedStableRef(typer: Typer, tree: Tree): Tree
+
   trait MatchMonadInterface {
     val typer: Typer
     val matchOwner = typer.context.owner
@@ -184,7 +191,7 @@ trait Interface extends ast.TreeDSL {
     // composition, which made the analysis of a match quadratic in its number of cases.
     // Only used for lookups, keyed by identity; allocated on first use.
     private[this] var stableTypes: java.util.IdentityHashMap[Tree, Type] = null
-    private def typedStable(t: Tree) = typer.typed(t.shallowDuplicate, Mode.MonoQualifierModes | Mode.TYPEPATmode)
+    private def typedStable(t: Tree) = typedStableRef(typer, t.shallowDuplicate)
     private def typedStableType(t: Tree): Type = {
       if (stableTypes eq null) stableTypes = new java.util.IdentityHashMap[Tree, Type]()
       val cached = stableTypes.get(t)
