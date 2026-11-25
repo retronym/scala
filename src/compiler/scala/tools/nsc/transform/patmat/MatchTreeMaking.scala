@@ -367,6 +367,17 @@ trait MatchTreeMaking extends MatchCodeGen with Debugging {
             tp.typeSymbol.owner == tp.prefix.typeSymbol && isStatic(tp.prefix)
           }
 
+          // The types that an instance of `outerClass` must be tested against to know that it conforms to the erasure of
+          // the prefix `tp`. One test per class: the outer reference has the static type `tp`, and erasure drops
+          // the tests of an intersection that the static type of the tested value conforms to.
+          def outerClassTests(outerClass: Symbol, tp: Type): List[Type] = tp.dealiasWiden match {
+            case RefinedType(parents, _)                       => parents.flatMap(outerClassTests(outerClass, _))
+            case AnnotatedType(_, underlying)                  => outerClassTests(outerClass, underlying)
+            case tp @ TypeRef(_, sym, _) if sym.isAbstractType => outerClassTests(outerClass, tp.upperBound)
+            case tp if tp.typeSymbol == SingletonClass || outerClass.isNonBottomSubClass(tp.typeSymbol) => Nil
+            case tp                                            => tp :: Nil
+          }
+
           // In `def foo(a: b.B) = a match { case _: p.P }`
           // testedBinder.symbol.info = b.B
           // expectedTp               = p.P
@@ -438,16 +449,26 @@ trait MatchTreeMaking extends MatchCodeGen with Debugging {
                 || definedInStaticLocation(expectedTp)
                 || testedBinder.info <:< expectedTp
                 || prefixAligns) orig
-              else gen.mkAttributedQualifierIfPossible(expectedPrefix) match {
-                case None => orig
-                case Some(expectedOuterRef) =>
-                  // ExplicitOuter replaces `Select(q, outerSym) OBJ_EQ expectedPrefix`
-                  // by `Select(q, outerAccessor(outerSym.owner)) OBJ_EQ expectedPrefix`
-                  // if there's an outer accessor, otherwise the condition becomes `true`
-                  // TODO: centralize logic whether there's an outer accessor and use here?
+              else {
+                // ExplicitOuter replaces `Select(q, outerSym) OBJ_EQ expectedPrefix`
+                // by `Select(q, outerAccessor(outerSym.owner)) OBJ_EQ expectedPrefix`
+                // if there's an outer accessor, otherwise the condition becomes `true`, with a warning.
+                // The same goes for `Select(q, outerSym).isInstanceOf[expectedPrefix]`, without the warning.
+                // TODO: centralize logic whether there's an outer accessor and use here?
+                def outerRef = {
                   val synthOuterGetter = expectedTp.typeSymbol.newMethod(nme.OUTER_SYNTH, newFlags = SYNTHETIC | ARTIFACT) setInfo expectedPrefix
-                  val outerTest = (Select(codegen._asInstanceOf(testedBinder, expectedTp), synthOuterGetter)) OBJ_EQ expectedOuterRef
-                  and(orig, outerTest)
+                  Select(codegen._asInstanceOf(testedBinder, expectedTp), synthOuterGetter)
+                }
+                gen.mkAttributedQualifierIfPossible(expectedPrefix) match {
+                  case Some(expectedOuterRef) =>
+                    and(orig, outerRef OBJ_EQ expectedOuterRef)
+                  case None if expectedClass.owner.isClass =>
+                    // `_: C#X`, where `X` is a member of a superclass of `C`: the outer instance must be a `C`
+                    outerClassTests(expectedClass.owner, expectedPrefix).foldLeft(orig) { (cond, tp) =>
+                      and(cond, gen.mkIsInstanceOf(outerRef, tp, any = true, wrapInApply = false))
+                    }
+                  case None => orig
+                }
               }
           }
         }

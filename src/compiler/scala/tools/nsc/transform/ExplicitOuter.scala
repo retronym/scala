@@ -378,6 +378,30 @@ abstract class ExplicitOuter extends InfoTransform
       localTyper typed DefDef(outerAcc, gen.mkCast(transformer.transform(path), outerAcc.info.resultType))
     }
 
+    /** Replace the synthetic `<outer>` selection `sel` on `base` in the test `tree` by a call of the outer accessor,
+     *  if there is one. Otherwise the whole test becomes TRUE, optionally with a warning.
+     */
+    private def transformOuterTest(tree: Tree, sel: Select, base: Tree, warn: Boolean)(mkTest: Tree => Tree): Tree = {
+      val outerFor = sel.symbol.owner
+      val acc = outerAccessor(outerFor)
+
+      if (acc == NoSymbol ||
+          // since we can't fix scala/bug#4440 properly (we must drop the outer accessors of final classes when there's no immediate reference to them in sight)
+          // at least don't crash... this duplicates maybeOmittable from constructors
+          (acc.owner.isEffectivelyFinal && !acc.isOverridingSymbol)) {
+        if (warn && !base.tpe.hasAnnotation(UncheckedClass))
+          runReporting.warning(tree.pos, "The outer reference in this type test cannot be checked at run time.", WarningCategory.Unchecked, currentOwner)
+        transform(TRUE) // urgh... drop condition if there's no accessor (or if it may disappear after constructors)
+      } else {
+        // println("(base, acc)= "+(base, acc))
+        val outerSelect = localTyper typed Apply(Select(base, acc), Nil)
+        // achieves the same as: localTyper typed atPos(tree.pos)(outerPath(base, base.tpe.typeSymbol, outerFor.outerClass))
+        // println("(b, tpsym, outerForI, outerFor, outerClass)= "+ (base, base.tpe.typeSymbol, outerFor, sel.symbol.owner, outerFor.outerClass))
+        // println("outerSelect = "+ outerSelect)
+        transform(mkTest(outerSelect))
+      }
+    }
+
     /** The main transformation method */
     override def transform(tree: Tree): Tree = {
       val sym = tree.symbol
@@ -468,24 +492,14 @@ abstract class ExplicitOuter extends InfoTransform
         // base.<outer>.eq(o) --> base.$outer().eq(o) if there's an accessor, else the whole tree becomes TRUE
         // TODO remove the synthetic `<outer>` method from outerFor??
         case Apply(eqsel@Select(Apply(sel@Select(base, nme.OUTER_SYNTH), Nil), eq), args) =>
-          val outerFor = sel.symbol.owner
-          val acc = outerAccessor(outerFor)
+          transformOuterTest(tree, sel, base, warn = true)(outerSelect => treeCopy.Apply(tree, treeCopy.Select(eqsel, outerSelect, eq), args))
 
-          if (acc == NoSymbol ||
-              // since we can't fix scala/bug#4440 properly (we must drop the outer accessors of final classes when there's no immediate reference to them in sight)
-              // at least don't crash... this duplicates maybeOmittable from constructors
-              (acc.owner.isEffectivelyFinal && !acc.isOverridingSymbol)) {
-            if (!base.tpe.hasAnnotation(UncheckedClass))
-              runReporting.warning(tree.pos, "The outer reference in this type test cannot be checked at run time.", WarningCategory.Unchecked, currentOwner)
-            transform(TRUE) // urgh... drop condition if there's no accessor (or if it may disappear after constructors)
-          } else {
-            // println("(base, acc)= "+(base, acc))
-            val outerSelect = localTyper typed Apply(Select(base, acc), Nil)
-            // achieves the same as: localTyper typed atPos(tree.pos)(outerPath(base, base.tpe.typeSymbol, outerFor.outerClass))
-            // println("(b, tpsym, outerForI, outerFor, outerClass)= "+ (base, base.tpe.typeSymbol, outerFor, sel.symbol.owner, outerFor.outerClass))
-            // println("outerSelect = "+ outerSelect)
-            transform(treeCopy.Apply(tree, treeCopy.Select(eqsel, outerSelect, eq), args))
-          }
+        // for a type pattern with a prefix that is not a path, `_: C#X`
+        // base.<outer>.isInstanceOf[C]() --> base.$outer().isInstanceOf[C]()
+        // Without an accessor this test is dropped silently, as it was never made before. `_: U#TypeApi` for an
+        // abstract `U <: Universe` is common and must not warn (pos/t12392.scala)
+        case Apply(tapp@TypeApply(issel@Select(Apply(sel@Select(base, nme.OUTER_SYNTH), Nil), is), targs), Nil) =>
+          transformOuterTest(tree, sel, base, warn = false)(outerSelect => treeCopy.Apply(tree, treeCopy.TypeApply(tapp, treeCopy.Select(issel, outerSelect, is), targs), Nil))
 
         // (t12312) C.this.a().X().isInstanceOf[C.this.a.X.type]() -->
         // D.this.$outer().a().X().isInstanceOf[D.this.$outer.a.X.type]()
