@@ -1,0 +1,2 @@
+z is q.Imp.z; implicitly finds q.Imp.z
+z is r.Imp.z; implicitly finds r.Imp.z
