@@ -1,0 +1,7 @@
+depth 2, Enc[Int] at the bottom: compiles = true, 3 searches
+depth 4, Enc[Int] at the bottom: compiles = true, 5 searches
+depth 8, Enc[Int] at the bottom: compiles = true, 9 searches
+depth 2, no Enc[String]: compiles = false, at most 8 searches = true
+depth 4, no Enc[String]: compiles = false, at most 16 searches = true
+depth 8, no Enc[String]: compiles = false, at most 32 searches = true
+depth 12, no Enc[String]: compiles = false, at most 48 searches = true
