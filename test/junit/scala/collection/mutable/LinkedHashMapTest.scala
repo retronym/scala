@@ -11,6 +11,27 @@ import scala.collection.mutable
 /* Test for scala/bug#9095 */
 @RunWith(classOf[JUnit4])
 class LinkedHashMapTest {
+  // HashMap.clone and HashMap.from(a hash map) reuse the stored hashes and presize; copies of a LinkedHashMap call hashCode again
+  @Test def `copies of a hash map reuse the stored hashes`(): Unit = {
+    var hashes = 0
+    final case class Key(i: Int) { override def hashCode = { hashes += 1; i } }
+    val lhm = mutable.LinkedHashMap.from((0 until 1000).map(i => Key(i) -> i))
+    val hm = mutable.HashMap.from(lhm)
+    def count(expected: Iterable[(Key, Int)])(f: => mutable.LinkedHashMap[Key, Int]): Int = {
+      hashes = 0
+      val copy = f
+      val n = hashes
+      assertEquals(expected.toList, copy.toList)
+      n
+    }
+    val counts = List(
+      "clone" -> count(lhm)(lhm.clone()),
+      "from(LinkedHashMap)" -> count(lhm)(mutable.LinkedHashMap.from(lhm)),
+      "from(HashMap)" -> count(hm)(mutable.LinkedHashMap.from(hm)),
+    )
+    assertEquals(counts.map { case (k, _) => (k, 0) }, counts)
+  }
+
   @nowarn("msg=inheritance from class LinkedHashMap")
   class TestClass extends mutable.LinkedHashMap[String, Int] {
     def lastItemRef = lastEntry
