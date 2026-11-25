@@ -420,14 +420,16 @@ abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis w
   protected def newTransformer(unit: CompilationUnit): AstTransformer =
     new MixinTransformer(unit)
 
-  class MixinTransformer(unit : CompilationUnit) extends AstTransformer with AccessorTreeSynthesis {
-    /** The typer */
-    private var localTyper: erasure.erasureAnalyzer.Typer = _
-    protected def typedPos(pos: Position)(tree: Tree): Tree = assignTypes(localTyper.asInstanceOf[analyzer.Typer], atPos(pos)(tree))
-
+  class MixinTransformer(unit : CompilationUnit) extends TypeAssigner with AccessorTreeSynthesis {
     /** The rootContext used for typing */
     private val rootContext =
       erasure.erasureAnalyzer.NoContext.make(EmptyTree, rootMirror.RootClass, newScope)
+
+    // A typer for the template being transformed, made when `localTyper` is next read.
+    private val typers = new erasure.erasureAnalyzer.TyperStack(erasure.erasureAnalyzer.newTyper(rootContext))
+    private def localTyper: erasure.erasureAnalyzer.Typer = typers.typer
+    override protected def fallbackTyper(why: String): analyzer.Typer = localTyper.asInstanceOf[analyzer.Typer]
+    protected def typedPos(pos: Position)(tree: Tree): Tree = typed(atPos(pos)(tree), WildcardType)
 
     private val nullables = mutable.HashMap[Symbol, Map[Symbol, List[Symbol]]]()
 
@@ -441,7 +443,7 @@ abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis w
       val sym = tree.symbol
       tree match {
         case Template(parents, self, body) =>
-          localTyper = erasure.erasureAnalyzer.newTyper(rootContext.make(tree, currentOwner))
+          typers.enterFromRoot(tree, currentOwner)
           exitingMixin(currentOwner.owner.info)//todo: needed?
 
           if (!currentOwner.isTrait && !isPrimitiveValueClass(currentOwner))
@@ -657,12 +659,12 @@ abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis w
      *  when coming back, it performs a postTransform at phase after.
      */
     override def transform(tree: Tree): Tree = {
-      val saved = localTyper
-      val tree1 = preTransform(tree).transform(this)
+      val saved = typers.depth
+      val tree1 = super.transform(preTransform(tree))
       // localTyper needed when not flattening inner classes. parts after an
       // inner class will otherwise be typechecked with a wrong scope
       try exitingMixin(postTransform(tree1))
-      finally localTyper = saved
+      finally typers.depth = saved
     }
   }
 

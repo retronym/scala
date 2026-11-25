@@ -92,7 +92,7 @@ trait PatternExpansion {
 
   // Analyze the fun / args of a case class or extractor pattern in terms of repeated patterns etc.
   // Extracts some info from signatures of get/apply/head methods (name-based patmat)
-  class ExtractorAlignment(val fun: Tree, val args: List[Tree])(context: Contexts#Context) extends ExtractorSubPatternAlignment {
+  class ExtractorAlignment(val fun: Tree, val args: List[Tree])(context: => Contexts#Context) extends ExtractorSubPatternAlignment {
     def unapplySelector: Symbol = NoSymbol
 
     def productArity = productTypes.length // values coming from the fixed-length content

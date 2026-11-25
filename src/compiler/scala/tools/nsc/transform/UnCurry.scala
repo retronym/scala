@@ -84,7 +84,7 @@ abstract class UnCurry extends InfoTransform
     private val newMembers        = mutable.Map[Symbol, mutable.Buffer[Tree]]()
 
     /** `tree`, synthesised at `pos` from typed trees and bound symbols, typed with a `TypeAssigner`. */
-    private def assignTypesPos(pos: Position)(tree: Tree): Tree = assignTypes(localTyper, atPos(pos)(tree))
+    private def assignTypesPos(pos: Position)(tree: Tree): Tree = typed(atPos(pos)(tree), WildcardType)
 
     // Expand `Function`s in constructors to class instance creation (scala/bug#6666, scala/bug#8363)
     // We use Java's LambdaMetaFactory (LMF), which requires an interface for the sam's owner
@@ -237,7 +237,7 @@ abstract class UnCurry extends InfoTransform
       } else {
         val mustExpand = mustExpandFunction(fun)
         // method definition with the same arguments, return type, and body as the original lambda
-        val liftedMethod = gen.mkLiftedFunctionBodyMethod(localTyper)(fun.symbol.owner, fun)
+        val liftedMethod = gen.mkLiftedFunctionBodyMethod(fun.symbol.owner, fun)
 
         // new function whose body is just a call to the lifted method
         val newFun = deriveFunction(fun)(_ => assignTypesPos(fun.pos)(
@@ -596,9 +596,9 @@ abstract class UnCurry extends InfoTransform
          * - synthetic Java varargs forwarders for repeated parameters
          */
         case Template(_, _, _) =>
-          localTyper = typer.atOwner(tree, currentClass)
           useNewMembers(currentClass) {
             newMembers =>
+              if (newMembers.nonEmpty) localTyper = typer.atOwner(tree, currentClass)
               deriveTemplate(tree)(transformTrees(newMembers) ::: _)
           }
 
