@@ -1,0 +1,13 @@
+FutureConstant               HANG
+FutureCallsMember            HANG
+ThreadLambda                 HANG
+ThreadAnonClass              ok
+ThreadAnonClassReadsVal      HANG
+FutureMap                    HANG
+LambdaInOtherClass           ok
+FutureMethodOfOtherObject    HANG
+LazyValFuture                ok
+AppBody                      ok
+LocalLazy                    HANG
+ByName                       HANG
+CycleOnTwoThreads            HANG
