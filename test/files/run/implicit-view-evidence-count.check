@@ -1,0 +1,5 @@
+implicitly[Show[X]].show(x): 6 searches per call
+x.show, evidence is a parameter of the method: 7 searches per call
+x.show, evidence is a parameter of the view: 7 searches per call
+num.times(a, b): 0 searches per call
+a * b through Numeric.Implicits: 2 searches per call
