@@ -90,7 +90,13 @@ trait LiveVariables extends ExprBuilder {
 
         override def nestedModuleClass(moduleClass: ClassDef): Unit = capturingCheck(moduleClass)
 
-        override def nestedMethod(defdef: DefDef): Unit = capturingCheck(defdef)
+        override def nestedMethod(defdef: DefDef): Unit = {
+          // The async body is the argument of the `locally` call added by `markForAsyncTransform` when uncurry sees it,
+          // so every try/catch in it has been lifted to a method. That method is called in place and nowhere else:
+          // its references are uses in this state, not captures.
+          if (isLiftedTry(defdef)) traverse(defdef.rhs)
+          else capturingCheck(defdef)
+        }
 
         override def synchronizedCall(arg: Tree): Unit = capturingCheck(arg)
 

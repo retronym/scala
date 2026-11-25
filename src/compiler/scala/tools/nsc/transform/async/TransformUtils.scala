@@ -114,6 +114,9 @@ private[async] trait TransformUtils extends AsyncTransformStates {
     * function, or by-name argument is encountered, the descent stops,
     * and `nestedClass` etc are invoked.
     */
+  /** Is this the method that uncurry lifted a try/catch into? It is called once, where it is defined. */
+  def isLiftedTry(defDef: DefDef): Boolean = defDef.symbol.isArtifact && defDef.name.startsWith(nme.LIFTED_TREE)
+
   trait AsyncTraverser extends Traverser {
     def nestedClass(classDef: ClassDef): Unit = {
     }

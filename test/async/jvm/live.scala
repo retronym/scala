@@ -167,6 +167,52 @@ package scala.async.run.live {
       block(baz).apply()
     }
 
+    // uncurry lifts a try/catch in the async body to a method, which is not a capture
+    @Test
+    def `zero out fields after use in try catch`(): Unit = {
+      def live: Set[Any] = testingEc.live[Cell[_]].map(_.v).toSet
+
+      def inStatement() = async {
+        val _0: Any = await(Cell(0))
+        val _1: Cell[Int] = await(Cell(1))
+        var n = await(0)
+        try {
+          n += _1.v
+        } catch {
+          case _: IllegalStateException => n = -1
+        }
+        await(0)
+        assertEquals("after try", Set(0), live)
+        identity(_0)
+        n
+      }
+      assertEquals(1, block(inStatement()))
+
+      def inExpression() = async {
+        val _0: Any = await(Cell(0))
+        val _1: Cell[String] = await(Cell("1"))
+        await(0)
+        val n = try _1.v.toInt catch { case _: NumberFormatException => -1 }
+        val m = await(n)
+        assertEquals("after try", Set(0), live)
+        identity(_0)
+        m
+      }
+      assertEquals(1, block(inExpression()))
+
+      def usedAfterTry() = async {
+        val _0: Any = await(Cell(0))
+        val _1: Cell[String] = await(Cell("1"))
+        await(0)
+        val n = try _1.v.toInt catch { case _: NumberFormatException => -1 }
+        val m = await(n)
+        assertEquals("after try", Set(0, "1"), live)
+        identity(_0)
+        m + _1.v.length
+      }
+      assertEquals(2, block(usedAfterTry()))
+    }
+
     // https://github.com/scala/async/issues/104
     @Test def dontNullOutVarsOfTypeNothing_t104(): Unit = {
       def errorGenerator(randomNum: Double) = {
