@@ -1,0 +1,10 @@
+direct(m) = List(Meters(1))
+direct(m).head.isInstanceOf[Meters] = true
+compound(m) = List(Meters(1))
+compound(m).head.isInstanceOf[Meters] = true
+bounded(m) = List(Meters(1))
+intersect[Any](m) = List(Meters(1))
+arr(m).getClass = Meters[]
+Array(m).getClass = Meters[]
+upcast(arr(m))(0) = Meters(1)
+classTag[Meters with Tagged] = Meters
