@@ -336,6 +336,7 @@ sealed class PriorityQueue[A](implicit val ord: Ordering[A])
     private[this] var i = resarr.p_size0 - 1
     def hasNext: Boolean = i >= 1
     def next(): A = {
+      if (!hasNext) Iterator.empty.next()
       val n = resarr.p_array(i)
       i -= 1
       toA(n)

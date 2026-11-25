@@ -124,4 +124,14 @@ class PriorityQueueTest {
     assertEquals(thingOne, newly.dequeue())
     assertEquals(thingTwo, pq.clone.dequeue())
   }
+
+  @Test
+  def `reverseIterator throws NoSuchElementException when exhausted`(): Unit = {
+    assertThrows[NoSuchElementException](PriorityQueue.empty[Int].reverseIterator.next())
+    assertThrows[NoSuchElementException](PriorityQueue.empty[String].reverseIterator.next())
+    val it = PriorityQueue(3, 1, 2).reverseIterator
+    assertEquals(3, it.size)
+    assertThrows[NoSuchElementException](it.next())
+    assertThrows[NoSuchElementException](it.next())
+  }
 }
