@@ -11,6 +11,36 @@ import scala.tools.testkit.AssertUtil.assertThrows
 
 class ArrayDequeTest {
 
+  @Test def `addAll of a sized source copies it in bulk when the free slots are contiguous`(): Unit = {
+    var nexts, copies = 0
+    val elems = Array.range(0, 100)
+    val src = new scala.collection.AbstractIterable[Int] {
+      override def knownSize = elems.length
+      def iterator = elems.iterator.map { e => nexts += 1; e }
+      override def copyToArray[B >: Int](xs: Array[B], start: Int, len: Int): Int = {
+        copies += 1
+        elems.copyToArray(xs, start, len)
+      }
+    }
+    val d = ArrayDeque(1, 2, 3)
+    d ++= src
+    assertEquals(List(1, 2, 3) ++ elems, d.toList)
+    assertEquals((0, 1), (nexts, copies))
+    // the free slots wrap around: elements are appended one by one
+    val w = new ArrayDeque[Int](16)
+    w ++= (1 to 12)
+    for (_ <- 1 to 10) w.removeHead()
+    w ++= (13 to 20).toVector
+    assertEquals((11 to 20).toList, w.toList)
+    // a view of the deque reads the elements it had before
+    val v = ArrayDeque(1, 2, 3)
+    v ++= v.view.map(_ * 10)
+    assertEquals(List(1, 2, 3, 10, 20, 30), v.toList)
+    val f = ArrayDeque(1, 2, 3)
+    assertThrows[RuntimeException](f ++= Vector(4, 5).view.map(x => if (x == 5) throw new RuntimeException else x))
+    assertEquals(List(1, 2, 3), f.toList)
+  }
+
   @Test
   def apply: Unit = {
     val buffer = ArrayDeque.empty[Int]

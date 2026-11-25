@@ -156,7 +156,20 @@ class ArrayBuffer[A] private (initialElements: Array[AnyRef], initialSize: Int)
           Array.copy(elems.array, 0, array, length, elemsLength)
           size0 = length + elemsLength
         }
-      case _ => super.addAll(elems)
+      case _ =>
+        val k = elems.knownSize
+        if (k > 0) {
+          // Copy in bulk, as `ArrayBuffer.from` does. The size is updated after the copy, so a view of this
+          // buffer reads only the elements it had before.
+          ensureSize(size0 + k)
+          var actual = -1
+          try actual = IterableOnce.copyElemsToArray(elems, array.asInstanceOf[Array[Any]], size0, k)
+          finally if (actual != k) java.util.Arrays.fill(array, size0, size0 + k, null)
+          if (actual != k) throw new IllegalStateException(s"Copied $actual of $k")
+          mutationCount += 1
+          size0 += k
+        }
+        else super.addAll(elems)
     }
     this
   }
