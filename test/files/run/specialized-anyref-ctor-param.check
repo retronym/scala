@@ -1,0 +1,10 @@
+specialized-anyref-ctor-param.scala:13: warning: Bounds prevent specialization of type T
+class X[@specialized(Int) T <: String](x0: T) {
+                          ^
+s
+1
+c
+a
+1
+x
+l
