@@ -1,0 +1,5 @@
+val n = b.use(): released
+val n = try b.use() finally ...: released
+val n = try b.use() catch ...: released
+var n = try b.use() catch ...: released
+val n = if (c) try b.use() catch ... else 0: released
