@@ -1,0 +1,11 @@
+5
+5
+5
+6
+5
+7
+BadClass: public int BadClass.myMethod(java.lang.Object)
+Sub: 
+SubOverride: public int SubOverride.myMethod(java.lang.Object)
+Leaf: public int Leaf.myMethod(java.lang.Object)
+MemberLeaf: public int MemberLeaf.m(java.lang.Object)
