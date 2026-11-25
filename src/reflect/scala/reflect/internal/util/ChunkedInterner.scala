@@ -13,7 +13,7 @@
 package scala
 package reflect.internal.util
 
-import java.lang.ref.{ReferenceQueue, WeakReference}
+import java.lang.ref.WeakReference
 
 /** A hash set for hash-consing, laid out so that G1 does not pay for it on every young collection.
  *
@@ -24,9 +24,9 @@ import java.lang.ref.{ReferenceQueue, WeakReference}
  *  object, which dirties a card that the next young collection scans. A chunk is allocated young, and a growth
  *  rebuilds the table into fresh, young chunks.
  *
- *  - `weak = true`: each element is held by a `Ref`, a `WeakReference` that also carries the element's hash. When an
- *    element is collected its slot becomes a tombstone, and the next rebuild drops it. There is no per-element chain
- *    link.
+ *  - `weak = true`: each element is held by a `WeakReference`, registered with no queue. A lookup skips the slot of
+ *    a collected element, and the next rebuild drops it. Draining a queue to free such slots earlier would cost a
+ *    lock per collected element. There is no per-element chain link.
  *  - `weak = false`: elements are held strongly until `clear`, with no object per element.
  *
  *  Elements are compared with `equals`, probe first, as in `WeakHashSet.findEntryOrUpdate`. Lookups do not
@@ -40,11 +40,11 @@ final class ChunkedInterner[A <: AnyRef](initialCapacity: Int, val weak: Boolean
   private[this] var mask: Int = InitialCapacity - 1
   private[this] var hashes: Array[Array[Int]] = newHashes(InitialCapacity)
   private[this] var elems: Array[Array[AnyRef]] = newElems(InitialCapacity)
-  /** live elements plus tombstones */
+  /** occupied slots: elements, live or (if `weak`) collected */
   private[this] var used = 0
+  /** elements added since the last rebuild; if `weak`, some may since have been collected */
   private[this] var live = 0
-  private[this] val queue: ReferenceQueue[AnyRef] = if (weak) new ReferenceQueue[AnyRef] else null
-  // The slot where a failed `find` would insert (the first tombstone it passed, or the empty slot that ended it), so
+  // The slot where a failed `find` would insert (the empty slot that ended it), so
   // that `add` can store there without probing again. It is valid only while `stamp` is unchanged and for the same
   // hash: the caller may intern into this table between the `find` and the `add`, for example while constructing
   // the element.
@@ -53,29 +53,25 @@ final class ChunkedInterner[A <: AnyRef](initialCapacity: Int, val weak: Boolean
   private[this] var freeHash = 0
   private[this] var freeStamp = -1
 
-  /** The element held at the non-null slot content `e`, or null if `e` is a tombstone or its element was collected. */
+  /** The element held at the non-null slot content `e`, or null if its element was collected. */
   @inline private[this] def deref(e: AnyRef): A =
     if (!weak) e.asInstanceOf[A]
-    else if (e eq Tombstone) null.asInstanceOf[A]
-    else e.asInstanceOf[Ref].get().asInstanceOf[A]
+    else e.asInstanceOf[WeakReference[AnyRef]].get().asInstanceOf[A]
 
   /** The element with hash `h` that `probe` equals, or null. */
   def find(h: Int, probe: AnyRef): A = {
-    removeStaleEntries()
     val mask = this.mask
     val elems = this.elems
     val hashes = this.hashes
     var i = spread(h) & mask
-    var tomb = -1
     while (true) {
       val e = elems(i >>> ChunkBits)(i & ChunkMask)
       if (e == null) {
-        free = if (tomb >= 0) tomb else i
+        free = i
         freeHash = h
         freeStamp = stamp
         return null.asInstanceOf[A]
       }
-      if (tomb < 0 && (e eq Tombstone)) tomb = i
       if (hashes(i >>> ChunkBits)(i & ChunkMask) == h) {
         val x = deref(e)
         if (x != null && probe.equals(x)) return x
@@ -87,10 +83,11 @@ final class ChunkedInterner[A <: AnyRef](initialCapacity: Int, val weak: Boolean
 
   /** Add `elem`, with hash `h`, which a `find` just failed to find. */
   def add[T <: A](elem: T, h: Int): T = {
-    val e = if (weak) new Ref(elem, h, queue) else elem
+    val e = if (weak) new WeakReference[AnyRef](elem) else elem
     if ((used + 1) * 2 > mask + 1) {
-      // grow if live elements fill a quarter of the table, otherwise rebuild at the same size to drop tombstones
-      rebuild(if (live * 4 >= mask + 1) (mask + 1) * 2 else mask + 1)
+      // grow if live elements fill a quarter of the table, otherwise rebuild at the same size to drop collected
+      // elements
+      rebuild(if (countLive() * 4 >= mask + 1) (mask + 1) * 2 else mask + 1)
       insert(e, h)
     }
     else if (freeStamp == stamp && freeHash == h) store(free, e, h)
@@ -108,20 +105,20 @@ final class ChunkedInterner[A <: AnyRef](initialCapacity: Int, val weak: Boolean
     if (e != null) e.asInstanceOf[T] else add(elem, h)
   }
 
-  /** Store slot content `e` (an element or its `Ref`) with hash `h` in the first free slot of its probe sequence. */
+  /** Store slot content `e` (an element or its `WeakReference`) with hash `h` in the first free slot of its probe sequence. */
   private[this] def insert(e: AnyRef, h: Int): Unit = {
     var i = spread(h) & mask
     var x = elems(i >>> ChunkBits)(i & ChunkMask)
-    while (x != null && (x ne Tombstone)) {
+    while (x != null) {
       i = (i + 1) & mask
       x = elems(i >>> ChunkBits)(i & ChunkMask)
     }
     store(i, e, h)
   }
 
-  /** Store slot content `e` with hash `h` at the empty or tombstone slot `i`. */
+  /** Store slot content `e` with hash `h` at the empty slot `i`. */
   private[this] def store(i: Int, e: AnyRef, h: Int): Unit = {
-    if (elems(i >>> ChunkBits)(i & ChunkMask) == null) used += 1 // a tombstone is already counted
+    used += 1
     elems(i >>> ChunkBits)(i & ChunkMask) = e
     hashes(i >>> ChunkBits)(i & ChunkMask) = h
   }
@@ -153,25 +150,21 @@ final class ChunkedInterner[A <: AnyRef](initialCapacity: Int, val weak: Boolean
     }
   }
 
-  /** Turn the slots of collected elements into tombstones. */
-  private[this] def removeStaleEntries(): Unit = if (weak) {
-    var stale = queue.poll()
-    while (stale != null) {
-      val ref = stale.asInstanceOf[Ref]
-      var i = spread(ref.hash) & mask
-      var done = false
-      while (!done) {
-        val e = elems(i >>> ChunkBits)(i & ChunkMask)
-        if (e == null) done = true // a rebuild already dropped it
-        else if (e eq ref) {
-          elems(i >>> ChunkBits)(i & ChunkMask) = Tombstone
-          live -= 1
-          done = true
-        }
-        else i = (i + 1) & mask
+  /** The number of elements that have not been collected. */
+  private[this] def countLive(): Int = if (!weak) live else {
+    var n = 0
+    var c = 0
+    while (c < elems.length) {
+      val es = elems(c)
+      var j = 0
+      while (j < es.length) {
+        val e = es(j)
+        if (e != null && deref(e) != null) n += 1
+        j += 1
       }
-      stale = queue.poll()
+      c += 1
     }
+    n
   }
 
   def clear(): Unit = {
@@ -181,11 +174,10 @@ final class ChunkedInterner[A <: AnyRef](initialCapacity: Int, val weak: Boolean
     hashes = newHashes(InitialCapacity)
     used = 0
     live = 0
-    if (weak) while (queue.poll() != null) ()
   }
 
-  /** The number of elements, counting ones collected since the last lookup. */
-  def size: Int = live
+  /** The number of elements. If `weak`, this scans the table. */
+  def size: Int = countLive()
 
   /** The number of chunks per array, for testing. */
   private[util] def chunkCount: Int = elems.length
@@ -195,10 +187,6 @@ object ChunkedInterner {
   final val ChunkBits = 16
   final val ChunkSize = 1 << ChunkBits
   final val ChunkMask = ChunkSize - 1
-
-  final class Ref(elem: AnyRef, val hash: Int, queue: ReferenceQueue[AnyRef]) extends WeakReference[AnyRef](elem, queue)
-
-  private val Tombstone: AnyRef = new Object
 
   /** Spread the bits of `hash`, as `WeakHashSet` and `java.util.HashMap` do, so that linear probing over the low bits
    *  does not cluster on hash codes that differ only in their high bits. */
