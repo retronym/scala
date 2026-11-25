@@ -18,7 +18,6 @@ package tpe
 import scala.annotation.tailrec
 import scala.collection.mutable
 import util.{StringContextStripMarginOps, TriState}
-import java.util.IdentityHashMap
 
 trait TypeComparers {
   self: SymbolTable =>
@@ -31,15 +30,41 @@ trait TypeComparers {
   private[this] val _pendingSubTypes = new mutable.HashSet[SubTypePair]
   def pendingSubTypes = _pendingSubTypes
 
-  private[this] val _knownFalseSubTypes = new IdentityHashMap[Type, List[Type]]
-  def knownFalseSubTypes = _knownFalseSubTypes
+  /** The recursion depth from which `isSubType` records the pairs it is working on in `pendingSubTypes`, and
+   *  answers `false` for a pair that is already there: `LogPendingSubTypesThreshold`, until a pair is cut off in
+   *  this way, and then 0 until the outermost check returns.
+   *
+   *  A check that only recurses deeply, as one of two long `::` types does, never finds a pair pending and is not
+   *  affected. One that does has been shown to loop. From then on pairs are recorded at every depth, and those
+   *  found to conform are kept in `provenSubTypes`. Otherwise each branch that the check takes on its way back up
+   *  has to recurse to the threshold again before its loop is noticed, which takes time exponential in the
+   *  threshold if the loop branches (scala/bug#13119).
+   *
+   *  The `false` given for a pending pair only says that the pair can't be derived from itself. It is not the
+   *  answer for that pair, which may still hold for another reason, and a `false` computed from it for another pair
+   *  is provisional in the same way. So no negative answer is remembered. A `true` is different: no rule of
+   *  `isSubType` has the failure of another check as a premise (`isDifferentTypeConstructor` only keeps the rules
+   *  for an abstract type's bounds from retrying with the type they started from; they are valid without it), so a
+   *  derivation in which some questions were answered `false` too early is still a derivation, and its conclusion
+   *  can be used again. It is remembered unless the pair has type variables, for which the answer depends on, and
+   *  adds to, their constraints.
+   */
+  private[this] var _pendingSubTypesFrom: Int = LogPendingSubTypesThreshold
+  def pendingSubTypesFrom = _pendingSubTypesFrom
+  def pendingSubTypesFrom_=(value: Int) = _pendingSubTypesFrom = value
 
-  // Called on every top-level `isSubType` / `isSameType`, but the map is only populated for pathological recursive
-  // subtype checks. Guard the `clear()`, as `IdentityHashMap.clear` zeroes the entire table even when empty.
-  private def clearKnownFalseSubTypes(): Unit = {
-    val m = knownFalseSubTypes
-    if (!m.isEmpty) m.clear()
-  }
+  /** Pairs without type variables found to conform since a pair was cut off as pending in the current outermost
+   *  check; empty otherwise. See `pendingSubTypesFrom`.
+   */
+  private[this] val _provenSubTypes = new mutable.HashSet[SubTypePair]
+  def provenSubTypes = _provenSubTypes
+
+  // Called when a top-level `isSubType` / `isSameType` returns, normally or not.
+  private def resetPendingSubTypesFrom(): Unit =
+    if (pendingSubTypesFrom != LogPendingSubTypesThreshold) {
+      pendingSubTypesFrom = LogPendingSubTypesThreshold
+      provenSubTypes.clear()
+    }
 
   final case class SubTypePair(tp1: Type, tp2: Type) {
     // scala/bug#8146 we used to implement equality here in terms of pairwise =:=.
@@ -103,7 +128,7 @@ trait TypeComparers {
   } finally {
     subsametypeRecursions -= 1
     if (subsametypeRecursions == 0) {
-      clearKnownFalseSubTypes()
+      resetPendingSubTypesFrom()
       // undoLog.clear() // too eager, breaks #3281, #3866
     }
   }
@@ -141,7 +166,7 @@ trait TypeComparers {
   finally {
     subsametypeRecursions -= 1
     if (subsametypeRecursions == 0) {
-      clearKnownFalseSubTypes()
+      resetPendingSubTypesFrom()
       // undoLog.clear() // too eager, breaks #3281, #3866
     }
   }
@@ -310,23 +335,26 @@ trait TypeComparers {
     var result = false
 
     try result = { // if subtype test fails, it should not affect constraints on typevars
-      if (subsametypeRecursions >= LogPendingSubTypesThreshold) {
+      val from = pendingSubTypesFrom
+      if (subsametypeRecursions >= from) {
         val p = SubTypePair(tp1, tp2)
-        if (pendingSubTypes(p)) {
-          val ts = knownFalseSubTypes.get(tp1)
-          val cur = if (ts != null) ts else Nil
-          knownFalseSubTypes.put(tp1, tp2 :: cur) // see scala/bug#13119
+        if (from == 0 && provenSubTypes(p))
+          true
+        else if (pendingSubTypes(p)) {
+          if (from != 0) pendingSubTypesFrom = 0 // see scala/bug#13119
           false // see neg/t8146-no-finitary*
-        } else
-          try {
-            pendingSubTypes += p
-            isSubType1(tp1, tp2, depth)
-          } finally {
-            pendingSubTypes -= p
-          }
-      } else if (!knownFalseSubTypes.isEmpty && { val ts = knownFalseSubTypes.get(tp1); ts != null && ts.contains(tp2) }) {
-        // redundant `isEmpty` check is probably premature optimization, but isSubType is perf sensitive
-        false
+        } else {
+          val res =
+            try {
+              pendingSubTypes += p
+              isSubType1(tp1, tp2, depth)
+            } finally {
+              pendingSubTypes -= p
+            }
+          // only once a pair has been cut off, here or below: a check that is merely deep must not pay for the traversals
+          if (res && pendingSubTypesFrom == 0 && !typeContainsTypeVar(tp1) && !typeContainsTypeVar(tp2)) provenSubTypes += p
+          res
+        }
       } else {
         isSubType1(tp1, tp2, depth)
       }
@@ -336,7 +364,7 @@ trait TypeComparers {
   } finally {
     subsametypeRecursions -= 1
     if (subsametypeRecursions == 0) {
-      clearKnownFalseSubTypes()
+      resetPendingSubTypesFrom()
       // undoLog.clear() // too eager, breaks #3281, #3866
     }
   }
