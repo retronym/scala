@@ -378,7 +378,7 @@ trait Logic extends Debugging {
       def recursionDepthReached =
         s"Exhaustivity analysis reached max recursion depth, not all missing cases are reported.\n($advice)"
 
-      abstract class Exception(val advice: String) extends RuntimeException("CNF budget exceeded")
+      abstract class Exception(val advice: String) extends RuntimeException("CNF budget exceeded", null, false, false)
 
       object formulaSizeExceeded extends Exception(s"The analysis required more space than allowed.\n$advice")
 

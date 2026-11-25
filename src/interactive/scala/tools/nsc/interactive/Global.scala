@@ -1440,4 +1440,5 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
   finishInitialization()
 }
 
-object CancelException extends Exception
+// Without a stack trace, which would keep the classes on the stack of its first use reachable.
+object CancelException extends Exception(null, null, false, false)

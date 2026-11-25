@@ -583,7 +583,8 @@ final class GlbLubs[U <: SymbolTable with Singleton](val self: U) {
     res
   }
 
-  val GlbFailure = new Throwable
+  // Without a stack trace, like `CyclicInheritance`.
+  val GlbFailure: Throwable = new Throwable(null, null, false, false) {}
 
   /** A global counter for glb calls in the `specializes` query connected to the `addMembers`
     *  call in `glb`. There's a possible infinite recursion when `specializes` calls
