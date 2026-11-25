@@ -73,10 +73,29 @@ object IntMap {
       else IntMap.Tip(key, s)
   }
 
-  private[immutable] case class Bin[+T](prefix: Int, mask: Int, left: IntMap[T], right: IntMap[T]) extends IntMap[T] {
+  /** A branch of the Patricia trie. `prefix` has the branching bit `mask` and all bits below it clear, so both
+   *  are kept in one word, `prefixMask = prefix | mask`, which saves a field per branch.
+   */
+  private[immutable] final class Bin[+T](prefixMask: Int, val left: IntMap[T], val right: IntMap[T]) extends IntMap[T] {
+    def prefix: Int = prefixMask & (prefixMask - 1)
+    def mask: Int = prefixMask & -prefixMask
     def bin[S](left: IntMap[S], right: IntMap[S]): IntMap[S] = {
       if ((this.left eq left) && (this.right eq right)) this.asInstanceOf[IntMap.Bin[S]]
       else IntMap.Bin[S](prefix, mask, left, right)
+    }
+  }
+
+  private[immutable] object Bin {
+    def apply[T](prefix: Int, mask: Int, left: IntMap[T], right: IntMap[T]): Bin[T] = new Bin(prefix | mask, left, right)
+    // An allocation-free, irrefutable extractor, so that `Bin(prefix, mask, left, right)` patterns read as before
+    def unapply[T](bin: Bin[T]): Extractor[T] = new Extractor(bin)
+    final class Extractor[+T](private val bin: Bin[T]) extends AnyVal {
+      def isEmpty: false = false
+      def get: Extractor[T] = this
+      def _1: Int = bin.prefix
+      def _2: Int = bin.mask
+      def _3: IntMap[T] = bin.left
+      def _4: IntMap[T] = bin.right
     }
   }
 
@@ -290,7 +309,7 @@ sealed abstract class IntMap[+T] extends AbstractMap[Int, T]
 
   @tailrec
   final def get(key: Int): Option[T] = this match {
-    case IntMap.Bin(prefix, mask, left, right) => if (zero(key, mask)) left.get(key) else right.get(key)
+    case b: IntMap.Bin[T] => if (zero(key, b.mask)) b.left.get(key) else b.right.get(key)
     case IntMap.Tip(key2, value) => if (key == key2) Some(value) else None
     case IntMap.Nil => None
   }
@@ -299,13 +318,13 @@ sealed abstract class IntMap[+T] extends AbstractMap[Int, T]
   final override def getOrElse[S >: T](key: Int, default: => S): S = this match {
     case IntMap.Nil => default
     case IntMap.Tip(key2, value) => if (key == key2) value else default
-    case IntMap.Bin(prefix, mask, left, right) =>
-      if (zero(key, mask)) left.getOrElse(key, default) else right.getOrElse(key, default)
+    case b: IntMap.Bin[T] =>
+      if (zero(key, b.mask)) b.left.getOrElse(key, default) else b.right.getOrElse(key, default)
   }
 
   @tailrec
   final override def apply(key: Int): T = this match {
-    case IntMap.Bin(prefix, mask, left, right) => if (zero(key, mask)) left(key) else right(key)
+    case b: IntMap.Bin[T] => if (zero(key, b.mask)) b.left(key) else b.right(key)
     case IntMap.Tip(key2, value) => if (key == key2) value else throw new IllegalArgumentException("Key not found")
     case IntMap.Nil => throw new IllegalArgumentException("key not found")
   }
@@ -410,7 +429,7 @@ sealed abstract class IntMap[+T] extends AbstractMap[Int, T]
     * @return        Union of `this` and `that`, with identical key conflicts resolved using the function `f`.
     */
   def unionWith[S >: T](that: IntMap[S], f: (Int, S, S) => S): IntMap[S] = (this, that) match{
-    case (IntMap.Bin(p1, m1, l1, r1), that@(IntMap.Bin(p2, m2, l2, r2))) =>
+    case (IntMap.Bin(p1, m1, l1, r1), IntMap.Bin(p2, m2, l2, r2)) =>
       if (shorter(m1, m2)) {
         if (!hasMatch(p2, p1, m1)) join(p1, this, p2, that)
         else if (zero(p2, m1)) IntMap.Bin(p1, m1, l1.unionWith(that, f), r1)
@@ -442,7 +461,7 @@ sealed abstract class IntMap[+T] extends AbstractMap[Int, T]
     * @return        Intersection of `this` and `that`, with values for identical keys produced by function `f`.
     */
   def intersectionWith[S, R](that: IntMap[S], f: (Int, T, S) => R): IntMap[R] = (this, that) match {
-    case (IntMap.Bin(p1, m1, l1, r1), that@IntMap.Bin(p2, m2, l2, r2)) =>
+    case (IntMap.Bin(p1, m1, l1, r1), IntMap.Bin(p2, m2, l2, r2)) =>
       if (shorter(m1, m2)) {
         if (!hasMatch(p2, p1, m1)) IntMap.Nil
         else if (zero(p2, m1)) l1.intersectionWith(that, f)
@@ -483,7 +502,7 @@ sealed abstract class IntMap[+T] extends AbstractMap[Int, T]
     */
   @tailrec
   final def firstKey: Int = this match {
-    case Bin(_, _, l, r) => l.firstKey
+    case b: Bin[T] => b.left.firstKey
     case Tip(k, v) => k
     case IntMap.Nil => throw new IllegalStateException("Empty set")
   }
@@ -493,7 +512,7 @@ sealed abstract class IntMap[+T] extends AbstractMap[Int, T]
     */
   @tailrec
   final def lastKey: Int = this match {
-    case Bin(_, _, l, r) => r.lastKey
+    case b: Bin[T] => b.right.lastKey
     case Tip(k, v) => k
     case IntMap.Nil => throw new IllegalStateException("Empty set")
   }
