@@ -108,13 +108,34 @@ abstract class Erasure extends InfoTransform
   // * higher-order type parameters
   // * type parameters appearing in method parameters
   // * type members not visible in an enclosing template
+  // * type parameters of a method that Java reflection cannot find (see `hiddenByLocalMethod`)
   private def isTypeParameterInSig(sym: Symbol, initialSymbol: Symbol) = (
     !sym.isHigherOrderTypeParameter &&
     sym.isTypeParameterOrSkolem && (
       (initialSymbol.isMethod && initialSymbol.typeParams.contains(sym)) ||
-      (initialSymbol.ownersIterator.exists(encl => encl.isClass && !encl.hasPackageFlag && sym.isNestedIn(encl)))
+      (initialSymbol.ownersIterator.exists(encl => encl.isClass && !encl.hasPackageFlag && sym.isNestedIn(encl)) &&
+        !hiddenByLocalMethod(sym, initialSymbol))
     )
   )
+
+  // A class nested in a method can refer to a type parameter of that method. A reader of the class file finds
+  // its declaration through the EnclosingMethod attribute of the class, which names the innermost method
+  // around the class, and that method's Signature (jvms-4.7.9.1). A local method is lifted and has no
+  // Signature, so this fails for a type parameter of a local method, and for one of a method that has a local
+  // method between it and the class:
+  //   def f[B] = { def g[T] = new java.util.ArrayList[(B, T)] {}; g[Int] }
+  // Neither `B` nor `T` can be found from the anonymous class, so they are erased in its signatures.
+  private def hiddenByLocalMethod(tparam: Symbol, initialSymbol: Symbol): Boolean = {
+    val meth = tparam.owner
+    // LambdaLift changes the owner of local classes and methods, the nesting in the source is in `originalOwner`
+    meth.isMethod && (!meth.originalOwner.isClass || {
+      // the outermost class or method around `initialSymbol` that is nested in `meth`
+      @tailrec def loop(sym: Symbol, outermost: Symbol): Symbol =
+        if (sym == meth || sym == NoSymbol || sym.hasPackageFlag) outermost
+        else loop(sym.originalOwner, if (sym.isClass || sym.isSourceMethod) sym else outermost)
+      loop(initialSymbol, NoSymbol).isSourceMethod
+    })
+  }
 
   /** This object is only used for confidence checking when -check:genjvm is set.
    *  In that case we make sure that the erasure of the `normalized` type
