@@ -119,4 +119,26 @@ class StringConcatTest extends BytecodeTesting {
     val r = s.replaceAll("""\[C@\w+""", "<ARRAY>")
     assertEquals(r, "meTTT()trued312312.3-32-4.2sbufchsq<ARRAY>")
   }
+
+  @Test
+  def emptyStringPlusValue(): Unit = {
+    val code =
+      """class C {
+        |  def t1(x: Object) = "" + x
+        |  def t2(x: Object) = s"$x"
+        |  def t3(x: String) = "" + x
+        |  def t4(x: Int) = "" + x
+        |}
+      """.stripMargin
+    val c = compileClass(code)
+    def invokeNameDesc(m: String): List[String] = getInstructions(c, m) collect {
+      case Invoke(_, _, name, desc, _) => name + desc
+    }
+    val valueOf = "valueOf(Ljava/lang/Object;)Ljava/lang/String;"
+    // the second call maps a null result of `x.toString` to "null"
+    assertEquals(List(valueOf, valueOf), invokeNameDesc("t1"))
+    assertEquals(List(valueOf, valueOf), invokeNameDesc("t2"))
+    assertEquals(List(valueOf), invokeNameDesc("t3"))
+    assertEquals(List("boxToInteger(I)Ljava/lang/Integer;", valueOf), invokeNameDesc("t4"))
+  }
 }

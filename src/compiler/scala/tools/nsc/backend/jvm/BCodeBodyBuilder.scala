@@ -1170,6 +1170,14 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
         case List(Literal(Constant("")), arg) =>
           genLoad(arg, ObjectRef)
           genCallMethod(String_valueOf, InvokeStyle.Static, arg.pos)
+          // `String.valueOf(x)` returns `x.toString`, which may be null, but a concatenation yields "null" in
+          // that case. A second `valueOf` maps null to "null". Strings and boxed primitives don't need it.
+          val toStringNonNull = tpeTK(arg) == StringRef || (arg match {
+            case Apply(boxOp, _ :: Nil) => currentRun.runDefinitions.isBox(boxOp.symbol)
+            case _ => false
+          })
+          if (!toStringNonNull)
+            genCallMethod(String_valueOf, InvokeStyle.Static, arg.pos)
 
         case concatenations =>
 
