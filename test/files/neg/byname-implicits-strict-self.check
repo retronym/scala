@@ -1,0 +1,13 @@
+byname-implicits-strict-self.scala:15: error: diverging implicit expansion for type => T
+starting with method d in object T
+  f
+  ^
+byname-implicits-strict-self.scala:16: error: diverging implicit expansion for type => U
+starting with method v in object V
+  g
+  ^
+byname-implicits-strict-self.scala:17: error: diverging implicit expansion for type T
+starting with method d in object T
+  h
+  ^
+3 errors
