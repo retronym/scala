@@ -18,6 +18,9 @@ import scala.reflect.internal.Flags._
 trait Lifter extends ExprBuilder {
   import global._
 
+  /** Marks the lifted definition of a local `val`, which is otherwise indistinguishable from that of a `var`. */
+  case object LiftedVal extends PlainAttachment
+
   /**
    * Identify which DefTrees are used (including transitively) which are declared
    * in some state but used (including transitively) in another state.
@@ -150,6 +153,7 @@ trait Lifter extends ExprBuilder {
         val treeLifted = t match {
           case vd@ValDef(_, _, tpt, rhs)                    =>
             val isLazy = sym.isLazy
+            val isVal = !sym.isMutable
             sym.setFlag(STABLE)
             if (currentTransformState.exteralFsmSelfParam == NoSymbol)
               sym.setFlag(PRIVATE | LOCAL)
@@ -158,7 +162,8 @@ trait Lifter extends ExprBuilder {
             sym.setFlag(MUTABLE)
             sym.setName(currentTransformState.name.freshenIfNeeded(sym.name.toTermName))
             sym.setInfo(sym.info.deconst)
-            treeCopy.ValDef(vd, Modifiers(sym.flags), sym.name, TypeTree(sym.info).setPos(t.pos), EmptyTree)
+            val lifted = treeCopy.ValDef(vd, Modifiers(sym.flags), sym.name, TypeTree(sym.info).setPos(t.pos), EmptyTree)
+            if (isVal) lifted.updateAttachment(LiftedVal) else lifted
           case dd@DefDef(_, _, tparams, vparamss, tpt, rhs) =>
             sym.setName(currentTransformState.name.freshen(sym.name.toTermName))
             if (currentTransformState.exteralFsmSelfParam == NoSymbol)
