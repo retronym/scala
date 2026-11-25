@@ -657,6 +657,10 @@ abstract class BCodeHelpers extends BCodeIdiomatic {
       || sym.isArtifact
       || sym.isLiftedMethod
       || sym.isBridge
+      // The static `$init$` of a trait takes the trait as its only parameter, which `mkStatic` types as the
+      // trait without type arguments. In a generic outer class, that is `Outer<C>.Inner`: malformed if `Inner`
+      // is generic, and it refers to a type parameter of the class from a static method (scala/bug#12510).
+      || sym.isMixinConstructor
     )
 
     /* @return
