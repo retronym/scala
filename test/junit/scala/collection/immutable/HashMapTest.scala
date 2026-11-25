@@ -8,10 +8,35 @@ import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 
 import scala.tools.testkit.AllocationTest
-import scala.tools.testkit.AssertUtil.assertThrows
+import scala.tools.testkit.AssertUtil.{assertNotReachable, assertThrows}
 
 @RunWith(classOf[JUnit4])
 class HashMapTest extends AllocationTest{
+
+  /** A set derived from `keySet` by adding, removing or filtering keys is a new set; it should not keep the values
+   *  of the map it was derived from. (`keySet` itself is documented to keep a reference to the map.)
+   */
+  @Test
+  def setsDerivedFromKeySetDoNotRetainValues(): Unit = {
+    def retains(op: Set[Int] => Set[Int]): Boolean = {
+      val value = new Object
+      val ref = new java.lang.ref.SoftReference(value)
+      val m = HashMap(1 -> ref.get(), 2 -> new Object, 3 -> new Object)
+      val derived = op(m.keySet)
+      assertTrue(derived.contains(1))
+      scala.util.Try(assertNotReachable(value, derived)(())).isFailure
+    }
+    val ops = List[(String, Set[Int] => Set[Int])](
+      "keySet + k"        -> (_ + 4),
+      "keySet - k"        -> (_ - 2),
+      "keySet.filter"     -> (_.filter(_ != 2)),
+      "keySet.filterNot"  -> (_.filterNot(_ == 2)),
+      "keySet & s"        -> (_ & Set(1, 2)),
+      "keySet ++ s"       -> (_ ++ Set(4)),
+      "keySet.diff(s)"    -> (_.diff(Set(2))),
+    )
+    assertEquals("operations whose result keeps the values of the map", Nil, ops.filter(op => retains(op._2)).map(_._1))
+  }
 
   @Test
   def canMergeIdenticalHashMaps(): Unit = {
