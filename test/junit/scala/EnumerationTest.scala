@@ -26,4 +26,15 @@ class EnumerationTest {
     }
     assertSame(Ordering[MyEnum.Value], MyEnum.ValueOrdering)
   }
+
+  @Test def iteratorFromNegativeIds(): Unit = {
+    object Neg extends Enumeration {
+      val M2 = Value(-2); val M1 = Value(-1); val Z = Value(0); val P1 = Value(1); val P2 = Value(2)
+    }
+    import Neg._
+    assertEquals(List(Z, P1, P2), values.iteratorFrom(Z).toList)
+    assertEquals(List(P2), values.iteratorFrom(P2).toList)
+    assertEquals(List(M2, M1, Z, P1, P2), values.iteratorFrom(M2).toList)
+    assertEquals(values.rangeFrom(M1).toList, values.iteratorFrom(M1).toList)
+  }
 }
