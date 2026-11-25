@@ -126,10 +126,12 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
    */
   private[nsc] def isStableContext(tree: Tree, mode: Mode, pt: Type) = {
     def ptSym = pt.typeSymbol
+    // The cheap tests come first: `pt.isStable` can force an `OverloadedArgProto`'s expected type,
+    // and the subtype test is only needed for an abstract or refinement `pt`.
     def expectsStable = (
-         pt.isStable
-      || mode.inQualMode && !tree.symbol.isConstant
-      || !(tree.tpe <:< pt) && (ptSym.isAbstractType && pt.lowerBound.isStable || ptSym.isRefinementClass)
+         mode.inQualMode && !tree.symbol.isConstant
+      || pt.isStable
+      || (ptSym.isAbstractType && pt.lowerBound.isStable || ptSym.isRefinementClass) && !(tree.tpe <:< pt)
     )
     def isNarrowable(tpe: Type): Boolean = unwrapWrapperTypes(tpe) match {
       case TypeRef(_, _, _) | RefinedType(_, _) => true
@@ -153,9 +155,10 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       tree.symbol
     }
     val isStableIdPattern = mode.typingPatternNotConstructor && tree.isTerm
+    // `admitsTypeSelection` walks the whole qualifier chain, so it goes last.
     def isModuleTypedExpr = (
-         treeInfo.admitsTypeSelection(tree)
-      && (isStableContext(tree, mode, pt) || sym.isModuleNotMethod)
+         (sym.isModuleNotMethod || isStableContext(tree, mode, pt))
+      && treeInfo.admitsTypeSelection(tree)
     )
     def isStableValueRequired = (
          isStableIdPattern
