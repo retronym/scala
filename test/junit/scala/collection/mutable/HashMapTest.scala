@@ -262,4 +262,27 @@ class HashMapTest {
       .mapValuesInPlace((_, _) => -1)
     assertTrue(m.toString, m.forall(_._2 == -1))
   }
+
+  // Doubles with short binary fractions hash through Float.hashCode, whose low bits are zero;
+  // the table index must still spread them about as well as random hashes.
+  @Test
+  def binaryFractionDoubleKeysSpread(): Unit = {
+    def nodesPerLookup(m: HashMap[Double, Unit]): Double = {
+      val tableField = classOf[HashMap[_, _]].getDeclaredFields.find(_.getName.endsWith("table")).get
+      tableField.setAccessible(true)
+      val table = tableField.get(m).asInstanceOf[Array[HashMap.Node[Double, Unit]]]
+      var visits = 0L
+      for (b <- table) {
+        var n = b; var depth = 0
+        while (n ne null) { depth += 1; visits += depth; n = n.next }
+      }
+      visits.toDouble / m.size
+    }
+    val n = 1 << 18
+    val whole = HashMap.from((0 until n).map(i => i.toDouble -> (())))
+    val quarters = HashMap.from((0 until n).map(i => (i / 4.0) -> (())))
+    val wholeCost = nodesPerLookup(whole)
+    val quartersCost = nodesPerLookup(quarters)
+    assertTrue(s"nodes visited per lookup: i / 4.0 $quartersCost, whole numbers $wholeCost", quartersCost < 1.5)
+  }
 }
