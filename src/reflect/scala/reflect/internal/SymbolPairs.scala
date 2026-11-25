@@ -103,6 +103,62 @@ abstract class SymbolPairs {
     def isValidFor(sym: Symbol): Boolean = (sym eq this.sym) && period == currentPeriod && (sym.rawInfo eq info)
   }
 
+  /** The members that can take part in a pair, numbered from 0 in the order they are added. Held in arrays,
+   *  not a `Scope`, to avoid an entry and a hash table per member for every cursor.
+   *
+   *  Each member is linked to the previous member with the same name, and members can be marked as visited.
+   *  `link` must be called once all members have been added.
+   */
+  private final class MemberTable {
+    private[this] var syms: Array[Symbol] = new Array[Symbol](64)
+    private[this] var prevSame: Array[Int] = _
+    private[this] var visited: Array[Long] = _
+    private[this] var count = 0
+
+    def size: Int = count
+    def apply(i: Int): Symbol = syms(i)
+
+    def add(sym: Symbol): Unit = {
+      if (count == syms.length) syms = java.util.Arrays.copyOf(syms, count * 2)
+      syms(count) = sym
+      count += 1
+    }
+
+    /** Links each member to the previous one with the same name, through an open-addressed table of the last index seen per name. */
+    def link(): Unit = {
+      val n = count
+      prevSame = new Array[Int](n)
+      visited = new Array[Long]((n + 63) >>> 6)
+      var cap = 16
+      while (cap < n * 2) cap <<= 1
+      val mask = cap - 1
+      val lastSeen = new Array[Int](cap) // index + 1, or 0 for an empty slot
+      var i = 0
+      while (i < n) {
+        val name = syms(i).name
+        var h = (name.hashCode * 0x9E3779B9) >>> 16 & mask
+        while (lastSeen(h) != 0 && (syms(lastSeen(h) - 1).name ne name)) h = (h + 1) & mask
+        prevSame(i) = lastSeen(h) - 1
+        lastSeen(h) = i + 1
+        i += 1
+      }
+    }
+
+    /** The closest member before `i` with the same name as member `i`, or -1. The name is checked again, as it may
+     *  have changed since `link` (explicitouter expands the names of some private members, and the bridges cursor
+     *  is iterated at erasure).
+     */
+    def nextWithSameName(i: Int): Int = {
+      val name = syms(i).name
+      var j = prevSame(i)
+      while (j >= 0 && (syms(j).name ne name)) j = prevSame(j)
+      j
+    }
+
+    def isVisited(i: Int): Boolean = (visited(i >>> 6) & (1L << i)) != 0
+    def markVisited(i: Int): Unit = visited(i >>> 6) |= (1L << i)
+  }
+
   /** The cursor class
    *  @param base   the base class containing the participating symbols
    */
@@ -134,18 +190,10 @@ abstract class SymbolPairs {
 
     // All the symbols which can take part in a pair, in the order they are entered: deferred before concrete,
     // and within each, members of `Any` first and members of `base` last. The cursor walks them backwards, so a
-    // member is visited before the members it shadows. `syms(nextSame(i))` is the member before `syms(i)` with the same name, or -1.
-    private[this] var syms: Array[Symbol] = new Array[Symbol](64)
-    private[this] var size = 0
-    private[this] var nextSame: Array[Int] = null
+    // member is visited before the members it shadows.
+    private[this] val members = new MemberTable
 
-    /** The members that have already been visited as highSymbol
-     *  (but may have been excluded via hasCommonParentAsSubclass.)
-     *  These will not appear as lowSymbol. A bit set indexed like `syms`.
-     */
-    private[this] var visited: Array[Long] = null
-
-    /** Initialization has to run now so `syms` is populated before
+    /** Initialization has to run now so `members` is populated before
      *  the declaration of curIndex.
      */
     init()
@@ -168,7 +216,7 @@ abstract class SymbolPairs {
     private[this] var highMemberTypeCache: MemberTypeOf = _
 
     // The current indices of the candidates for low and high symbol, or -1.
-    private[this] var curIndex  = size - 1
+    private[this] var curIndex  = members.size - 1
     private[this] var nextIndex = curIndex
 
     // These fields are initially populated with a call to next().
@@ -176,19 +224,14 @@ abstract class SymbolPairs {
 
     // populate the above data structures
     private def init(): Unit = {
-      def add(sym: Symbol): Unit = {
-        if (size == syms.length) syms = java.util.Arrays.copyOf(syms, size * 2)
-        syms(size) = sym
-        size += 1
-      }
-      // Fill `syms` with lower symbols shadowing higher ones
+      // Fill `members` with lower symbols shadowing higher ones
       def fillDecls(bcs: List[Symbol], deferred: Boolean): Unit = {
         if (!bcs.isEmpty) {
           fillDecls(bcs.tail, deferred)
           var e = bcs.head.info.decls.elems
           while (e ne null) {
             if (e.sym.initialize.isDeferred == deferred && !exclude(e.sym))
-              add(e.sym)
+              members.add(e.sym)
             e = e.next
           }
         }
@@ -199,35 +242,7 @@ abstract class SymbolPairs {
       // then, concrete.
       fillDecls(bases, deferred = false)
 
-      // Link each member to the previous member with the same name, through an open-addressed table of the last index seen per name.
-      val n = size
-      nextSame = new Array[Int](n)
-      visited = new Array[Long]((n + 63) >>> 6)
-      var cap = 16
-      while (cap < n * 2) cap <<= 1
-      val mask = cap - 1
-      val lastSeen = new Array[Int](cap) // index + 1, or 0 for an empty slot
-      var i = 0
-      while (i < n) {
-        val name = syms(i).name
-        var h = (name.hashCode * 0x9E3779B9) >>> 16 & mask
-        while (lastSeen(h) != 0 && (syms(lastSeen(h) - 1).name ne name)) h = (h + 1) & mask
-        nextSame(i) = lastSeen(h) - 1
-        lastSeen(h) = i + 1
-        i += 1
-      }
-    }
-
-    private def isVisited(i: Int): Boolean = (visited(i >>> 6) & (1L << i)) != 0
-    private def markVisited(i: Int): Unit = visited(i >>> 6) |= (1L << i)
-
-    // The next member after `i` with the same name as `i`. The name is checked again, as it may have changed since `init`
-    // (explicitouter expands the names of some private members, and the bridges cursor is iterated at erasure).
-    private def lookupNext(i: Int): Int = {
-      val name = syms(i).name
-      var j = nextSame(i)
-      while (j >= 0 && (syms(j).name ne name)) j = nextSame(j)
-      j
+      members.link()
     }
 
     // We can only draw conclusions about linearisation from a non-trait parent; skip Object, being the top of the lattice.
@@ -241,14 +256,14 @@ abstract class SymbolPairs {
 
     @tailrec private def advanceNextEntry(): Unit = {
       if (nextIndex >= 0) {
-        nextIndex = lookupNext(nextIndex)
+        nextIndex = members.nextWithSameName(nextIndex)
         if (nextIndex >= 0) {
-          val high = syms(nextIndex)
+          val high = members(nextIndex)
           if (isObjectAnyPair(low, high)) {
-            markVisited(nextIndex)
+            members.markVisited(nextIndex)
             advanceNextEntry()
           } else {
-            val isMatch = matches(high) && { markVisited(nextIndex) ; true } // side-effect visited on all matches
+            val isMatch = matches(high) && { members.markVisited(nextIndex) ; true } // side-effect visited on all matches
 
             // Advance if no match, or if the particular cursor is not interested in this pair
             if (!isMatch || skipOwnerPair(low.owner, high.owner)) advanceNextEntry()
@@ -261,7 +276,7 @@ abstract class SymbolPairs {
       if (curIndex >= 0) {
         curIndex -= 1
         if (curIndex >= 0) {
-          if (isVisited(curIndex) || exclude(syms(curIndex)))
+          if (members.isVisited(curIndex) || exclude(members(curIndex)))
             advanceCurEntry()
           else
             nextIndex = curIndex
@@ -290,7 +305,7 @@ abstract class SymbolPairs {
     @tailrec
     final def next(): Unit = {
       if (curIndex >= 0) {
-        lowSymbol = syms(curIndex)
+        lowSymbol = members(curIndex)
         advanceNextEntry()        // sets highSymbol
         if (nextIndex < 0) {
           advanceCurEntry()
