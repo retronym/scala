@@ -1055,7 +1055,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
    *
    *  this method will return List('apply\$mcII\$sp')
    */
-  private def specialOverrides(clazz: Symbol) = logResultIf[List[Symbol]]("specialized overrides in " + clazz, _.nonEmpty) {
+  private def specialOverrides(clazz: Symbol, newDecls: List[Symbol]) = logResultIf[List[Symbol]]("specialized overrides in " + clazz, _.nonEmpty) {
     /* Return the overridden symbol in syms that needs a specialized overriding symbol,
      * together with its specialization environment. The overridden symbol may not be
      * the closest to 'overriding', in a given hierarchy.
@@ -1098,6 +1098,61 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
         }
       }
       (NoSymbol, emptyEnv)
+    }
+    /* A normalized member needs a special override as well when the overridden method mentions a specialized
+     * type parameter of its class:
+     *
+     *   class B[@specialized(Int) T] { def m[@specialized(Int) V](v: V, t: T) = .. }
+     *   class C extends B[Int] { override def m[@specialized(Int) V](v: V, t: Int) = .. }
+     *
+     * `C.m$mIc$sp` overrides the normalized member `B.m$mIc$sp`, which has the overload `m$mIcI$sp`,
+     * implemented in `B$mcI$sp`. `C` gets a `m$mIcI$sp` that calls its `m$mIc$sp`. The normalized members
+     * of `clazz` are in `newDecls` and not yet in its scope, and the overridden normalized member is not a
+     * member of the base class at this phase, so it is found through the method that the original of
+     * `overriding` overrides.
+     *
+     * Only a class gets the member. The members of a trait read from a classfile are computed here in the
+     * same way, and a trait compiled by an earlier version does not have this one, so a mixin forwarder
+     * to it would fail to link. Where `C` is a trait, the class that mixes it in gets the member, calling
+     * `m$mIc$sp` virtually, unless a class or trait later in its linearization overrides `m` again.
+     */
+    def normalizedOverrides: List[Symbol] = if (clazz.isTrait) Nil else {
+      val mixins = clazz.mixinClasses
+      def inherited(mixin: Symbol) = {
+        val laterBases = clazz :: mixins.takeWhile(_ ne mixin)
+        exitingSpecialize(mixin.info.decls.toList).filter(sym => sym.isSpecialized && (info.get(sym) match {
+          // as seen from `clazz`: two generic traits that both override `m` only match there
+          case Some(NormalizedMember(original)) => !laterBases.exists(original.matchingSymbol(_, clazz.thisType) != NoSymbol)
+          case _                                => false
+        }))
+      }
+      (newDecls.filter(_.owner == clazz) ::: mixins.flatMap(inherited)) flatMap { overriding =>
+        info.get(overriding) match {
+          case Some(NormalizedMember(original)) =>
+            val overridingInfo = overriding.info.asSeenFrom(clazz.thisType, overriding.owner)
+            val found = original.allOverriddenSymbols.iterator.flatMap { overriddenOriginal =>
+              val overridden = exitingSpecialize(overriddenOriginal.owner.info.decl(overriding.name)).filter(sym =>
+                info.get(sym).contains(NormalizedMember(overriddenOriginal)))
+              val stvars = specializedTypeVars(overridden.info)
+              if (overridden == NoSymbol || stvars.isEmpty) None
+              else {
+                val env    = unify(overridden.info, overridingInfo, emptyEnv, tparams = true)
+                def atNext = exitingSpecialize(overridden.owner.info.decl(specializedName(overridden, env)))
+                if (TypeEnv.restrict(env, stvars).nonEmpty && TypeEnv.isValid(env, overridden) && atNext != NoSymbol)
+                  Some((overridden, env))
+                else None
+              }
+            }
+            found.nextOption().map { case (overridden, env) =>
+              val om = specializedOverload(clazz, overriding, env, overridden)
+              debuglog(s"specialized overload $om for normalized member ${overriding.name.decode} in ${pp(env)}: ${om.info}")
+              typeEnv(om) = env ++ typeEnv(overriding)
+              info(om) = Forward(overriding)
+              om
+            }
+          case _ => None
+        }
+      }
     }
     (clazz.info.decls flatMap { overriding =>
       needsSpecialOverride(overriding) match {
@@ -1158,7 +1213,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
           )
           Some(om)
       }
-    }).toList
+    }).toList ::: normalizedOverrides
   }
 
   case object UnifyError extends scala.util.control.ControlThrowable
@@ -1314,7 +1369,8 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
               if (tparams.nonEmpty) "(poly) " else "", clazz, parents1)
             )
           }
-          val newScope = newScopeWith(specializeClass(clazz, typeEnv(clazz)) ++ specialOverrides(clazz): _*)
+          val newDecls = specializeClass(clazz, typeEnv(clazz))
+          val newScope = newScopeWith(newDecls ++ specialOverrides(clazz, newDecls): _*)
           // If tparams.isEmpty, this is just the ClassInfoType.
           GenPolyType(tparams, ClassInfoType(parents1, newScope, clazz))
         }
