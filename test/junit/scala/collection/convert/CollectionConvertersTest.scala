@@ -77,4 +77,21 @@ class CollectionConvertersTest {
     assertTrue(sut.isInstanceOf[JavaCollectionWrappers.JConcurrentMapWrapper[_, _]])
     assertThrows[NullPointerException](sut.put("any", null))
   }
+
+  @Test def `Buffer asJava supports the mutators that AbstractList derives from add and remove`(): Unit = {
+    import scala.collection.mutable.ArrayBuffer
+    def check(expected: List[Int])(f: java.util.List[Integer] => Unit): Unit = {
+      val b = ArrayBuffer[Integer](1, 2, 3, 4)
+      f(b.asJava)
+      assertEquals(expected, b.toList.map(_.intValue))
+    }
+    check(List(0, 1, 2, 3, 4))(_.add(0, 0))
+    check(List(1, 7, 8, 2, 3, 4))(_.addAll(1, java.util.Arrays.asList(7, 8)))
+    check(List(1, 2, 9, 3, 4))(_.listIterator(2).add(9))
+    check(List(1, 3, 4))(l => assertTrue(l.remove(Integer.valueOf(2): Object)))
+    check(List(1, 3))(l => assertTrue(l.removeIf(_ % 2 == 0)))
+    check(List(2, 4))(l => assertTrue(l.removeAll(java.util.Arrays.asList(1, 3))))
+    check(List(1, 3))(l => assertTrue(l.retainAll(java.util.Arrays.asList(1, 3))))
+    check(List(1, 2, 3, 4))(l => assertTrue(!l.remove(Integer.valueOf(5): Object)))
+  }
 }
