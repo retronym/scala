@@ -287,7 +287,11 @@ abstract class LambdaLift extends InfoTransform {
 
       afterOwnPhase {
         for ((owner, freeValues) <- free.toList) {
-          val newFlags = SYNTHETIC | (if (owner.isClass) PARAMACCESSOR else PARAM)
+          // A parameter for a free variable is not in the generic signature of the method or constructor,
+          // which is computed from its type before this phase. It is an ARTIFACT so that the backend marks it
+          // as synthetic in the MethodParameters attribute, which is how Java reflection aligns the generic
+          // parameter types with the descriptor (scala/bug#10880 did the same for the outer parameter).
+          val newFlags = SYNTHETIC | (if (owner.isClass) PARAMACCESSOR else PARAM | ARTIFACT)
 
           proxies(owner) =
             for (fv <- freeValues.toList) yield {
