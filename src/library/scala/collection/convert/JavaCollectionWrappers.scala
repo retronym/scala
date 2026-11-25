@@ -111,14 +111,82 @@ private[collection] object JavaCollectionWrappers extends Serializable {
     override def hashCode: Int = underlying.hashCode()
   }
 
+  /** A `ListIterator` for a wrapper of a `Seq` without fast indexed access, such as a `List` or `ListBuffer`.
+   *
+   *  `AbstractList`'s list iterator calls `get(i)` for every step, which makes `equals`, `indexOf`, `subList` and
+   *  the other methods that `AbstractList` bases on it quadratic for such a `Seq`. This one steps forward with an
+   *  iterator of the `Seq`, and falls back to `get` only for `previous`. After a modification through the list
+   *  iterator, the next forward step starts a new iterator at the cursor.
+   */
+  private[convert] final class LinearSeqListIterator[A](list: ju.AbstractList[A], underlying: Seq[A], start: Int) extends ju.ListIterator[A] {
+    if (start < 0 || underlying.lengthCompare(start) < 0) throw new IndexOutOfBoundsException(s"Index: $start")
+    private[this] var cursor = start
+    private[this] var lastRet = -1
+    private[this] var it: Iterator[A] = null
+    private[this] def forward: Iterator[A] = {
+      if (it eq null) it = underlying.iterator.drop(cursor)
+      it
+    }
+    def hasNext: Boolean = forward.hasNext
+    def next(): A = {
+      val i = forward
+      if (!i.hasNext) throw new ju.NoSuchElementException
+      val e = i.next()
+      lastRet = cursor
+      cursor += 1
+      e
+    }
+    def hasPrevious: Boolean = cursor > 0
+    def previous(): A = {
+      if (cursor <= 0) throw new ju.NoSuchElementException
+      val e = list.get(cursor - 1)
+      cursor -= 1
+      lastRet = cursor
+      it = null
+      e
+    }
+    def nextIndex: Int = cursor
+    def previousIndex: Int = cursor - 1
+    override def remove(): Unit = {
+      if (lastRet < 0) throw new IllegalStateException
+      list.remove(lastRet)
+      if (lastRet < cursor) cursor -= 1
+      lastRet = -1
+      it = null
+    }
+    def set(e: A): Unit = {
+      if (lastRet < 0) throw new IllegalStateException
+      list.set(lastRet, e)
+      it = null
+    }
+    def add(e: A): Unit = {
+      list.add(cursor, e)
+      cursor += 1
+      lastRet = -1
+      it = null
+    }
+  }
+
   @SerialVersionUID(3L)
   class SeqWrapper[A](val underlying: Seq[A]) extends ju.AbstractList[A] with IterableWrapperTrait[A] with Serializable {
     def get(i: Int) = underlying(i)
+    override def listIterator(index: Int): ju.ListIterator[A] =
+      if (underlying.isInstanceOf[IndexedSeq[_]]) super.listIterator(index)
+      else new LinearSeqListIterator(this, underlying, index)
+    override def lastIndexOf(o: Any): Int =
+      if (underlying.isInstanceOf[IndexedSeq[_]]) super.lastIndexOf(o)
+      else new SeqWrapper(underlying.toVector).lastIndexOf(o)
   }
 
   @SerialVersionUID(3L)
   class MutableSeqWrapper[A](val underlying: mutable.Seq[A]) extends ju.AbstractList[A] with IterableWrapperTrait[A] with Serializable {
     def get(i: Int) = underlying(i)
+    override def listIterator(index: Int): ju.ListIterator[A] =
+      if (underlying.isInstanceOf[IndexedSeq[_]]) super.listIterator(index)
+      else new LinearSeqListIterator(this, underlying, index)
+    override def lastIndexOf(o: Any): Int =
+      if (underlying.isInstanceOf[IndexedSeq[_]]) super.lastIndexOf(o)
+      else new SeqWrapper(underlying.toVector).lastIndexOf(o)
     override def set(i: Int, elem: A) = {
       val p = underlying(i)
       underlying(i) = elem
@@ -129,6 +197,21 @@ private[collection] object JavaCollectionWrappers extends Serializable {
   @SerialVersionUID(3L)
   class MutableBufferWrapper[A](val underlying: mutable.Buffer[A]) extends ju.AbstractList[A] with IterableWrapperTrait[A] with Serializable {
     def get(i: Int) = underlying(i)
+    override def listIterator(index: Int): ju.ListIterator[A] =
+      if (underlying.isInstanceOf[IndexedSeq[_]]) super.listIterator(index)
+      else new LinearSeqListIterator(this, underlying, index)
+    override def lastIndexOf(o: Any): Int =
+      if (underlying.isInstanceOf[IndexedSeq[_]]) super.lastIndexOf(o)
+      else new SeqWrapper(underlying.toVector).lastIndexOf(o)
+    // `List.sort` writes back through `set(i)`, which is linear in `i` for such a buffer
+    override def sort(c: ju.Comparator[_ >: A]): Unit =
+      if (underlying.isInstanceOf[IndexedSeq[_]]) super.sort(c)
+      else {
+        val a = toArray()
+        ju.Arrays.sort(a, c.asInstanceOf[ju.Comparator[AnyRef]])
+        underlying.clear()
+        a.foreach(e => underlying += e.asInstanceOf[A])
+      }
     override def set(i: Int, elem: A) = { val p = underlying(i); underlying(i) = elem; p }
     override def add(elem: A) = { underlying += elem; true }
     override def remove(i: Int) = underlying remove i
