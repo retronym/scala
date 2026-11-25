@@ -1,7 +1,7 @@
 package scala.collection.concurrent
 
 import org.junit.Test
-import org.junit.Assert.assertEquals
+import org.junit.Assert.{assertEquals, assertNotSame, assertSame}
 
 import scala.util.hashing.Hashing
 import scala.tools.testkit.AssertUtil.assertThrows
@@ -704,5 +704,49 @@ class TrieMapTest {
     assert(!TrieMap.from((1 to 5).map(x => x -> x)).isEmpty)
     assert(!TrieMap.from((1 to 10).map(x => x -> x)).isEmpty)
     assert(!TrieMap.from((1 to 100).map(x => x -> x)).isEmpty)
+  }
+
+  // A snapshot replaces the root with a copy in a new generation, which makes the next operation on every path
+  // copy that path. `isEmpty` and `nonEmpty` must not do that.
+  @Test
+  def isEmptyTakesNoSnapshot(): Unit = {
+    for (n <- List(0, 1, 100)) {
+      val m = TrieMap.from((1 to n).map(x => x -> x))
+      val root = m.readRoot()
+      assertEquals(n == 0, m.isEmpty)
+      assertEquals(n != 0, m.nonEmpty)
+      assertSame(root, m.readRoot())
+      m.size // takes a snapshot
+      assertNotSame(root, m.readRoot())
+    }
+  }
+
+  @Test
+  def isEmptyAfterRemovals(): Unit = {
+    val hashings = List[Hashing[Integer]](
+      Hashing.default,
+      _ => 42,                                                    // every key in one L-node
+      k => k % 3,
+      k => 7 | ((k % 4) << 5) | ((k % 2) << 30))                  // collisions down to different levels
+    for (hashing <- hashings; seed <- 1 to 20) {
+      val r = new java.util.Random(seed)
+      val t = new TrieMap[Integer, Integer](hashing, Equiv.universal)
+      val model = new java.util.HashMap[Integer, Integer]
+      val n = 1 + r.nextInt(40)
+      for (i <- 0 until 2000) {
+        val k = Integer.valueOf(r.nextInt(n))
+        r.nextInt(10) match {
+          case 0 | 1 | 2     => t.put(k, i); model.put(k, i)
+          case 3 | 4 | 5 | 6 => t.remove(k); model.remove(k)
+          case 7             => if (r.nextInt(50) == 0) { t.clear(); model.clear() }
+          case 8             => if (r.nextInt(5) == 0) t.snapshot() else t.get(k)
+          case 9             =>
+            if (r.nextInt(5) == 0) t.size
+            else if (r.nextInt(100) == 0) { model.keySet.toArray.foreach(x => t.remove(x.asInstanceOf[Integer])); model.clear() }
+        }
+        assertEquals(model.isEmpty, t.isEmpty)
+        if (i % 100 == 0) assertEquals(model.isEmpty, t.readOnlySnapshot().isEmpty)
+      }
+    }
   }
 }
