@@ -93,7 +93,11 @@ trait TypeAdaptingTransformer { self: TreeDSL =>
           if (treeInfo isExprSafeToInline side) value
           else BLOCK(side, value)
         val tree1 = pt match {
-          case ErasedValueType(_, BoxedUnitTpe) => cast(preservingSideEffects(tree, REF(BoxedUnit_UNIT)), pt)
+          case ErasedValueType(clazz, BoxedUnitTpe) =>
+            // The unboxed value is always (), but `tree` is still evaluated and cast to the value class, as it is for
+            // every other underlying type: the cast fails for a value of another class, and `tree` may be a path
+            // through an object that is yet to be initialized.
+            cast(BLOCK(cast(tree, clazz.tpe), REF(BoxedUnit_UNIT)), pt)
           case ErasedValueType(clazz, underlying) => cast(unboxValueClass(tree, clazz, underlying), pt)
           case _ =>
             pt.typeSymbol match {
