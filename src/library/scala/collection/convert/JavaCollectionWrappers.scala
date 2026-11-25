@@ -252,6 +252,9 @@ private[collection] object JavaCollectionWrappers extends Serializable {
   class MapWrapper[K, V](underlying: Map[K, V]) extends ju.AbstractMap[K, V] with Serializable { self =>
     override def size = underlying.size
 
+    // not `size == 0`, as inherited: the size of a ListMap, IntMap, LongMap or TrieMap is not stored
+    override def isEmpty: Boolean = underlying.isEmpty
+
     override def get(key: AnyRef): V = try {
       underlying get key.asInstanceOf[K] match {
         case None => null.asInstanceOf[V]
@@ -263,6 +266,8 @@ private[collection] object JavaCollectionWrappers extends Serializable {
 
     override def entrySet: ju.Set[ju.Map.Entry[K, V]] = new ju.AbstractSet[ju.Map.Entry[K, V]] {
       def size = self.size
+
+      override def isEmpty: Boolean = self.isEmpty
 
       def iterator: ju.Iterator[ju.Map.Entry[K, V]] = new ju.Iterator[ju.Map.Entry[K, V]] {
         val ui = underlying.iterator

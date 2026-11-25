@@ -180,4 +180,40 @@ class MapWrapperTest {
     wrapped.updateWith(null)(_ => Some("x"))
     assertTrue(jmap.containsKey(null))
   }
+
+  @Test def `isEmpty of a wrapped Scala map does not compute its size`: Unit = {
+    var sizes = 0
+    class Counting(elems: List[(String, Int)]) extends collection.immutable.AbstractMap[String, Int] {
+      def iterator = elems.iterator
+      def get(key: String) = elems.collectFirst { case (`key`, v) => v }
+      def removed(key: String) = new Counting(elems.filter(_._1 != key))
+      def updated[V1 >: Int](key: String, value: V1) = (elems.toMap: Map[String, V1]).updated(key, value)
+      override def isEmpty = elems.isEmpty
+      override def size = { sizes += 1; elems.size }
+      override def knownSize = -1
+    }
+    for (elems <- List(Nil, List("a" -> 1, "b" -> 2))) {
+      val jm = new Counting(elems).asJava
+      assertEquals(elems.isEmpty, jm.isEmpty)
+      assertEquals(elems.isEmpty, jm.entrySet.isEmpty)
+      assertEquals(elems.isEmpty, jm.keySet.isEmpty)
+      assertEquals(elems.isEmpty, jm.values.isEmpty)
+    }
+    assertEquals(0, sizes)
+
+    val listMap = collection.immutable.ListMap("a" -> 1)
+    assertFalse(listMap.asJava.isEmpty)
+    assertTrue(collection.immutable.ListMap.empty[String, Int].asJava.isEmpty)
+    val mutableMap = collection.mutable.HashMap("a" -> 1)
+    val jmutable = mutableMap.asJava
+    assertFalse(jmutable.isEmpty)
+    mutableMap.clear()
+    assertTrue(jmutable.isEmpty)
+    assertTrue(jmutable.entrySet.isEmpty)
+    val trieMap = collection.concurrent.TrieMap("a" -> 1)
+    val jconcurrent: jutil.concurrent.ConcurrentMap[String, Int] = trieMap.asJava
+    assertFalse(jconcurrent.isEmpty)
+    trieMap.clear()
+    assertTrue(jconcurrent.isEmpty)
+  }
 }
