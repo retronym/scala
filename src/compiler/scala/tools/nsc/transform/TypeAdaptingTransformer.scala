@@ -110,9 +110,11 @@ trait TypeAdaptingTransformer { self: TreeDSL =>
     }
 
     final def unboxValueClass(tree: Tree, clazz: Symbol, underlying: Type): Tree =
-      if (tree.tpe.typeSymbol == NullClass && isPrimitiveValueClass(underlying.typeSymbol)) {
-        // convert `null` directly to underlying type, as going via the unboxed type would yield a NPE (see scala/bug#5866)
-        unbox(tree, underlying)
+      if (tree.tpe.typeSymbol == NullClass) {
+        // convert `null` directly to underlying type, as going via the unboxed type would yield a NPE (see scala/bug#5866).
+        // For a reference type that is `tree` itself. Selecting the unbox method from it is not an option:
+        // the value has the JVM type `scala.runtime.Null$`, which is not a legal receiver for a method of `clazz`.
+        if (isPrimitiveValueClass(underlying.typeSymbol)) unbox(tree, underlying) else tree
       } else
         Apply(Select(adaptToType(tree, clazz.tpe), clazz.derivedValueClassUnbox), List())
 

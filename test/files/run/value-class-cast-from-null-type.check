@@ -1,0 +1,4 @@
+(null: Any).asInstanceOf[VS].x = null
+(null: String).asInstanceOf[VS].x = null
+null.asInstanceOf[VS].x = null
+Other.hello() = hello from Other
