@@ -141,6 +141,8 @@ private[concurrent] object Promise {
       } else {
         val buffer = new AtomicReference[Success[Any]]()
         val zipped = new DefaultPromise[R]()
+        // The callback on `that` if it can be unregistered. Assigned before `thisF` is registered, which publishes it.
+        var thatT: Transformation[U, Unit] = null
 
         val thisF: Try[T] => Unit = {
           case left: Success[_] =>
@@ -149,7 +151,10 @@ private[concurrent] object Promise {
               zipped.tryComplete(try Success(f(left.get, right.get)) catch { case e if NonFatal(e) => Failure(e) })
           case f => // Can only be Failure
             zipped.tryComplete(f.asInstanceOf[Failure[R]])
+            // `that` no longer matters; don't keep `f` and the result reachable from it until it completes
+            if (thatT ne null) that.asInstanceOf[DefaultPromise[U]].unregisterCallback(thatT)
         }
+        val thisT = new Transformation[T, Unit](Xform_onComplete, thisF, executor)
 
         val thatF: Try[U] => Unit = {
           case right: Success[_] =>
@@ -158,10 +163,20 @@ private[concurrent] object Promise {
               zipped.tryComplete(try Success(f(left.get, right.get)) catch { case e if NonFatal(e) => Failure(e) })
           case f => // Can only be Failure
             zipped.tryComplete(f.asInstanceOf[Failure[R]])
+            this.unregisterCallback(thisT) // likewise for `this`
         }
-        // Cheaper than this.onComplete since we already polled the state
-        this.dispatchOrAddCallbacks(state, new Transformation[T, Unit](Xform_onComplete, thisF, executor))
-        that.onComplete(thatF)
+        if (that.isInstanceOf[DefaultPromise[_]]) {
+          val thatP = that.asInstanceOf[DefaultPromise[U]]
+          thatT = new Transformation[U, Unit](Xform_onComplete, thatF, executor)
+          // Cheaper than this.onComplete since we already polled the state
+          this.dispatchOrAddCallbacks(state, thisT)
+          thatP.dispatchOrAddCallbacks(thatP.get(), thatT)
+          // `thisF` may have failed `zipped` before `thatT` was registered and so not have found it
+          if (zipped.isCompleted) thatP.unregisterCallback(thatT)
+        } else {
+          this.dispatchOrAddCallbacks(state, thisT)
+          that.onComplete(thatF)
+        }
         zipped.future
       }
     }

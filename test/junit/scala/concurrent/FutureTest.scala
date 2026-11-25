@@ -322,6 +322,43 @@ class FutureTest {
     assertEquals(3, ran.get)
   }
 
+  // Once one side has failed the result of zipWith, the callback on the side that is still pending is of no use.
+  // Left registered, it keeps the user's function and the failure reachable from that future until it completes.
+  // The callback list is the only path from the future to them, so the test counts its entries.
+  @Test def zipWithUnregistersFromPendingSideOnFailure(): Unit = {
+    implicit val ec: ExecutionContext = ExecutionContext.parasitic
+    val boom = new Exception("boom") with scala.util.control.NoStackTrace
+    def check(combine: (Future[Int], Future[Int], (Int, Int) => Int) => Future[Any]): Unit = {
+      // the other side has failed already
+      val longLived = Promise[Int]()
+      assertEquals(Some(scala.util.Failure(boom)), combine(longLived.future, Future.failed(boom), _ + _).value)
+      assertEquals(0, numTransforms(longLived))
+      assertEquals(Some(scala.util.Failure(boom)), combine(Future.failed(boom), longLived.future, _ + _).value)
+      assertEquals(0, numTransforms(longLived))
+
+      // the other side fails later
+      for (longLivedFirst <- List(true, false)) {
+        val other = Promise[Int]()
+        val zipped =
+          if (longLivedFirst) combine(longLived.future, other.future, _ + _)
+          else combine(other.future, longLived.future, _ + _)
+        assertTrue(numTransforms(longLived) > 0)
+        other.failure(boom)
+        assertEquals(Some(scala.util.Failure(boom)), zipped.value)
+        assertEquals(0, numTransforms(longLived))
+      }
+
+      // nothing is lost when both sides succeed
+      val other = Promise[Int]()
+      val zipped = combine(longLived.future, other.future, _ + _)
+      other.success(1)
+      longLived.success(2)
+      assertTrue(zipped.value.get.isSuccess)
+    }
+    check((a, b, f) => a.zipWith(b)(f))
+    check((a, b, f) => a.zip(b).map(f.tupled))
+  }
+
   @Test def completedWaitUndefined(): Unit = {
     assertThrows[IllegalArgumentException](Await.result(Future.successful(1), Undefined))
     assertThrows[IllegalArgumentException](Await.ready(Future.successful(1), Undefined))
