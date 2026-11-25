@@ -292,6 +292,17 @@ sealed class NumericRange[T](
     catch { case _: ClassCastException => false }
 
   override def sum[B >: T](implicit num: Numeric[B]): B = {
+    def addUp: B = {
+      var acc = num.zero
+      var i = head
+      var idx = 0
+      while(idx < length) {
+        acc = num.plus(acc, i)
+        i = i + step
+        idx = idx + 1
+      }
+      acc
+    }
     if (isEmpty) num.zero
     else if (size == 1) head
     else {
@@ -326,22 +337,16 @@ sealed class NumericRange[T](
         // (not going to worry about running out of memory)
         val numAsIntegral = num.asInstanceOf[Integral[B]]
         import numAsIntegral._
-        ((num fromInt size) * (head + last)) / (num fromInt 2)
+        val two = num fromInt 2
+        val twiceSum = (num fromInt size) * (head + last)
+        // `/` is `quot`, which for BigDecimal truncates unless `twiceSum` is an even integer.
+        // It need not be when the elements are fractional; then the elements are added up.
+        if (equiv(twiceSum % two, zero)) twiceSum / two
+        else addUp
       }
       else {
         // User provided custom Numeric, so we cannot rely on arithmetic series formula (e.g. won't work on something like Z_6)
-        if (isEmpty) num.zero
-        else {
-          var acc = num.zero
-          var i = head
-          var idx = 0
-          while(idx < length) {
-            acc = num.plus(acc, i)
-            i = i + step
-            idx = idx + 1
-          }
-          acc
-        }
+        addUp
       }
     }
   }
