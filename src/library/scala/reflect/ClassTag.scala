@@ -79,7 +79,11 @@ trait ClassTag[T] extends ClassManifestDeprecatedApis[T] with Equals with Serial
 
   // case class accessories
   override def canEqual(x: Any) = x.isInstanceOf[ClassTag[_]]
-  override def equals(x: Any) = x.isInstanceOf[ClassTag[_]] && this.runtimeClass == x.asInstanceOf[ClassTag[_]].runtimeClass
+  override def equals(x: Any) = x match {
+    // ask the other side, so that a plain ClassTag is not equal to a Manifest, which is not equal to it either
+    case that: ClassTag[_] => (that canEqual this) && this.runtimeClass == that.runtimeClass
+    case _                 => false
+  }
   override def hashCode = runtimeClass.##
   override def toString = {
     def prettyprint(clazz: jClass[_]): String =

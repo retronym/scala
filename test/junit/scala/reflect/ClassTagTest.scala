@@ -35,4 +35,18 @@ class ClassTagTest {
     val a3 = ct.newArray2(1)
     a3(0) = a1
   }
+
+  @Test def classTagEqualsManifestSymmetric(): Unit = {
+    val ct: ClassTag[_] = ClassTag(classOf[String])
+    val mf: ClassTag[_] = manifest[String]
+    assertEquals(mf == ct, ct == mf)
+    assertFalse(ct == mf)
+    assertEquals(ct, ClassTag(classOf[String]))
+    assertEquals(mf, manifest[String])
+    val cl: ClassTag[_] = classTag[List[_]]
+    assertFalse(cl == manifest[List[Int]])
+    assertFalse(cl == manifest[List[String]])
+    assertEquals(ClassTag.Int, ClassTag(classOf[Int]))
+    assertEquals(ClassTag(classOf[Int]), manifest[Int])
+  }
 }
