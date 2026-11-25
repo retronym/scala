@@ -252,6 +252,24 @@ object TreeSet extends SortedIterableFactory[TreeSet] {
         new TreeSet[E](tree)
       case _ if it.knownSize == 0 =>
         new TreeSet[E]
+      case s: scala.collection.Seq[E] if s.isInstanceOf[scala.collection.IndexedSeq[_]] || s.isInstanceOf[List[_]] =>
+        // A strict sequence that is already strictly ascending is built in linear time with no further comparisons.
+        // The order is checked in a first pass, which is safe as reading the sequence again evaluates nothing.
+        val i = s.iterator
+        var n = 0
+        var ascending = true
+        if (i.hasNext) {
+          var prev = i.next()
+          n = 1
+          while (ascending && i.hasNext) {
+            val e = i.next()
+            ascending = ordering.compare(prev, e) < 0
+            prev = e
+            n += 1
+          }
+        }
+        if (ascending) new TreeSet[E](RB.fromOrderedKeys(s.iterator, n))
+        else (newBuilder[E] ++= s).result()
       case _ =>
         (newBuilder[E] ++= it).result()
     }

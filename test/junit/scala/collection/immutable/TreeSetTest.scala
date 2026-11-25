@@ -14,6 +14,27 @@ import scala.tools.testkit.AllocationTest
 @annotation.nowarn("msg=Boolean literals should be passed using named argument syntax for parameter selfEqual")
 class TreeSetTest extends AllocationTest {
 
+  @Test def `from of a sorted strict Seq builds the tree without inserting`(): Unit = {
+    var compares = 0
+    val ord: Ordering[String] = (x, y) => { compares += 1; x.compareToIgnoreCase(y) }
+    val n = 1000
+    val sorted = List.tabulate(n)(i => f"$i%05d")
+    def count[T](f: => T): (T, Int) = { compares = 0; val r = f; (r, compares) }
+    for (s <- List[collection.Seq[String]](sorted, sorted.toVector, sorted.toArray[String])) {
+      val (ts, c) = count(TreeSet.from(s)(ord))
+      assertEquals(sorted, ts.toList)
+      assertEquals(n - 1, c)
+    }
+    // not sorted, or a duplicate under the ordering: insert one by one, keeping the first of equal elements
+    assertEquals(List("a", "B", "c"), TreeSet.from(List("c", "a", "B"))(ord).toList)
+    val dup = TreeSet.from(Vector("a", "b", "B", "c"))(ord)
+    assertEquals(List("a", "b", "c"), dup.toList)
+    // a view is read once, as before
+    var applied = 0
+    assertEquals(sorted, TreeSet.from(sorted.view.map { x => applied += 1; x })(ord).toList)
+    assertEquals(n, applied)
+  }
+
   @Test
   def hasCorrectDropAndTakeMethods(): Unit = {
     val set = TreeSet(1, 2, 3)
