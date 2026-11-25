@@ -84,11 +84,13 @@ sealed class NumericRange[T](
     else locationAfterN(length - 1)
   override def init: NumericRange[T] =
     if (isEmpty) Nil.init
+    else if (crossesTheEndAfterN(1)) newEmptyRange(start) // `end - step` may overflow
     else new NumericRange(start, end - step, step, isInclusive)
 
   override def head: T = if (isEmpty) Nil.head else start
   override def tail: NumericRange[T] =
     if (isEmpty) Nil.tail
+    else if (crossesTheEndAfterN(1)) newEmptyRange(end) // `start + step` may overflow
     else if(isInclusive) new NumericRange.Inclusive(start + step, end, step)
     else new NumericRange.Exclusive(start + step, end, step)
 
@@ -167,18 +169,6 @@ sealed class NumericRange[T](
   private def locationAfterN(n: Int): T = start + (step * fromInt(n))
 
   private def crossesTheEndAfterN(n: Int): Boolean = {
-    // if we're sure that subtraction in the context of T won't overflow, we use this function
-    // to calculate the length of the range
-    def unsafeRangeLength(r: NumericRange[T]): T = {
-      val diff = num.minus(r.end, r.start)
-      val quotient = num.quot(diff, r.step)
-      val remainder = num.rem(diff, r.step)
-      if (!r.isInclusive && num.equiv(remainder, num.zero))
-        num.max(quotient, num.zero)
-      else
-        num.max(num.plus(quotient, num.one), num.zero)
-    }
-
     // detects whether value can survive a bidirectional trip to -and then from- Int.
     def fitsInInteger(value: T): Boolean = num.equiv(num.fromInt(num.toInt(value)), value)
 
@@ -190,48 +180,23 @@ sealed class NumericRange[T](
     val sameSign = num.equiv(num.sign(start), num.sign(end))
 
     if (sameSign) { // subtraction is safe
-      val len = unsafeRangeLength(this)
-      if (fitsInInteger(len)) n >= num.toInt(len) else num.gteq(num.fromInt(n), len)
+      // The length is the quotient or the quotient + 1. Compare `n` with the quotient, as adding one
+      // overflows T when the length exceeds T's MaxValue (e.g. `NumericRange.inclusive[Byte](-128, -1, 1)`).
+      val diff = num.minus(end, start)
+      val quotient = num.quot(diff, step)
+      val lengthIsQuotient = !isInclusive && num.equiv(num.rem(diff, step), num.zero)
+      if (fitsInInteger(quotient)) {
+        val q = num.toInt(quotient)
+        if (lengthIsQuotient) n >= q else n > q
+      }
+      else if (lengthIsQuotient) num.gteq(num.fromInt(n), quotient)
+      else num.gt(num.fromInt(n), quotient)
     } else {
-      // split to two ranges, which subtraction is safe in both of them (around zero)
-      val stepsRemainderToZero = num.rem(start, step)
-      val walksOnZero = num.equiv(stepsRemainderToZero, num.zero)
-      val closestToZero = if (walksOnZero) -step else stepsRemainderToZero
-
-      /*
-      When splitting into two ranges, we should be super-careful about one of the sides hitting MinValue of T,
-      so we take two steps smaller than zero to ensure unsafeRangeLength won't overflow (taking one step may overflow depending on the step).
-      Same thing happens for MaxValue from zero, so we take one step further to ensure the safety of unsafeRangeLength.
-      After performing such operation, there are some elements remaining in between and around zero,
-      which their length is represented by carry.
-       */
-      val (l: NumericRange[T], r: NumericRange[T], carry: Int) =
-        if (num.lt(start, num.zero)) {
-          if (walksOnZero) {
-            val twoStepsAfterLargestNegativeNumber = num.plus(closestToZero, num.times(step, num.fromInt(2)))
-            (NumericRange(start, closestToZero, step), copy(twoStepsAfterLargestNegativeNumber, end, step), 2)
-          } else {
-            (NumericRange(start, closestToZero, step), copy(num.plus(closestToZero, step), end, step), 1)
-          }
-        } else {
-          if (walksOnZero) {
-            val twoStepsAfterZero = num.times(step, num.fromInt(2))
-            (copy(twoStepsAfterZero, end, step), NumericRange.inclusive(start, -step, step), 2)
-          } else {
-            val twoStepsAfterSmallestPositiveNumber = num.plus(closestToZero, num.times(step, num.fromInt(2)))
-            (copy(twoStepsAfterSmallestPositiveNumber, end, step), NumericRange.inclusive(start, closestToZero, step), 2)
-          }
-        }
-
-      val leftLength = unsafeRangeLength(l)
-      val rightLength = unsafeRangeLength(r)
-
-      // instead of `n >= rightLength + leftLength + curry` which may cause addition overflow,
-      // this can be used `(n - leftLength - curry) >= rightLength` (Both in Int and T, depends on whether the lengths fit in Int)
-      if (fitsInInteger(leftLength) && fitsInInteger(rightLength))
-        n - num.toInt(leftLength) - carry >= num.toInt(rightLength)
-      else
-        num.gteq(num.minus(num.minus(num.fromInt(n), leftLength), num.fromInt(carry)), rightLength)
+      // `end - start` may overflow. `length` counts the elements without overflowing, and throws if there are
+      // more than Int.MaxValue of them, in which case no `n` reaches the end. (A zero step, its other reason
+      // to throw, is excluded above; a BigDecimal step lost to rounding makes `length` throw anyway.)
+      try n >= length
+      catch { case _: IllegalArgumentException => false }
     }
   }
 
@@ -285,7 +250,16 @@ sealed class NumericRange[T](
 
   // a well-typed contains method.
   def containsTyped(x: T): Boolean =
-    isWithinBoundaries(x) && (((x - start) % step) == zero)
+    isWithinBoundaries(x) && {
+      if (sign(x) == sign(start)) ((x - start) % step) == zero // subtraction is safe
+      else {
+        // `x - start` may overflow. The remainders of `x` and `start` by `step` have opposite signs and
+        // magnitudes below `step`, so `x` and `start` are congruent iff the remainders differ by 0 or `step`.
+        val rx = x % step
+        val rs = start % step
+        rx == rs || (if (sign(rx) == sign(step)) rx - step else rx + step) == rs
+      }
+    }
 
   override def contains[A1 >: T](x: A1): Boolean =
     try containsTyped(x.asInstanceOf[T])
@@ -432,16 +406,31 @@ object NumericRange {
       def check(t: T): T =
         if (num.gt(t, limit)) throw new IllegalArgumentException("More than Int.MaxValue elements.")
         else t
+      // The quotient of a difference with the same sign as the step is non-negative,
+      // unless the division overflows, as quot(Long.MinValue, -1L) does.
+      def checkedQuot(diff: T): T = {
+        val q = num.quot(diff, step)
+        if (num.lt(q, zero)) throw new IllegalArgumentException("More than Int.MaxValue elements.")
+        else check(q)
+      }
       // If the range crosses zero, it might overflow when subtracted
       val startside = num.sign(start)
       val endside = num.sign(end)
       num.toInt{
         if (num.gteq(num.times(startside, endside), zero)) {
-          // We're sure we can subtract these numbers.
+          // We're sure we can subtract these numbers, except 0 - start when start is the type's MinValue
+          // (e.g. Long.MinValue to 0). For end == 0 use quot(-start, step) == -quot(start, step) instead.
           // Note that we do not use .rem because of different conventions for Long and BigInt
-          val diff = num.minus(end, start)
-          val quotient = check(num.quot(diff, step))
-          val remainder = num.minus(diff, num.times(quotient, step))
+          val (quotient, remainder) =
+            if (endside == zero) {
+              val q = num.quot(start, step)
+              if (num.lt(q, num.negate(limit))) throw new IllegalArgumentException("More than Int.MaxValue elements.")
+              (num.negate(q), num.minus(num.times(q, step), start))
+            } else {
+              val diff = num.minus(end, start)
+              val q = checkedQuot(diff)
+              (q, num.minus(diff, num.times(q, step)))
+            }
           if (!isInclusive && zero == remainder) quotient else check(num.plus(quotient, one))
         }
         else {
@@ -473,7 +462,7 @@ object NumericRange {
             else {
               // There is a last piece
               val enddiff = num.minus(end,waypointB)
-              val endq    = check(num.quot(enddiff, step))
+              val endq    = checkedQuot(enddiff)
               val last    = if (endq == zero) waypointB else num.plus(waypointB, num.times(endq, step))
               // Now we have to tally up all the pieces
               //   1 for the initial value

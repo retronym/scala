@@ -69,6 +69,116 @@ class NumericRangeTest {
     }
   }
 
+  // `x - start` overflows when the range spans more than T's MaxValue
+  @Test
+  def containsAndIndexOfAcrossOverflowingSpan(): Unit = {
+    def check[T](r: NumericRange[T]): Unit = {
+      val xs = r.toList
+      for ((x, i) <- xs.zipWithIndex) {
+        assertTrue(s"$r contains $x", r.contains(x))
+        assertEquals(s"$r indexOf $x", i, r.indexOf(x))
+        assertEquals(s"$r lastIndexOf $x", i, r.lastIndexOf(x))
+      }
+    }
+    check(NumericRange.inclusive(Long.MinValue, Long.MaxValue, Long.MaxValue))
+    check(NumericRange.inclusive(Long.MaxValue, Long.MinValue, -Long.MaxValue))
+    check(NumericRange.inclusive(-6000000000000000000L, 6000000000000000000L, 4000000000000000000L))
+    check(NumericRange.inclusive(Int.MinValue, Int.MaxValue, Int.MaxValue))
+    check(NumericRange.inclusive(Int.MaxValue, Int.MinValue, Int.MinValue))
+    check(NumericRange.inclusive[Byte](Byte.MinValue, Byte.MaxValue, 100))
+    val r = NumericRange.inclusive(-6000000000000000000L, 6000000000000000000L, 4000000000000000000L)
+    for (x <- List(-5999999999999999999L, 1L, 5999999999999999999L, Long.MaxValue, Long.MinValue)) {
+      assertFalse(s"$r contains $x", r.contains(x))
+      assertEquals(-1, r.indexOf(x))
+    }
+  }
+
+  // Wide descending ranges from a positive start across zero go through the split in crossesTheEndAfterN
+  @Test
+  def takeDropWideDescendingRangeAcrossZero(): Unit = {
+    def check[T](r: NumericRange[T]): Unit = {
+      val xs = r.toList
+      assertEquals(xs.length, r.length)
+      for (n <- 0 to xs.length + 1) {
+        assertEquals(s"$r take $n", xs.take(n), r.take(n).toList)
+        assertEquals(s"$r drop $n", xs.drop(n), r.drop(n).toList)
+      }
+    }
+    check(NumericRange.inclusive(Int.MaxValue, Int.MinValue, -(1 << 30)))
+    check(NumericRange.inclusive(Long.MaxValue, Long.MinValue, -(1L << 62)))
+    check(NumericRange.inclusive(Int.MaxValue, Int.MinValue + 1, -(1 << 30)))
+    check(NumericRange.inclusive(Int.MaxValue - 1, Int.MinValue, -(1 << 30)))
+    check(NumericRange.inclusive(Int.MaxValue, -1, -(1 << 30)))
+    check(NumericRange.inclusive(Int.MaxValue, Int.MinValue, -(1 << 29) - 3))
+    check(NumericRange.inclusive(1 << 30, Int.MinValue, -(1 << 30)))
+    check(NumericRange.inclusive(Int.MinValue, Int.MaxValue, 1 << 30))
+    check(NumericRange.inclusive(Int.MinValue + 1, Int.MaxValue, 1 << 30))
+    // ranges that end among the elements around zero which are in neither part of the split
+    check(NumericRange.inclusive(Int.MaxValue, 0, -(1 << 30)))
+    check(NumericRange(Int.MaxValue, -1, -(1 << 30)))
+    check(NumericRange(Int.MaxValue - 1, 0, -(1 << 30) + 1))
+    check(NumericRange(Int.MaxValue - 1, -(1 << 30), -(1 << 30) + 1))
+    check(NumericRange[Byte](-128, 0, 1))
+    check(NumericRange[Byte](-128, 1, 1))
+    check(NumericRange.inclusive[Byte](-128, 0, 1))
+    check(NumericRange(Int.MinValue + 1, 0, 1 << 30))
+    check(NumericRange(Int.MinValue, 0, 1 << 30))
+    check(NumericRange(Int.MinValue, 1, 1 << 30))
+    // steps above MaxValue / 2, for which the elements two steps past zero overflow
+    check(NumericRange.inclusive(1, -1, -(1 << 30) - 1))
+    check(NumericRange.inclusive(0, Int.MinValue, -(1 << 30) - 1))
+    check(NumericRange.inclusive(-1, Int.MaxValue, (1 << 30) + 1))
+    check(NumericRange.inclusive[Byte](1, -1, -65))
+    check(NumericRange.inclusive[Byte](0, -128, -65))
+    check(NumericRange(Long.MinValue, 0L, 1L << 62))
+    check(NumericRange.inclusive(Long.MaxValue, Long.MinValue, Long.MinValue))
+    // more than Int.MaxValue elements
+    assertEquals(List(1L, 0L, -1L), NumericRange.inclusive(1L, Long.MinValue, -1L).take(3).toList)
+    assertEquals(List(-1L, 0L, 1L), NumericRange(-1L, Long.MaxValue, 1L).take(3).toList)
+  }
+
+  // `start + step` in tail and `end - step` in init wrap around for a one-element range at the type's bound
+  @Test
+  def tailInitOfOneElementRangeAtBound(): Unit = {
+    def check[T](r: NumericRange[T]): Unit = {
+      val xs = r.toList
+      assertEquals(s"$r.tail", xs.tail, r.tail.toList)
+      assertEquals(s"$r.init", xs.init, r.init.toList)
+      assertEquals(s"$r.tails", xs.tails.toList, r.tails.map(_.toList).toList)
+      assertEquals(s"$r.inits", xs.inits.toList, r.inits.map(_.toList).toList)
+    }
+    check(NumericRange.inclusive(Int.MaxValue, Int.MaxValue, 1))
+    check(NumericRange.inclusive(Int.MinValue, Int.MinValue, 1))
+    check(NumericRange.inclusive(Int.MinValue, Int.MinValue, -1))
+    check(NumericRange.inclusive(Long.MinValue, Long.MinValue, 1L))
+    check(NumericRange.inclusive(Long.MaxValue, Long.MaxValue, 1L))
+    check(NumericRange.inclusive(Int.MaxValue - 1, Int.MaxValue, 2))
+    check(NumericRange.inclusive(Int.MaxValue - 3, Int.MaxValue, 2))
+    check(NumericRange(Int.MinValue, Int.MinValue + 1, 3))
+    check(NumericRange.inclusive(Int.MinValue + 3, Int.MinValue, -2))
+    check(NumericRange.inclusive[Byte](120, Byte.MaxValue, 5))
+
+    // long ranges, whose length exceeds T.MaxValue, are not mistaken for one-element ranges
+    def checkLong[T](r: NumericRange[T]): Unit = {
+      val xs = r.toList
+      assertEquals(s"$r.tail", xs.tail, r.tail.toList)
+      assertEquals(s"$r.init", xs.init, r.init.toList)
+    }
+    checkLong(NumericRange.inclusive[Byte](Byte.MinValue, -1, 1))
+    checkLong(NumericRange.inclusive[Byte](-1, Byte.MinValue, -1))
+    checkLong(NumericRange.inclusive[Short](Short.MinValue, -1, 1))
+    // more than Int.MaxValue elements, so compare the bounds
+    def checkHuge[T](r: NumericRange[T])(implicit num: Integral[T]): Unit = {
+      import num._
+      val (tail, init) = (r.tail, r.init)
+      assertEquals(s"$r.tail", (r.start + r.step, r.end, r.step, r.isInclusive), (tail.start, tail.end, tail.step, tail.isInclusive))
+      assertEquals(s"$r.init", (r.start, r.end - r.step, r.step, r.isInclusive), (init.start, init.end, init.step, init.isInclusive))
+    }
+    checkHuge(NumericRange.inclusive(Int.MinValue, -1, 1))
+    checkHuge(NumericRange.inclusive(Long.MinValue, -1L, 1L))
+    checkHuge(NumericRange.inclusive(Long.MaxValue, 0L, -1L))
+  }
+
   @Test
   def numericRangeIsEmpty(): Unit = {
     //Test Positive Step
@@ -307,6 +417,29 @@ class NumericRangeTest {
   }
 
   @Test
+  def longMinValueToZeroLength(): Unit = {
+    def check(r: NumericRange[Long], expected: List[Long]): Unit = {
+      assertEquals(s"$r.length", expected.length, r.length)
+      assertEquals(s"$r.toList", expected, r.toList)
+      assertEquals(s"$r.last", expected.last, r.last)
+    }
+    check(NumericRange(Long.MinValue, 0L, 1L << 61), List(Long.MinValue, -(3L << 61), -(1L << 62), -(1L << 61)))
+    check(NumericRange.inclusive(Long.MinValue, 0L, 1L << 61), List(Long.MinValue, -(3L << 61), -(1L << 62), -(1L << 61), 0L))
+    check(NumericRange.inclusive(Long.MinValue, 0L, 3L << 61), List(Long.MinValue, -(1L << 61)))
+    check(NumericRange(Long.MinValue, 0L, Long.MaxValue), List(Long.MinValue, -1L))
+    check(NumericRange.inclusive(Long.MaxValue, 0L, -(1L << 62)), List(Long.MaxValue, Long.MaxValue - (1L << 62)))
+    assertThrows[IllegalArgumentException](NumericRange(Long.MinValue, 0L, 1L).length)
+    assertThrows[IllegalArgumentException](NumericRange.inclusive(Long.MinValue, 0L, 1L).length)
+    // the mirror image, from 0 down to Long.MinValue
+    check(NumericRange.inclusive(0L, Long.MinValue, -(1L << 62)), List(0L, -(1L << 62), Long.MinValue))
+    check(NumericRange(0L, Long.MinValue, -(1L << 62)), List(0L, -(1L << 62)))
+    assertThrows[IllegalArgumentException](NumericRange(0L, Long.MinValue, -1L).length)
+    assertThrows[IllegalArgumentException](NumericRange.inclusive(0L, Long.MinValue, -1L).length)
+    assertThrows[IllegalArgumentException](NumericRange(1L, Long.MinValue, -1L).length)
+    assertThrows[IllegalArgumentException](NumericRange.inclusive(1L, Long.MinValue, -1L).length)
+  }
+
+  @Test
   def wideNegativeNumericRangeUntilZeroShouldNotOverflow() = {
     val start = Int.MinValue
     val end = 0
@@ -405,6 +538,23 @@ class NumericRangeTest {
 
     assertThrows[IllegalArgumentException](NumericRange(Int.MinValue, Int.MaxValue, 1).indexOf(300))
     assertThrows[IllegalArgumentException](NumericRange(Int.MinValue, Int.MaxValue, 1).lastIndexOf(300))
+  }
+
+  @Test
+  def takeDropWholeNegativeHalfOfNarrowType(): Unit = {
+    // The length (128, 32768) exceeds T.MaxValue, so it cannot be computed in T.
+    def check[T](r: NumericRange[T]): Unit = {
+      val xs = r.toList
+      assertEquals(xs.length, r.length)
+      for (n <- List(1, 2, xs.length - 2, xs.length - 1, xs.length, xs.length + 1)) {
+        assertEquals(s"$r take $n", xs.take(n), r.take(n).toList)
+        assertEquals(s"$r drop $n", xs.drop(n), r.drop(n).toList)
+      }
+    }
+    check(NumericRange.inclusive[Byte](Byte.MinValue, -1, 1))
+    check(NumericRange.inclusive[Byte](-1, Byte.MinValue, -1))
+    check(NumericRange.inclusive[Short](Short.MinValue, -1, 1))
+    check(NumericRange.inclusive[Short](-1, Short.MinValue, -1))
   }
 
 }
