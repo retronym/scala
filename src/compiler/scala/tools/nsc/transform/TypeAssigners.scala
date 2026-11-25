@@ -30,8 +30,33 @@ trait TypeAssigners { self: TypingTransformers =>
    *  A subclass hooks in at three points: `enter` (on entering an original tree), `adapt`
    *  (adapting a typed tree to its expected type) and `typed1`/`typedCore` (special cases).
    *  `Erasure.ErasureRetyper` is one, typing erased trees.
+   *
+   *  It needs no typing context: what it needs from `localTyper` goes through `enclosingOwner` and
+   *  `fallbackTyper`, which `TypingTransformer` implements with its `localTyper`. After erasure, only
+   *  `fallback` needs a `Typer`.
+   *
+   *  A class, not a trait, and with `global` in a field of its own: a dozen transformers extend it, so calls
+   *  from its shared code to its own methods, to its enclosing phase or to `global` through an interface would
+   *  dispatch through an itable at a megamorphic call site.
    */
-  trait TypeAssigner extends TypingTransformer {
+  abstract class TypeAssigner extends OwnerStackTransformer {
+    protected[this] final val assignerGlobal: TypeAssigners.this.global.type = TypeAssigners.this.global
+    import assignerGlobal._
+    import assignerGlobal.definitions._
+
+    /** The innermost owner entered, as the owner of a typing context there would be. */
+    protected def enclosingOwner: Symbol = currentOwner
+
+    private[this] var rootTyper: analyzer.Typer = null
+
+    /** A `Typer` for what the assigner cannot do itself, `why`: one in the root context of the unit,
+     *  made when first needed, with no context for the owners entered.
+     */
+    protected def fallbackTyper(why: String): analyzer.Typer = {
+      if (rootTyper eq null) rootTyper = newRootLocalTyper(currentUnit)
+      rootTyper
+    }
+
     /** The result type of the enclosing method, the expected type of `Return` expressions. */
     private[this] var enclMethodResult: Type = NoType
 
@@ -67,8 +92,8 @@ trait TypeAssigners { self: TypingTransformers =>
      */
     private def skolemized(tree: Tree): Tree = {
       val tp = tree.tpe
-      if (tree.isTerm && isExistentialType(tp) && !localTyper.context.owner.isAccessor)
-        tree setType tp.dealias.skolemizeExistential(localTyper.context.owner, tree)
+      if (tree.isTerm && isExistentialType(tp) && !enclosingOwner.isAccessor)
+        tree setType tp.dealias.skolemizeExistential(enclosingOwner, tree)
       else tree
     }
 
@@ -81,8 +106,20 @@ trait TypeAssigners { self: TypingTransformers =>
 
     /** A tree shape the assigner does not know: type it with `localTyper`. */
     protected def fallback(tree: Tree, pt: Type, why: String): Tree = {
+      val localTyper = fallbackTyper(why)
       devWarning(tree.pos, s"$phase: typing $why with ${localTyper.getClass.getSimpleName}")
       localTyper.typed(beforeFallback(tree), pt)
+    }
+
+    /** `Typer.packedType(tree, owner)`, which changes only a type that mentions a symbol defined in `owner`,
+     *  a captured existential, a type parameter of a raw type or an annotation.
+     */
+    private def packedType(tree: Tree, owner: Symbol): Type = {
+      def mayPack(sym: Symbol) = (sym ne NoSymbol) &&
+        (sym.hasTransOwner(owner) || sym.hasAllFlags(symtab.Flags.EXISTENTIAL | symtab.Flags.CAPTURED) || existentialsAndSkolems.isRawParameter(sym))
+      if (tree.tpe.exists(t => t.isInstanceOf[AnnotatedType] || mayPack(t.typeSymbol) || mayPack(t.termSymbol)))
+        fallbackTyper("Function").packedType(tree, owner)
+      else tree.tpe
     }
 
     /** The typer's mode for an expression, or for the qualifier of a selection. */
@@ -92,7 +129,7 @@ trait TypeAssigners { self: TypingTransformers =>
      *  fully defined, else the branches' lub, or their weak lub if that differs, as in
      *  `Typer.typedIf`.
      */
-    private def branchesType(pt: Type, tpes: => List[Type]): Type =
+    @inline private def branchesType(pt: Type, tpes: => List[Type]): Type =
       if (analyzer.isFullyDefined(pt)) pt
       else {
         val tpes1 = tpes.map(_.deconst)
@@ -127,7 +164,13 @@ trait TypeAssigners { self: TypingTransformers =>
      *  underlying type.
      */
     private def stabilized(tree: Tree, pre: Type, qualMode: Boolean, pt: Type): Tree =
-      if (phase.erasedTypes) tree else localTyper.stabilize(tree, pre, exprMode(qualMode), pt)
+      if (phase.erasedTypes) tree
+      else {
+        val sym = tree.symbol
+        // Without these, `stabilize` needs no `Typer`: it reports no error and resolves no overload.
+        val needsTyper = tree.isErrorTyped || sym.isOverloaded || !sym.isValue && !qualMode
+        analyzer.stabilize(tree, pre, exprMode(qualMode), pt, if (needsTyper) fallbackTyper("stabilize") else null)
+      }
 
     /** Analogue of `Typer.typed1` for the tree shapes that synthesised trees, and erased trees, have. */
     protected def typedCore(tree: Tree, pt: Type, qualMode: Boolean): Tree = tree match {
@@ -160,11 +203,11 @@ trait TypeAssigners { self: TypingTransformers =>
 
       case tree: This =>
         // Typer.typedThis
-        tree.symbol orElse localTyper.qualifyingClass(tree, tree.qual, packageOK = false, immediate = true) match {
+        tree.symbol orElse fallbackTyper("This-nosym").qualifyingClass(tree, tree.qual, packageOK = false, immediate = true) match {
           case NoSymbol => tree setType ErrorType // reported by qualifyingClass
           case clazz =>
             tree setSymbol clazz setType clazz.thisType.underlying
-            if (localTyper.isStableContext(tree, exprMode(qualMode), pt)) tree setType clazz.thisType else tree
+            if (analyzer.isStableContext(tree, exprMode(qualMode), pt)) tree setType clazz.thisType else tree
         }
 
       case sup: Super =>
@@ -233,7 +276,7 @@ trait TypeAssigners { self: TypingTransformers =>
         val restpe = ldef.symbol.tpe.resultType
         val rhs1 = typed(rhs, restpe)
         params foreach (param => param setType param.symbol.tpe)
-        deriveLabelDef(ldef)(_ => rhs1) setType restpe
+        treeCopy.LabelDef(ldef, ldef.name, params, rhs1) setType restpe
 
       case vdef @ ValDef(_, _, tpt, rhs) =>
         val sym = vdef.symbol
@@ -282,10 +325,10 @@ trait TypeAssigners { self: TypingTransformers =>
         // Typer.typed1 and Typer.doTypedFunction past typer, for a function with no expected
         // function or SAM type, which would give its body an expected type.
         if (pt ne WildcardType) return fallback(tree, pt, "Function-pt")
-        if (fun.symbol == NoSymbol) fun.symbol = localTyper.context.owner.newAnonymousFunctionValue(fun.pos)
+        if (fun.symbol == NoSymbol) fun.symbol = enclosingOwner.newAnonymousFunctionValue(fun.pos)
         val vparams1 = vparams.mapConserve(vd => typed(vd, WildcardType).asInstanceOf[ValDef])
         val body1 = atOwner(fun, fun.symbol)(typed(body, WildcardType))
-        val resTp = localTyper.packedType(body1, fun.symbol).resultType.deconst match {
+        val resTp = packedType(body1, fun.symbol).resultType.deconst match {
           case ct: ConstantType => ct.widen
           case tp => tp
         }
@@ -300,7 +343,8 @@ trait TypeAssigners { self: TypingTransformers =>
     protected final def typedSelect(sel: Select, qual1: Tree, qualMode: Boolean, pt: Type): Tree = {
       val sym = sel.symbol orElse qual1.tpe.member(sel.name)
       if (sym == NoSymbol) return fallback(treeCopy.Select(sel, qual1, sel.name), pt, "Select-nosym")
-      if (sym.alternatives.head.owner.isPackageObjectClass && qual1.symbol != null && qual1.symbol.hasPackageFlag)
+      // `qual1` is tested first: `alternatives` allocates a list for a non-overloaded symbol.
+      if (qual1.symbol != null && qual1.symbol.hasPackageFlag && sym.alternatives.head.owner.isPackageObjectClass)
         // As `Typer.typedSelect`, select a package object's member from the package object.
         return typedSelect(sel, typedQualifier(atPos(qual1.pos.focus)(Select(qual1, nme.PACKAGE))), qualMode, pt)
       if (qual1.isInstanceOf[Super]) {
@@ -323,7 +367,7 @@ trait TypeAssigners { self: TypingTransformers =>
       // Typer.normalTypedApply
       val fun2 = {
         val sym = fun1.symbol
-        if ((sym ne null) && sym.isMethod && sym.isStable) localTyper.stabilizeFun(fun1, exprMode(qualMode), pt)
+        if ((sym ne null) && sym.isMethod && sym.isStable) analyzer.stabilizeFun(fun1, exprMode(qualMode), pt)
         else fun1
       }
       def typedArgs = app.args.mapConserve(typed(_, WildcardType))
@@ -336,7 +380,9 @@ trait TypeAssigners { self: TypingTransformers =>
           // its error (a translated match can call an extractor's members with the wrong types).
           if (!phase.erasedTypes && !args1.corresponds(params)((arg, param) => conforms(arg.tpe, param.tpe)))
             return fallback(treeCopy.Apply(app, fun2, args1), pt, "Apply-nonconforming")
-          treeCopy.Apply(app, fun2, args1) setType mt.resultType(args1.map(_.tpe))
+          // `resultType(actuals)` ignores the actuals when these hold: don't build their list.
+          val restpe = if (mt.isTrivial || phase.erasedTypes) mt.resultType else mt.resultType(args1.map(_.tpe))
+          treeCopy.Apply(app, fun2, args1) setType restpe
         case OverloadedType(pre, alts) if !phase.erasedTypes =>
           // An operator selected by name, such as `==` or `&` on a primitive: the alternative
           // whose parameter types are those of the arguments, if there is exactly one.
@@ -365,6 +411,17 @@ trait TypeAssigners { self: TypingTransformers =>
         case _ =>
           fallback(treeCopy.Apply(app, fun2, app.args), pt, "Apply-" + fun2.tpe.getClass.getSimpleName)
       }
+    }
+
+    /** `gen.mkAttributedCast` without a `Typer`: `gen.mkCast` builds `tree.$asInstanceOf[pt]()`
+     *  with the `Select` typed, and the type application and the application get their types from
+     *  it, as `Typer` would give them.
+     */
+    protected final def typedSyntheticCast(tree: Tree, pt: Type): Tree = gen.mkCast(tree, pt) match {
+      case app @ Apply(ta @ TypeApply(sel: Select, _), Nil) if sel.tpe ne null =>
+        typedApply(app, typedTypeApply(ta, WildcardType), WildcardType, qualMode = false)
+      case _ =>
+        gen.mkAttributedCast(tree, pt) // another shape than `mkCast` builds after uncurry
     }
 
     /** `ta` with its typed function: instantiates the polymorphic type. */
@@ -416,6 +473,7 @@ trait TypeAssigners { self: TypingTransformers =>
           pat.symbol.setInfo(body1.tpe)
           treeCopy.Bind(pat, name, body1) setType body1.tpe
         case _ =>
+          val localTyper = fallbackTyper("pattern")
           devWarning(pat.pos, s"$phase: typing pattern ${pat.getClass.getSimpleName} with ${localTyper.getClass.getSimpleName}")
           localTyper.typedPattern(beforeFallback(pat), pt)
       }
@@ -423,7 +481,7 @@ trait TypeAssigners { self: TypingTransformers =>
   }
 
   /** A `TypeAssigner` typing in the context of `typer`. */
-  final class TypeAssignerIn(typer: analyzer.Typer) extends TypingTransformer(typer) with TypeAssigner {
+  final class TypeAssignerIn(typer: analyzer.Typer) extends TypingTransformer(typer) {
     def typedStable(tree: Tree): Tree = typedQualifier(tree)
   }
 
