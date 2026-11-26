@@ -236,8 +236,18 @@ abstract class Duplicators extends AbstractAnalyzer {
         case ClassDef(_, _, _, tmpl @ Template(parents, _, stats)) =>
           // log("invalidating classdef " + tree)
           tmpl.symbol = tree.symbol.newLocalDummy(tree.pos)
+          // The getter of a trait val refers to its setter, which is how Constructors finds what to call to
+          // initialize the field. The typer does not set that up for the new symbols.
+          val traitSetters = stats.collect {
+            case getter: DefDef if getter.symbol.isGetter && getter.symbol.asTerm.referenced.isSetter =>
+              (getter, getter.symbol.asTerm.referenced)
+          }
           invalidateAll(stats, tree.symbol)
-          super.typed(tree.clearType(), mode, pt)
+          val result = super.typed(tree.clearType(), mode, pt)
+          traitSetters.foreach { case (getter, setter) =>
+            if (getter.symbol.isGetter) getter.symbol.asTerm.referenced = updateSym(setter)
+          }
+          result
 
         case ddef @ DefDef(_, _, _, _, tpt, rhs) =>
           ddef.tpt modifyType fixType

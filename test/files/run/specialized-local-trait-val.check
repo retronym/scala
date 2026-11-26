@@ -1,0 +1,48 @@
+members
+  generic:     v=8 r=9 l=10,10 p=p q=q param=s cap=c k=11 count=111
+  specialized: v=8 r=9 l=10,10 p=p q=q param=1 cap=c k=11 count=111
+local class
+  generic:     v=8 param=s p=p c=s
+  specialized: v=8 param=1 p=p c=1
+overridden
+  generic:     a=5 b=1 o=B
+  specialized: a=5 b=1 o=B
+self type
+  generic:     v=s w=ws
+  specialized: v=1 w=w1
+same member
+  generic:     A.v=1 B.w=2 A.p=a B.p=b D.v=3
+  specialized: A.v=1 B.w=2 A.p=a B.p=b D.v=3
+same name
+  generic:     first s, second s
+  specialized: first 1, second 1
+nested
+  generic:     o=s m=ms i=is
+  specialized: o=1 m=m1 i=i1
+early
+  generic:     e=s v=vs
+  specialized: e=1 v=v1
+by-name
+  generic:     v=n l=n w=s
+  specialized: v=2 l=2 w=1
+in function
+  generic:     v=s
+  specialized: v=1
+two parameters
+  generic:     x=s y=t v=8
+  specialized: x=1 y=2.0 v=8
+two parameters, long and int
+  generic:     x=s y=t v=8
+  specialized: x=1 y=2 v=8
+class, AnyRef
+  generic:     v=8 p=2.0 q=t
+  specialized: v=8 p=2 q=t
+class, method
+  generic:     v=x w=s p=p
+  specialized: v=2 w=1 p=p
+class, specialized method
+  generic:     v=s w=u
+  specialized: v=1 w=2
+class, field
+  generic:     v=s
+  specialized: v=1
