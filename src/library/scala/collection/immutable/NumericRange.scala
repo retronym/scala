@@ -532,7 +532,7 @@ object NumericRange {
       if (_hasNext) {
         // For a fixed-width type, `lastElement - _next` wraps to the wrong sign when it does not fit.
         val diff = lastElement - _next
-        if (num.signum(diff) * num.signum(self.step) < 0) -1
+        if (!num.equiv(diff, num.zero) && num.lt(diff, num.zero) != num.lt(self.step, num.zero)) -1
         else {
           val steps = diff / self.step
           val stepsInt = num.toInt(steps)
