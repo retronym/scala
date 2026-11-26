@@ -1,0 +1,13 @@
+{
+ "id": "GE1",
+ "outcome": "FIXED",
+ "branch": "review/w4-ge1-specialize-super-accessor",
+ "commit": "02cd70a349",
+ "workspace": "/Users/jzaugg-virtus/code/.worktrees/scala/w4-fix-d",
+ "files": "src/compiler/scala/tools/nsc/transform/SpecializeTypes.scala, test/files/run/specialized-super-accessor.scala, test/files/run/specialized-super-accessor.check",
+ "failing_before": "On the base build: error: java.util.NoSuchElementException: key not found: method super$m at SpecializeTypes$SpecializationTransformer.addBody (duplicateBody, transformDefDef); the class-with-lambda shape: key not found: method super$show.",
+ "ran_after": "sbt (workspace): 'partest test/files/run/specialized-super-accessor.scala' passed; 'partest --grep specializ' 191 passed, 0 failed. Hand run with the workspace's build/quick/classes on an explicit java -cp: the test with -Ycheck:all compiles cleanly and prints the expected output; javap shows T1.m$mIc$sp boxing and calling T1$$super$m. git merge-tree against the heads of the 31 open fork PRs touching SpecializeTypes, Duplicators, Constructors or the optimizer: no conflicts.",
+ "prior_work": "No ticket found. Open fork PRs on super calls into specialized parents with other causes: retronym/scala#354, #456, #649 (no textual overlap).",
+ "unsure": "The change behind the regression from 2.12 was not found; normalizeMember and SuperAccessors' accessor creation read the same in 2.12.20. A class super accessor (for a super call from a lambda) previously would also have been normalized; it now is not, so such a class loses no member that ever compiled (it crashed). The variant's super call now boxes.",
+ "note": "normalizeMember skips super accessors, as specializeMember already does, so the bodiless accessor gets no specialized variants."
+}

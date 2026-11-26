@@ -6,8 +6,8 @@
  "note": "RangeIterator.knownSize counts in Long and returns -1 above Int.MaxValue. Shares the branch with GC2.",
  "workspace": "/Users/jzaugg-virtus/code/.worktrees/scala/w4-fix-a",
  "branch": "review/w4-gc1-range-iterator-known-size",
- "commit": "567c785f0c",
+ "commit": "f6563d5abb",
  "files": "src/library/scala/collection/immutable/Range.scala, src/library/scala/collection/immutable/NumericRange.scala, test/junit/scala/collection/immutable/RangeTest.scala, test/junit/scala/collection/immutable/NumericRangeTest.scala",
- "ran_after": "sbt \"junit/testOnly scala.collection.immutable.RangeTest scala.collection.immutable.NumericRangeTest scala.collection.immutable.RangeConsistencyTest scala.collection.IteratorTest\" (passed), library/mimaReportBinaryIssues (success, no new filters).",
+ "ran_after": "sbt \"junit/testOnly scala.collection.immutable.RangeTest scala.collection.immutable.NumericRangeTest scala.collection.immutable.RangeConsistencyTest scala.collection.IteratorTest\" (passed), \"scalacheck/testOnly scala.collection.immutable.NumericRangeProperties scala.collection.immutable.RangeProperties\" (passed), library/mimaReportBinaryIssues (success, no new filters). git merge-tree with the heads of retronym/scala#555, #558, #655 and the GC3/GC5 branches: clean.",
  "prior_work": "None for iterator knownSize. Related open fork PRs on the same classes: retronym/scala#555 (Range.posOf), retronym/scala#558 (RangeIterator.drop), retronym/scala#655 (NumericRange count/length/take/drop; does not touch the iterator); no textual overlap with any of them."
 }

@@ -1,0 +1,13 @@
+{
+ "id": "GA1",
+ "outcome": "COVERED",
+ "branch": "",
+ "commit": "",
+ "workspace": "/Users/jzaugg-virtus/code/.worktrees/scala/w4-fix-b",
+ "files": "",
+ "failing_before": "",
+ "ran_after": "",
+ "prior_work": "GC7 (primary).",
+ "unsure": "nothing",
+ "note": "Duplicate of GC7 (the review): every GA1 cell is covered by GC7's branches review/w4-gc7-arraydeque-aliased-source (ArrayDeque addAll, patchInPlace, subtractAll; UnrolledBuffer subtractAll) and review/w4-gc7-unrolledbuffer-aliased-source (UnrolledBuffer addAll, prependAll, ++=:, insertAll, patchInPlace, stacked on retronym/scala#538). The ArrayBuffer/ListBuffer ConcurrentModificationException lines are fail-fast and now give the result for patchInPlace and subtractAll."
+}

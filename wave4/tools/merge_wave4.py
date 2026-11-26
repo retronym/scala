@@ -67,12 +67,16 @@ for d in sorted(glob.glob(W4 + "/findings/*/"), key=lambda p: natkey(os.path.bas
     o18 = str(f.get("on_2_13_18", "")).lower()
     if o18.startswith(("different", "absent")) or "regression" in str(f.get("kind", "")).lower(): regress[fid] = str(f.get("on_2_13_18", ""))
 regress.update(st.get("regress", {}))
-W4D = {"findings": rows, "level": level, "scala3": scala3, "related": related, "area": AREA4, "ids": ids, "regress": regress,
+DR = {}
+for fp in sorted(glob.glob(os.path.join(DASH, "diffreview-w4-*.json")), key=lambda p: p.endswith("-rework.json")):  # a rework file is applied last
+    try: DR.update(json.load(open(fp)))
+    except Exception as ex: print("bad diff review", fp, ex)
+W4D = {"diffreview": DR, "findings": rows, "level": level, "scala3": scala3, "related": related, "area": AREA4, "ids": ids, "regress": regress,
        "phases": st.get("phases", []), "meta": st.get("meta", []), "agents": st.get("agents", []), "log": st.get("log", [])}
 js = "const WAVE4 = " + json.dumps(W4D, ensure_ascii=False).replace("</", "<\\/") + ";\n" \
     "WAVE2.w4 = new Set(WAVE4.ids); WAVE4.ids.forEach(i => WAVE2.ids.add(i)); Object.assign(WAVE2.level, WAVE4.level); Object.assign(WAVE2.area, WAVE4.area);\n" \
     "DATA.findings.push(...WAVE4.findings); DATA.phases.push(...WAVE4.phases); DATA.meta.push(...WAVE4.meta); DATA.agents.unshift(...WAVE4.agents); DATA.log.unshift(...WAVE4.log);\n" \
-    'for (const k of ["related", "scala3", "regress"]) DATA[k] = Object.assign(DATA[k] || {}, WAVE4[k]);\n' \
+    'for (const k of ["related", "scala3", "regress", "diffreview"]) DATA[k] = Object.assign(DATA[k] || {}, WAVE4[k]);\n' \
     'DATA.base += " · wave four (26 November: generated inputs and oracles) on the integration build of draft fixes";\n'
 s = open(P).read()
 assert "// wave3-end\n" in s and "// wave2-end\n" in s, "run merge_wave2.py and merge_extra.py first"

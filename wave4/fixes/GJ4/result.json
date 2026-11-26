@@ -1,0 +1,13 @@
+{
+ "id": "GJ4",
+ "outcome": "FIXED",
+ "branch": "review/w4-gj4-java-enum-lone-comma",
+ "commit": "320dc981d5",
+ "workspace": "/Users/jzaugg-virtus/code/.worktrees/scala/w4-fix-c",
+ "files": "src/compiler/scala/tools/nsc/javac/JavaParsers.scala, test/files/pos/java-enum-lone-comma/E0.java, test/files/pos/java-enum-lone-comma/E1.java, test/files/pos/java-enum-lone-comma/Test.scala",
+ "failing_before": "pos/java-enum-lone-comma on the base: 'E0.java:1: error: identifier expected but `,` found.' and the same for E1.java.",
+ "ran_after": "sbt partest of pos/java-enum-lone-comma plus every partest directory with a Java source containing enum (36 tests across pos, neg, run, jvm): all ok.",
+ "prior_work": "None. Scala 3 rejects these files too.",
+ "unsure": "nothing",
+ "note": "enumDecl skips a leading comma when } or ; follows it; a comma followed by a constant is still an error, as in javac."
+}

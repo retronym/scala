@@ -11,3 +11,12 @@ Read `/Users/jzaugg-virtus/code/.worktrees/scala/bug-hunting-second-wave-da4ba4/
 - **Deliverables** go in `wave4/fixes/<ID>/` (`result.json`, `pr-title.txt`, `pr-body.md`), same fields as wave two, `workspace` an absolute path. The pull-request body's closing line is exactly: `Found in the fourth wave of the coordinated code review of 2.13.x (finding <ID>). Prepared with Claude.`
 - **Pull-request body**: for a fix: problem, mechanism, fix, for a busy expert. For a test-only branch the first paragraph says the pull request holds a failing test and no fix. In both: what the program does, what it should do and why, the mechanism and code location as far as the finding and its review establish them, whether it is a regression (name the upstream pull request if the review found it), existing tickets and related pull requests on the fork (qualified, `retronym/scala#NNN`), and a short "possible fix" paragraph. Do not say how the defect was found beyond the closing line, no generator or seed, no testing status, no counts, no commit SHAs, no manual line wrapping.
 - The fork's CI runs on JDK 8 with fatal warnings: no unused imports or values in tests, no Java 9+ API without the `jvm` line.
+
+## Rework after diff review
+
+A diff reviewer read each fix pull request; its verdicts are in `/Users/jzaugg-virtus/.claude/scala-2-13-review-dashboard/diffreview-w4-*.json`, keyed by pull-request number. In rework mode your brief lists pull requests whose verdict is `defect` or `concern`. For each:
+
+- Do not check out or amend the pull request's branch: another worker created it. Create `sweep/<the branch name without review/>` at that branch's head (`git fetch -q origin <branch>` then `git checkout -b sweep/... FETCH_HEAD`), make the change, and amend so the sweep branch is one commit on the same base as before, holding test and fix. The coordinator pushes it over the pull request's head.
+- Add a test for each input the reviewer gave, and reproduce each on the unreworked branch first.
+- Rewrite `result.json` (`branch` is the sweep branch, add `sweep` with value `"review-fix"`), `pr-title.txt` and `pr-body.md` in `wave4/fixes/<ID>/`. The body describes the change as it now stands, with no account of the rework.
+- If a reviewer's point is a decision for the owner and not a defect, do not decide it: state the options in the body.

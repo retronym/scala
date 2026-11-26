@@ -1,0 +1,1 @@
+Don't specialize a super accessor's method type parameters

@@ -1,0 +1,1 @@
+Test a lambda over a local lazy val in a specialized body

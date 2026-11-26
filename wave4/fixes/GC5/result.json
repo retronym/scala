@@ -1,0 +1,13 @@
+{
+ "id": "GC5",
+ "outcome": "FIXED",
+ "branch": "review/w4-gc5-bigdecimal-range-count",
+ "commit": "6f3bbcd104",
+ "workspace": "/Users/jzaugg-virtus/code/.worktrees/scala/w4-fix-a",
+ "files": "src/library/scala/collection/immutable/NumericRange.scala, test/junit/scala/collection/immutable/NumericRangeTest.scala",
+ "failing_before": "NumericRangeTest.bigDecimalCountFromFractionalStartAcrossZero: IllegalArgumentException: More than Int.MaxValue elements. at NumericRange$.count (Range.BigDecimal.inclusive(0.34, -21474836.11, -0.01).length); the small-range model checks in the same test passed before the fix.",
+ "ran_after": "sbt \"junit/testOnly scala.collection.immutable.NumericRangeTest scala.collection.immutable.RangeTest scala.collection.immutable.RangeConsistencyTest\" (passed, includes the scala/bug#12073 test smallIncrementCount), \"scalacheck/testOnly scala.collection.immutable.NumericRangeProperties scala.collection.immutable.RangeProperties\" (passed), library/mimaReportBinaryIssues (success, no new filters). git merge-tree with retronym/scala#533, #655 heads and the GC1 branch: clean.",
+ "prior_work": "scala/bug#12073 (b2c2f35842, 2.13.4) introduced the startdiff = start branch; retronym/scala#533 and #655 change other parts of NumericRange.count (#655 adds checkedQuot for the last piece, which composes: the last piece is now never inflated). No ticket found.",
+ "unsure": "startdiff is now -start (step to zero) rather than 0 (stay at start); both are correct, -start keeps the waypoint between start and zero. Only BigDecimal reaches the branch.",
+ "note": "NumericRange.count's first piece steps from a fractional start towards zero instead of away from it, so the last piece is no longer inflated past the Int.MaxValue check."
+}

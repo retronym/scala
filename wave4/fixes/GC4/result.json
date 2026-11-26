@@ -1,0 +1,14 @@
+{
+ "id": "GC4",
+ "outcome": "FIXED",
+ "branch": "review/w4-gc4-range-lastindexof-overflow",
+ "commit": "e505773516",
+ "workspace": "/Users/jzaugg-virtus/code/.worktrees/scala/w4-fix-a",
+ "stacked_on": "retronym/scala#555 (review/w2-li1-range-indexof-overflow, head 4e88f66b55)",
+ "files": "src/library/scala/collection/immutable/Range.scala, test/junit/scala/collection/immutable/RangeTest.scala",
+ "failing_before": "RangeTest.indexOfBeyondIntIndices (on #555's head): expected:<-1> but was:<-2147483645>",
+ "ran_after": "On the stacked branch: sbt \"junit/testOnly scala.collection.immutable.RangeTest scala.collection.immutable.RangeConsistencyTest\" (passed), library/mimaReportBinaryIssues (success, no new filters).",
+ "prior_work": "retronym/scala#555 (LI1) rewrites the same line; this widens it. No ticket found.",
+ "unsure": "#555 is based on a7ba69ff60 (wave-two base), not 4a67cb8202, so this branch is too. Position exactly Int.MaxValue (e.g. (Int.MinValue to 51).indexOf(-1)) is still returned, as it is a valid Int. -1 chosen over throwing, as the review leaned.",
+ "note": "posOf returns -1 when the Long position exceeds Int.MaxValue. One commit on top of #555."
+}

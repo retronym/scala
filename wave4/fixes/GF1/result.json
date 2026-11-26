@@ -1,0 +1,13 @@
+{
+ "id": "GF1",
+ "outcome": "FIXED",
+ "branch": "review/w4-gf1-constant-if-nothing-scrutinee",
+ "commit": "32b4d34dac",
+ "workspace": "/Users/jzaugg-virtus/code/.worktrees/scala/w4-fix-c",
+ "files": "src/compiler/scala/tools/nsc/typechecker/RefChecks.scala, test/files/run/constant-if-nothing-scrutinee.scala, test/files/run/constant-if-nothing-scrutinee.check",
+ "failing_before": "run/constant-if-nothing-scrutinee.scala on the base: 'error: Error while emitting constant-if-nothing-scrutinee.scala / assertion failed: Bad superClass for class Int: <none> ... during phase: jvm'. Also on the base: (if (false) 1 else \"s\") match { case \"s\" => ...; case 1 => ... } gives 'error during expansion of this match (this is a scalac bug). type mismatch; found Int(1) required String', and (if (Debug) A() else B()) match { case A() => 0; case B() => 1 } on a sealed trait gives a false 'unreachable code' warning.",
+ "ran_after": "sbt \"partest test/files/run/constant-if-nothing-scrutinee.scala\" (ok) then \"partest --pos --neg --run --jvm\": every test ok except four untracked tests of my other findings in the working tree (pos/java-enum-lone-comma, neg/annotation-argument-not-constant, neg/java-annotation-operator-argument, run/java-record-varargs-accessor), which fail without their fixes. -Ycheck:all by hand on the test plus three scratch variants (Some/None, String narrowing, .toString on a reduced if) with the workspace's build/quick/classes on the class path (java -cp library:reflect:compiler:scala-asm scala.tools.nsc.Main, -version showed 2.13.19-...-4a67cb8): only the ModuleSerializationProxy 'out of scope symbol' warnings that case class companions give on the base too; the compiled test prints disabled/0/1.",
+ "prior_work": "None for this cause. scala/bug#11200 has the same assertion text from a different, closed cause. Regression in 2.13.0 from scala/scala#7260 (inferred by the review from 2.12.20 compiling it).",
+ "unsure": "The wrap applies to every constant-condition if whose branch type is not =:= to the if's type, not only to match scrutinees (e.g. `if (C) 1 else 2` typed Int now leaves Typed(Literal(1), Int)). Typed is transparent to tailcalls, erasure and the back end, and the full pos/neg/run/jvm categories pass, but bytecode of such code was not diffed. A narrower alternative is to wrap only when the branch type is Nothing; that leaves the String-narrowing expansion error and the false unreachable warning.",
+ "note": "RefChecks.transformIf wraps the surviving branch in Typed(branch, TypeTree(if.tpe)) when the types differ, so the pattern matcher (after refchecks since 2.13.0) sees the scrutinee type the cases were typed against."
+}

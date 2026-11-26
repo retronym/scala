@@ -1,0 +1,14 @@
+{
+ "id": "GC7",
+ "outcome": "FIXED",
+ "branch": "review/w4-gc7-arraybuffer-flatmapinplace-alias",
+ "commit": "d59493946d",
+ "workspace": "/Users/jzaugg-virtus/code/.worktrees/scala/w4-fix-b",
+ "files": "src/library/scala/collection/mutable/Buffer.scala, test/junit/scala/collection/mutable/ArrayBufferTest.scala",
+ "failing_before": "ArrayBufferTest.flatMapInPlace_viewOfSelf: expected:<ArrayBuffer(1, 2, 1, 2, 1, 2)> but was:<ArrayBuffer()>. By hand on the base: ArrayDeque(1, 2).flatMapInPlace(x => q.iterator.map(_*x)) = IndexOutOfBoundsException.",
+ "ran_after": "sbt -java-home ~/.sdkman/candidates/java/21.0.12+1.1-tem \"junit/testOnly scala.collection.*\" library/mimaReportBinaryIssues on the branch: Passed 1675, Failed 0; MiMa success with no new filters. Integration check (not a deliverable branch, ws/gc7-integration in the workspace): review/w4-gc7-arraydeque-aliased-source merged with retronym/scala#548, #534, review/w4-gc7-arraybuffer-flatmapinplace-alias and review/w4-gc7-unrolledbuffer-aliased-source (merges cleanly; only automatic merges), then sbt -java-home ~/.sdkman/candidates/java/21.0.12+1.1-tem \"junit/testOnly scala.collection.*\" library/mimaReportBinaryIssues: all passed, MiMa success. Hand run of the finding examples with java -cp <workspace>/build/quick/classes/library (integration build) against the w3-int pack (unfixed): every example gives the expected result after.",
+ "prior_work": "scala/bug#12121; no existing PR touches IndexedBuffer.flatMapInPlace. ListBuffer.flatMapInPlace already reads each result as produced.",
+ "stacked_on": "",
+ "unsure": "The ArrayDeque case is tested in ArrayBufferTest beside the ArrayBuffer case, since the fix is in IndexedBuffer. A function returning a view or iterator of something else now pays one copy per result.",
+ "note": "IndexedBuffer.flatMapInPlace copies each result that may read the buffer when the function returns it, before the buffer is cleared, which matches ListBuffer."
+}

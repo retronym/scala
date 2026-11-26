@@ -23,11 +23,39 @@
   ],
   "agents": [
     [
+      "w4 rework compiler",
+      "Opus",
+      "Rework of retronym/scala#750 and #756 after diff review",
+      "running",
+      ""
+    ],
+    [
+      "w4 rework self-aliasing",
+      "Opus",
+      "Rework of retronym/scala#758, #759 and #760 after diff review",
+      "running",
+      ""
+    ],
+    [
+      "w4 diff review compiler",
+      "Opus",
+      "Independent read of #750, #751, #752, #753, #756",
+      "done",
+      "3 ok (#751, #752, #753), 1 concern (#750: correct, but the Typed wrap changes bytecode of ordinary code), 1 defect (#756: rejects unary operators on literals such as !true and ~1, which 2.13.18 accepts)"
+    ],
+    [
+      "w4 diff review library",
+      "Opus",
+      "Independent read of #747, #748, #754, #755, #758, #759, #760",
+      "done",
+      "4 ok (#747, #748, #754, #755), 3 defect (#758, #759, #760: immutable.Stream passes the trusted-source rule, the empty-receiver shortcut is unsound for a lazily concatenated source, and Option is copied on safe hot paths)"
+    ],
+    [
       "w4 fix java+expr",
       "Opus",
       "Fixes for GJ1 to GJ4, GF1, GF2",
-      "running",
-      ""
+      "done",
+      "GJ1, GJ2, GJ4, GF1 and GF2 fixed, GJ3 test only (a sound fix needs the constant-expression parser in annotation element values and would replace retronym/scala#288). GF1 wraps the reduced branch in a Typed with the type of the if; the narrowing also broke match expansion on a String branch and gave a false unreachable-code warning. GF2 rejects non-constant annotation arguments that 2.13.0 to 2.13.18 accept, as 2.12 and Scala 3 do"
     ],
     [
       "w4 fix programs",
@@ -40,15 +68,15 @@
       "w4 fix ranges",
       "Opus",
       "Fixes for GC1 to GC6: range iterators, updateWith",
-      "running",
-      ""
+      "done",
+      "GC1 and GC2 fixed in one pull request (knownSize counts in Long and reports unknown when it cannot fit), GC3, GC4 (stacked on retronym/scala#555) and GC5 fixed, GC6 test only as a design question: the worker also found that an absent key whose function grows the table lands in the wrong bucket"
     ],
     [
       "w4 fix self-aliasing",
       "Opus",
       "Fixes for GC7 by collection class: ArrayDeque, UnrolledBuffer, ArrayBuffer.flatMapInPlace, sets and maps",
-      "running",
-      ""
+      "done",
+      "GC7 fixed for buffers in three pull requests and written up as a design question for sets and maps; GA1 covered. A non-empty ArrayDeque now copies a view or iterator source once in addAll, and ArrayBuffer and ListBuffer return the right result where they threw ConcurrentModificationException. Cost of the extra copy not measured"
     ],
     [
       "w4 review library",
@@ -108,6 +136,18 @@
     ]
   ],
   "log": [
+    [
+      "26 Nov 22:35",
+      "Diff reviews of the first twelve fix pull requests: seven ok, one concern (#750), four defects (#756, #758, #759, #760). The four are converted to drafts and two rework workers are on all five."
+    ],
+    [
+      "26 Nov 22:26",
+      "More wave-four pull requests: retronym/scala#756 (GF2), #757 (GJ3, test only) and the four for self-aliasing (GC7, GA1). 16 of 22 findings now link to a pull request; the eight specialization and inliner findings are with the last worker."
+    ],
+    [
+      "26 Nov 22:22",
+      "First wave-four pull requests opened on the fork, retronym/scala#747 to #755: range iterator knownSize (GC1, GC2), Range drop, indexOf and BigDecimal count (GC3 to GC5), updateWith as a test with the options (GC6), the constant-if crash (GF1), and three Java parser fixes (GJ1, GJ2, GJ4). None has had a diff review yet."
+    ],
     [
       "26 Nov 22:13",
       "All three independent reviews are in: 22 findings, none doubtful, wrong or by design; GA1 is a duplicate of GC7 and GE8 of GE3; GC7, GE4 and GE7 are known tickets. Three regressions in unreleased 2.13.19 or earlier 2.13 releases stand out: GJ1 (sealed Java types, scala/scala#11329), GE6 (ASM upgrade, scala/scala#11327), GC6 (updateWith, 2.13.1). Four fix workers are running."
@@ -214,6 +254,110 @@
     "GJ4": {
       "state": "verified",
       "note": "cmd.sh re-run by the coordinating session on the integration build at 26 Nov 21:47; output matches actual.txt"
+    }
+  },
+  "fix": {
+    "GC1": {
+      "prs": [
+        747
+      ],
+      "state": "fixed",
+      "note": "Fix: RangeIterator.knownSize counts in Long and returns -1 above Int.MaxValue. Shares the branch with GC2."
+    },
+    "GC3": {
+      "prs": [
+        748
+      ],
+      "state": "fixed",
+      "note": "Fix: RangeIterator.drop returns early when the iterator is exhausted, covering empty ranges whose lastElement wraps and exhausted iterators of ranges ending at Int.MaxValue."
+    },
+    "GC6": {
+      "prs": [
+        749
+      ],
+      "state": "fixed",
+      "note": "Test only, no fix yet: Design question as the review says: support re-entrancy (re-check node and table after the call, second bucket walk) or reject with a modification count and CME as java.util.HashMap.compute does. Branch holds the failing test and the options."
+    },
+    "GF1": {
+      "prs": [
+        750
+      ],
+      "state": "fixed",
+      "note": "Fix: RefChecks.transformIf wraps the surviving branch in Typed(branch, TypeTree(if.tpe)) when the types differ, so the pattern matcher (after refchecks since 2.13.0) sees the scrutinee type the cases were typed against."
+    },
+    "GJ2": {
+      "prs": [
+        751
+      ],
+      "state": "fixed",
+      "note": "Fix: recordDecl gives the generated accessor Array[T] when the header parameter's type tree is the repeated-parameter type; the canonical constructor keeps T*. An explicitly declared accessor is untouched."
+    },
+    "GJ4": {
+      "prs": [
+        752
+      ],
+      "state": "fixed",
+      "note": "Fix: enumDecl skips a leading comma when } or ; follows it; a comma followed by a constant is still an error, as in javac."
+    },
+    "GJ1": {
+      "prs": [
+        753
+      ],
+      "state": "fixed",
+      "note": "Fix: Two-site fix: Flags.SEALED instead of the token constant SEALED in classDecl and interfaceDecl."
+    },
+    "GC4": {
+      "prs": [
+        754
+      ],
+      "state": "fixed",
+      "note": "Fix (stacked on retronym/scala#555): posOf returns -1 when the Long position exceeds Int.MaxValue. One commit on top of #555."
+    },
+    "GC2": {
+      "prs": [
+        747
+      ],
+      "state": "fixed",
+      "note": "Fix (same pull request as GC1): Same branch as GC1. NumericRangeIterator.knownSize returns -1 when the difference wraps or the count does not round-trip through Int."
+    },
+    "GC5": {
+      "prs": [
+        755
+      ],
+      "state": "fixed",
+      "note": "Fix: NumericRange.count's first piece steps from a fractional start towards zero instead of away from it, so the last piece is no longer inflated past the Int.MaxValue check."
+    },
+    "GF2": {
+      "prs": [
+        756
+      ],
+      "state": "fixed",
+      "note": "Fix: tryConst now also checks that the argument's original tree is a constant expression in the sense of SLS 6.24; blocks and calls of literal-typed methods are reported with the existing 'annotation argument needs to be a constant' error."
+    },
+    "GJ3": {
+      "prs": [
+        757
+      ],
+      "state": "fixed",
+      "note": "Test only, no fix yet: Not fixed: a sound fix reuses constantExprOpt in elementValue (new terminators, class literals) and folds with JavaConstantFolder in typedAnnotation, which lives privately in Namers; that is a parser and typer change of moderate size that would replace retronym/scala#288 and is better done as one change with J5."
+    },
+    "GC7": {
+      "prs": [
+        758,
+        759,
+        760,
+        761
+      ],
+      "state": "fixed",
+      "note": "Fix, in four pull requests by collection class: retronym/scala#758 buffers (ArrayDeque addAll, patchInPlace, subtractAll), #759 UnrolledBuffer (stacked on #538), #760 ArrayBuffer.flatMapInPlace, #761 sets and maps as failing tests with the options (snapshot, fail fast, document). One rule throughout: a source is read before the first write unless it is an immutable collection other than LazyList, a mutable.ArraySeq, or an ArrayBuffer or ArrayDeque other than the receiver."
+    },
+    "GA1": {
+      "prs": [
+        758,
+        759
+      ],
+      "state": "fixed",
+      "note": "Fix: covered by the GC7 pull requests for ArrayDeque and UnrolledBuffer."
     }
   }
 }

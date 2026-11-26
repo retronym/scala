@@ -1,0 +1,13 @@
+{
+ "id": "GF2",
+ "outcome": "FIXED",
+ "branch": "review/w4-gf2-annotation-argument-not-constant",
+ "commit": "a6d5f90f00",
+ "workspace": "/Users/jzaugg-virtus/code/.worktrees/scala/w4-fix-c",
+ "files": "src/compiler/scala/tools/nsc/typechecker/Typers.scala, test/files/neg/annotation-argument-not-constant/Ann.java, test/files/neg/annotation-argument-not-constant/Test.scala, test/files/neg/annotation-argument-not-constant.check",
+ "failing_before": "neg/annotation-argument-not-constant on the base: no error for the blocks, K.three(), K.id(5) or K.three() + 1 (the only error was for a \"a\" + 1 case, since removed from the test because it is not a constant on the base either).",
+ "ran_after": "sbt partest --update-check of the new test (6 errors: two blocks and a block in a ConstantAnnotation, K.three(), K.id(5), K.three() + 1; the Ok classes compile); partest --pos --neg --jvm with the final predicate: all ok except the untracked GJ3 test; partest --run with an earlier, stricter version of the predicate: all ok; junit/testOnly scala.tools.nsc.typechecker.*: 23 passed.",
+ "prior_work": "retronym/scala#606 (EO6/LZ2) folds blocks in ordinary code and does not touch tryConst; no overlap. jvm/java-constant-impure-qualifier (base) asserts @SerialVersionUID(K.make().inst) is accepted; the fix keeps that.",
+ "unsure": "Design decision: this rejects source that 2.13.0-2.13.18 accept. Fixed because SLS 11/6.24 is explicit, 2.12.20 and Scala 3 (for Java annotations) reject the same arguments, and the forms are unlikely in real code; a deprecation warning for one release is the conservative alternative, named in the PR body. It also applies to Scala ConstantAnnotations (@deprecated, @nowarn, @SerialVersionUID), which Scala 3 does not check. The predicate relies on the OriginalTreeAttachment that adaptConstant leaves on folded literals and accepts a Select of any stable symbol regardless of its qualifier (needed for the existing impure-qualifier test), so K.four for a non-final val four: 4 is still accepted. The full run category was not rerun with the final, more permissive predicate. The error for a block prints the typed tree (with the val's accessor).",
+ "note": "tryConst now also checks that the argument's original tree is a constant expression in the sense of SLS 6.24; blocks and calls of literal-typed methods are reported with the existing 'annotation argument needs to be a constant' error."
+}

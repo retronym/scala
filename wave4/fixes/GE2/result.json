@@ -1,0 +1,13 @@
+{
+ "id": "GE2",
+ "outcome": "FIXED",
+ "branch": "review/w4-ge2-specialize-super-call-type-args",
+ "commit": "fcbb097e50",
+ "workspace": "/Users/jzaugg-virtus/code/.worktrees/scala/w4-fix-d",
+ "files": "src/compiler/scala/tools/nsc/transform/SpecializeTypes.scala, test/files/run/specialized-super-call-type-args.scala, test/files/run/specialized-super-call-type-args.check",
+ "failing_before": "Base build: 'type argument: StackOverflowError', 'inferred type argument: StackOverflowError', 'specialized type parameter, Int: StackOverflowError', 'specialized type parameter, String: StackOverflowError', 'fold: StackOverflowError' (class parent row: 2).",
+ "ran_after": "sbt (workspace): 'partest test/files/run/specialized-super-call-type-args.scala' passed; 'partest --grep specializ' 191 passed, 0 failed. Temporary merge of this branch with retronym/scala#354's head, built in the workspace: partest of run/specialized-super-call-type-args, run/specialized-super-call (#354's test) and run/t3651 all passed; the temporary branch is deleted. Hand run with the workspace's build/quick/classes on an explicit java -cp: the test with -Ycheck:all compiles cleanly and prints the expected output. git merge-tree against the heads of the 31 open fork PRs touching SpecializeTypes, Duplicators, Constructors or the optimizer: no conflicts.",
+ "prior_work": "retronym/scala#354 (super.m(args) without type arguments; this branch handles the TypeApply case and is independent of it), retronym/scala#433 (override lookup in transformSelect), NW3 (abstract override variant).",
+ "unsure": "Stacking: written on the base, not on #354, because the change is in the neighbouring TypeApply case and does not need #354's code; the review suggested folding it into #354 as a wider fix, which the coordinator may prefer to do by cherry-picking. The new Select is untyped and retyped by computeResidualTypeVars' typedOperator; residual type arguments go through the existing path.",
+ "note": "In the TypeApply case, a Super qualifier of a class with new parents is rebuilt and the variant selected by name and retyped, so the call binds to the specialized trait's implementation instead of the generic forwarder."
+}
