@@ -418,8 +418,10 @@ abstract class BCodeSyncAndTry extends BCodeBodyBuilder {
       }
     }
 
-    /* Does this tree have a try-catch block? */
-    def mayCleanStack(tree: Tree): Boolean = tree exists { t => t.isInstanceOf[Try] }
+    /* Does this tree have a try-catch block, or a return? An exception handler starts with an empty stack. A return
+     * may jump to the cleanup of an enclosing try-finally, which other returns reach with an empty stack.
+     */
+    def mayCleanStack(tree: Tree): Boolean = tree exists { t => t.isInstanceOf[Try] || t.isInstanceOf[Return] }
 
     sealed trait EHClause
     case class NamelessEH(typeToDrop: ClassBType,  caseBody: Tree) extends EHClause
