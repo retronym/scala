@@ -14,7 +14,7 @@ package scala
 package collection
 package immutable
 
-import java.io.{ObjectInputStream, ObjectOutputStream}
+import java.io.{NotSerializableException, ObjectInputStream, ObjectOutputStream}
 import java.lang.{StringBuilder => JStringBuilder}
 import scala.annotation.tailrec
 import scala.collection.generic.SerializeEnd
@@ -465,8 +465,22 @@ final class LazyList[+A] private (lazyState: AnyRef /* EmptyMarker.type | () => 
     else tail.foldLeft(op(z, head))(op)
 
   // LazyList.Empty doesn't use the SerializationProxy
-  protected[this] def writeReplace(): AnyRef =
-    if (knownNonEmpty) new SerializationProxy[A](this) else this
+  @tailrec protected[this] def writeReplace(): AnyRef = rawTail match {
+    case fun: Function0[_] =>
+      // Not evaluated. Default serialization would write `_tail` (in the slot of `LazyListBase`, together with
+      // everything `fun` captures) before it reads `_head`. If another thread evaluated this cell in between, the
+      // stream would hold the state function with the evaluated head. So a private copy is written instead, which
+      // no other thread can evaluate. Its serialized form is that of this cell before evaluation.
+      new LazyList[A](fun)
+    case null =>
+      if (isEvaluated) this else writeReplace() // another thread is about to write `_head`
+    case _: LazyList[_] =>
+      if (isEvaluated) new SerializationProxy[A](this) else writeReplace()
+    case marker =>
+      // Being evaluated (a `Thread` or an `InRace`). Fail here, not when the marker is written: the cell can be
+      // evaluated by then, and its two fields would again be read at different times.
+      throw new NotSerializableException(marker.getClass.getName)
+  }
 
   override protected[this] def className = "LazyList"
 
