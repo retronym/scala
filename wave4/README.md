@@ -230,6 +230,8 @@ Each is stated in the body of its pull request; none was made on his behalf.
 - retronym/scala#764 adds an on-by-default warning for `def m[@specialized X](q: => X)`, which can fail a `-Werror` build.
 - retronym/scala#775 is partial: a primitive-typed match in statement position with one arm that erases to `Object` still fails the tree checker.
 - retronym/scala#779: nested binders are not scoped to their own binder, the same limit retronym/scala#459 has for existentials.
+- scala/scala#11426 (from retronym/scala#769, which absorbed #747 and #748) fails its validate check on a deprecated `Numeric.signum` that came from the wave-four `knownSize` fix. The replacement, comparisons against zero, is the last commit on the branch `review/w4-gc1-range-iterator-known-size`; `num.sign` returns `T`, so the compiler's hint is not a drop-in.
+- Seen in passing by a diff reviewer and not yet a finding: `1L + lock.synchronized { intExpr }` fails verification on the base.
 - The four `area:generated:*` labels on the fork are unused and can be deleted.
 
 ## Not verified

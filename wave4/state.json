@@ -28,6 +28,13 @@
   ],
   "agents": [
     [
+      "w4 ci triage 2",
+      "Sonnet",
+      "Fork CI results for retronym/scala#747 to #785",
+      "done",
+      "Of 38: 26 pass, 7 still running, 5 fail only in the deliberately failing tests they add (#749, #761, #765, #767, #772). The allocation tests of #758 to #760 pass on JDK 8. #757 passes because its test is skipped on JDK 8. #747, #748 and #753 were closed by the owner's account: the first two folded into retronym/scala#769 (now scala/scala#11426), the third promoted as scala/scala#11427"
+    ],
+    [
       "w4 verify WP10",
       "Sonnet",
       "Check WP10 against #750 and add its test",
@@ -45,8 +52,8 @@
       "w4 diff review #784",
       "Opus",
       "Independent read of the WP5 fix in the back end",
-      "running",
-      ""
+      "done",
+      "ok, low risk. 62 cases with a return in operand position give the same result and finalizer trace as hand-written equivalents, under default flags, -opt:local and the inliner; the base crashes on the same file. The standard library and 1,104 run and jvm tests are byte-identical. Cost: 4 ms on the library, 66 ms for 500 generated methods; the frame limit of GE6 cannot be hit because the analyzer's limits are already unbounded. Suggests closing #618 and moving its test here. Seen in passing on the base: 1L + lock.synchronized { intExpr } fails verification"
     ],
     [
       "w4 rework #779",
@@ -407,6 +414,18 @@
     ]
   ],
   "log": [
+    [
+      "27 Nov 01:53",
+      "scala/scala#11426 (opened by another session from retronym/scala#769, which absorbed #747) fails its validate check on the deprecated Numeric.signum that came from the wave-four knownSize fix. The replacement, comparisons against zero, is the commit on top of the closed #747's branch review/w4-gc1-range-iterator-known-size; this session does not touch upstream."
+    ],
+    [
+      "27 Nov 01:53",
+      "#784, the fix for scala/bug#10183, passed its diff review and is out of draft."
+    ],
+    [
+      "27 Nov 01:52",
+      "Second CI pass: no failure outside deliberately failing tests. #747 and #748 were folded into retronym/scala#769 and #753 promoted upstream by another session; the follow-up commit for #747's deprecation warning sits on that closed pull request's branch."
+    ],
     [
       "27 Nov 01:49",
       "WP10 is covered by #750, which now has a test for it. All 39 wave-four findings link to a pull request."
@@ -922,7 +941,7 @@
         784
       ],
       "state": "fixed",
-      "note": "Fix (draft until read): Back-end fix (option a): after emitting a method, find the stack at each return-to-cleanup jump with an ASM analysis and pop it, so all jumps to a cleanup arrive with an empty stack; empty-stack returns are unchanged (library class files identical)."
+      "note": "Fix (judged ok by an independent diff review): Back-end fix (option a): after emitting a method, find the stack at each return-to-cleanup jump with an ASM analysis and pop it, so all jumps to a cleanup arrive with an empty stack; empty-stack returns are unchanged (library class files identical)."
     },
     "WP7": {
       "prs": [
