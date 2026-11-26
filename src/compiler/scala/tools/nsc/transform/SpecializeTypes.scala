@@ -1603,7 +1603,16 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
           )
         }
         if (env.isEmpty) NoSymbol
-        else qual.tpe member specializedName(symbol, env) suchThat isMatch
+        else {
+          val specName   = specializedName(symbol, env)
+          val candidates = qual.tpe member specName filter isMatch
+          // Overloads that differ in an unspecialized parameter type all pass the AnyRef case of `doesConform`;
+          // keep the variant of `symbol` or an override of it.
+          lazy val variant = overloads(symbol).find(o => o.sym.name == specName && o.matchesEnv(env)).fold(NoSymbol: Symbol)(_.sym)
+          def isVariant(member: Symbol) =
+            !candidates.isOverloaded || !variant.exists || member == variant || member.overriddenSymbol(variant.owner) == variant
+          candidates suchThat isVariant
+        }
       }
 
       def matchingSymbolInPrefix(pre: Type, member: Symbol, env: TypeEnv): Symbol = {
@@ -1701,7 +1710,19 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
               ifDebug(assert(symbol.info.typeParams.sizeCompare(targs1) == 0, "" + symbol.info.typeParams + " / " + targs))
 
               val env = typeEnv(specMember)
-              computeResidualTypeVars(tree, specMember, gen.mkAttributedSelect(qual1, specMember), targs, env)
+              val specSel = qual1 match {
+                // As for `super.m(args)` above, bind against the new parents: there the variant is the specialized
+                // parent's implementation, not the generic parent's forwarder to `m`, which may be this very override.
+                // Select by symbol, as the variant's name may be overloaded.
+                case sup @ Super(supQual, mix) if hasNewParents(sup) =>
+                  val sup1 = localTyper.typedQualifier(Super(supQual, mix) setPos sup.pos)
+                  specMember.matchingSymbol(sup1.tpe) match {
+                    case impl if impl.exists && !impl.isOverloaded => gen.mkAttributedSelect(sup1, impl)
+                    case _                                         => gen.mkAttributedSelect(qual1, specMember)
+                  }
+                case _ => gen.mkAttributedSelect(qual1, specMember)
+              }
+              computeResidualTypeVars(tree, specMember, specSel, targs, env)
           }
 
         // This rewires calls to specialized methods defined in the local scope. For example:
