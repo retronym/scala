@@ -213,6 +213,10 @@ Coverage reached by the generated inputs alone, in lines: `scala/tools/nsc/trans
 - **Machine.** Eighteen cores and about 47 GB of free disk are shared; two JVMs per track at 2 GB, no sbt in track agents, scratch capped per track. Compiler coverage runs with JaCoCo on the compiler jars slow compilation noticeably; do them once per round, not continuously.
 - **Money.** Ephyra's only figure is about $66 and eight machine-hours per target for the closed loop. A track here is one agent session of 45 to 90 minutes plus a verifying read, the same order as a wave-three hunter.
 
+## A prompt for later reviews
+
+`REVIEW-PROMPT.md` distils what the four waves showed about where defects sit, which checks find them and how fixes go wrong, written as context for a code-review session assessing any later change to Scala 2 or Scala 3. The dashboard shows it in its Prompt section with a copy button.
+
 ## Decisions for the owner
 
 Each is stated in the body of its pull request; none was made on his behalf.

@@ -93,7 +93,9 @@ for fp in sorted(glob.glob(os.path.join(DASH, "diffreview-w4-*.json")), key=lamb
     except Exception as ex: print("bad diff review", fp, ex)
 W4D = {"diffreview": DR, "findings": rows, "level": level, "scala3": scala3, "related": related, "area": AREA4, "ids": ids, "regress": regress,
        "phases": st.get("phases", []), "meta": st.get("meta", []), "agents": agents, "log": st.get("log", [])}
-js = "const WAVE4 = " + json.dumps(W4D, ensure_ascii=False).replace("</", "<\\/") + ";\n" \
+PROMPT = open(os.path.join(W4, "REVIEW-PROMPT.md")).read() if os.path.exists(os.path.join(W4, "REVIEW-PROMPT.md")) else ""
+js = "const REVIEW_PROMPT = " + json.dumps(PROMPT, ensure_ascii=False).replace("</", "<\\/") + ";\n" + \
+    "const WAVE4 = " + json.dumps(W4D, ensure_ascii=False).replace("</", "<\\/") + ";\n" \
     "WAVE2.w4 = new Set(WAVE4.ids); WAVE4.ids.forEach(i => WAVE2.ids.add(i)); Object.assign(WAVE2.level, WAVE4.level); Object.assign(WAVE2.area, WAVE4.area);\n" \
     "DATA.findings.push(...WAVE4.findings); DATA.phases.push(...WAVE4.phases); DATA.meta.push(...WAVE4.meta); DATA.agents.unshift(...WAVE4.agents); DATA.log.unshift(...WAVE4.log);\n" \
     'for (const k of ["related", "scala3", "regress", "diffreview"]) DATA[k] = Object.assign(DATA[k] || {}, WAVE4[k]);\n' \
@@ -179,7 +181,37 @@ body.ix-open #ix{transform:none;visibility:visible} body.ix-open #ix-shade{opaci
   nav.querySelectorAll("summary").forEach(sm => sm.addEventListener("click", ev => { if (!ev.target.closest(".ix-tog")) ev.preventDefault(); }));
   window.addEventListener("hashchange", mark);
 }
-const anchorsReady = () => { addAnchors(); buildIndex(); goToHash(); };
+// Prompt: the review's lessons as context for a later code-review session, from wave4/REVIEW-PROMPT.md, with a copy button.
+function addPrompt() {
+  if (!REVIEW_PROMPT || document.getElementById("prompt-body")) return;
+  const st = document.createElement("style");
+  st.textContent = `#prompt-body{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 18px;max-width:92ch}
+#prompt-body h4{font-size:14px;font-weight:600;margin:16px 0 6px} #prompt-body p{margin:0 0 8px} #prompt-body ul{margin:0 0 8px;padding-left:20px} #prompt-body li{margin:0 0 5px}
+#prompt-copy{font:inherit;font-size:12.5px;color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:3px 12px;cursor:pointer;margin:0 0 8px}
+#prompt-copy:focus-visible{outline:2px solid var(--info);outline-offset:2px}`;
+  document.head.appendChild(st);
+  const inline = t => esc(t).replace(/`([^`]+)`/g, "<code>$1</code>");
+  let out = "", list = false;
+  for (const line of REVIEW_PROMPT.split("\n")) {
+    const isLi = line.startsWith("- ");
+    if (list && !isLi) { out += "</ul>"; list = false; }
+    if (line.startsWith("## ")) out += `<h4>${inline(line.slice(3))}</h4>`;
+    else if (isLi) { if (!list) { out += "<ul>"; list = true; } out += `<li>${inline(line.slice(2))}</li>`; }
+    else if (line.trim()) out += `<p>${inline(line)}</p>`;
+  }
+  if (list) out += "</ul>";
+  const sec = document.createElement("section");
+  sec.innerHTML = `<h2>Prompt</h2><p class="sub" style="margin:0 0 8px">Context for a later code-review session assessing any change to Scala 2 or Scala 3: what the four waves showed about where defects sit, which checks find them and how fixes go wrong. Source: <code>wave4/REVIEW-PROMPT.md</code> (retronym/scala#745).</p>` +
+    `<button id="prompt-copy" type="button">Copy the prompt</button><div id="prompt-body">${out}</div>`;
+  const meta = document.getElementById("meta"); const after = meta && meta.closest("section");
+  if (after && after.parentNode) after.parentNode.insertBefore(sec, after.nextSibling); else document.querySelector("main").appendChild(sec);
+  const btn = sec.querySelector("#prompt-copy");
+  btn.addEventListener("click", async () => { let ok = false;
+    try { await navigator.clipboard.writeText(REVIEW_PROMPT); ok = true; } catch (e) {
+      try { const ta = document.createElement("textarea"); ta.value = REVIEW_PROMPT; ta.style.position = "fixed"; ta.style.opacity = "0"; document.body.appendChild(ta); ta.select(); ok = document.execCommand("copy"); ta.remove(); } catch (e2) {} }
+    btn.textContent = ok ? "Copied" : "Copy failed: select the text below"; setTimeout(() => { btn.textContent = "Copy the prompt"; }, 2500); });
+}
+const anchorsReady = () => { addPrompt(); addAnchors(); buildIndex(); goToHash(); };
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", anchorsReady); else setTimeout(anchorsReady, 0);
 window.addEventListener("load", anchorsReady); window.addEventListener("hashchange", goToHash);
 '''
