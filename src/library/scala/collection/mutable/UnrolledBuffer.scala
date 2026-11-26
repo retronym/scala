@@ -13,7 +13,7 @@
 package scala.collection
 package mutable
 
-import scala.annotation.tailrec
+import scala.annotation.{nowarn, tailrec}
 import scala.collection.generic.{CommonErrors, DefaultSerializable}
 import scala.reflect.ClassTag
 import scala.collection.immutable.Nil
@@ -214,9 +214,20 @@ sealed class UnrolledBuffer[T](implicit val tag: ClassTag[T])
     this
   }
 
-  // Inserting splits and relinks the nodes while the elements are read, so read this buffer from a copy.
-  private def unaliased(elems: IterableOnce[T]): IterableOnce[T] =
-    if (elems.asInstanceOf[AnyRef] eq this) clone() else elems
+  // Inserting splits and relinks the nodes while the elements are read, so a source that may read this buffer is
+  // read from a copy.
+  private def unaliased(elems: IterableOnce[T]): IterableOnce[T] = {
+    @nowarn("cat=deprecation") // Stream
+    val mayReadThis = elems match {
+      case _: Option[_] => false
+      case _: immutable.LazyList[_] | _: immutable.Stream[_] => true
+      case _: immutable.Iterable[_] | _: ArraySeq[_] => false
+      case _: ArrayBuffer[_] | _: ArrayDeque[_] | _: ListBuffer[_] | _: UnrolledBuffer[_] | _: HashSet[_] | _: LinkedHashSet[_] =>
+        elems.asInstanceOf[AnyRef] eq this
+      case _ => true
+    }
+    if (mayReadThis) ArrayBuffer.from(elems) else elems
+  }
 
   private def writeObject(out: java.io.ObjectOutputStream): Unit = {
     out.defaultWriteObject
@@ -252,7 +263,13 @@ object UnrolledBuffer extends StrictOptimizedClassTagSeqFactory[UnrolledBuffer] 
 
   def empty[A : ClassTag]: UnrolledBuffer[A] = new UnrolledBuffer[A]
 
-  def from[A : ClassTag](source: scala.collection.IterableOnce[A]): UnrolledBuffer[A] = newBuilder[A].addAll(source)
+  def from[A : ClassTag](source: scala.collection.IterableOnce[A]): UnrolledBuffer[A] = {
+    // `source` cannot read a buffer created here, so it is appended without the copy `addAll` makes of a lazy source.
+    val b = new UnrolledBuffer[A]
+    val it = source.iterator
+    while (it.hasNext) b.addOne(it.next())
+    b
+  }
 
   def newBuilder[A : ClassTag]: UnrolledBuffer[A] = new UnrolledBuffer[A]
 
