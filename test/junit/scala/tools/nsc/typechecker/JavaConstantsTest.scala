@@ -52,6 +52,8 @@ class JavaConstantsTest {
     |  public static final char TERNC = true ? 'x' : 0;
     |  public static final String S1S = "a" + 1 + 'c' + 1.5f + 2.5 + true + 10L + I1 + 1e10 + Float.MIN_VALUE;
     |  public static final String S2S = "x" + (char) 65 + (1 + 2) + (String) "y" + (java.lang.String) "z";
+    |  public static final String MIXED = 1 + 2 + "a" + 1 + 2, MIXED2 = 'a' + 1 + "b" + 'c' + 1 + (1 + 2) + 2 * 3;
+    |  public static final boolean MIXED3 = "a" + 1 == "a1", MIXED4 = 1 + 2 + "" + 1 != "31";
     |  public static final String S3S = "" + ("a" == "a") + TERNC;
     |  public static final java.lang.String S4S = "a";
     |  public static final int NEG = ~I1, PLUS = +C1;
@@ -94,6 +96,19 @@ class JavaConstantsTest {
     assert(expected.contains("J.I1: Int(4096)"), expected.mkString("\n"))
     val actual = fieldTypes(newGlobal(""), List(new BatchSourceFile("J.java", J)), List("J", "I", "K"))
     assertEquals(expected.mkString("\n"), actual.mkString("\n"))
+  }
+
+  // The operands of a left-associative operator are folded iteratively: javac accepts expressions of this length.
+  @Test def longLeftAssociatedExpression(): Unit = {
+    val n = 20000
+    val source = s"""
+      |public class J {
+      |  public static final String S = 1 + 2 + ${List.fill(n)("\"ab\"").mkString(" + ")} + 1 + 2;
+      |  public static final int I = 1 ${List.fill(n)("- 3 + 2").mkString(" ")};
+      |}
+      |""".stripMargin
+    val actual = fieldTypes(newGlobal(""), List(new BatchSourceFile("J.java", source)), List("J"))
+    assertEquals(List(s"J.I: Int(${1 - n})", s"""J.S: String("3${"ab" * n}12")"""), actual)
   }
 }
 
