@@ -4118,9 +4118,35 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
           case _ => false
         }
 
+        // A constant expression (SLS 6.24) is built from literals, constant values and operations on them.
+        // A tree of literal type need not be one: `{ f(); 3 }`, or a call of `def three(): 3`.
+        // The qualifier of a constant value is not evaluated, so it need not be constant.
+        def isConstantExpr(t: Tree): Boolean = t match {
+          case Literal(_)               => t.attachments.get[OriginalTreeAttachment].forall(att => isConstantExpr(att.original))
+          case Ident(_)                 => t.symbol.isStable
+          case Select(qual, _)          => t.symbol.isStable || isPrimitiveOrString(qual) && isConstantExpr(qual)
+          case Apply(Select(qual, _), args) if isPrimitiveOrString(qual) => isConstantExpr(qual) && args.forall(isConstantExpr)
+          case Typed(expr, _)           => isConstantExpr(expr)
+          case _                        => isDefaultArg(t)
+        }
+        // the receiver of an operator, whose symbol is not always set when the typer folded it;
+        // a literal receiver (`~1`, `!true`) may have no type in the original tree
+        def isPrimitiveOrString(qual: Tree) = qual match {
+          case Literal(c) => c.isAnyVal && c.tag != UnitTag || c.tag == StringTag
+          case _          => qual.tpe != null && {
+            val sym = qual.tpe.widen.typeSymbol
+            isPrimitiveValueClass(sym) || sym == StringClass
+          }
+        }
+
         if (const == null) {
           if (unit.isJava) unmappable = true
           else if (!isDefaultArg(ttree)) reportAnnotationError(AnnotationNotAConstantError(ttree))
+          None
+        }
+        else if (!unit.isJava && !isConstantExpr(ttree)) {
+          val original = ttree.attachments.get[OriginalTreeAttachment].fold(ttree)(_.original)
+          reportAnnotationError(AnnotationNotAConstantError(original))
           None
         }
         else if (const.value == null) {
