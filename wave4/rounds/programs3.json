@@ -1,0 +1,61 @@
+[
+ {
+  "round": 11,
+  "change": "Java-facing family: @BeanProperty/@BooleanBeanProperty members in traits, classes and companions, @throws/@deprecated/@varargs on generated methods, companion objects (static forwarders, invoked by reflection), @SerialVersionUID Serializable leaves round-tripped through serialization, serializable lambdas round-tripped and applied, a trait default reached through a bridge by reflection, and a reflection dump (generic signatures, bridges, defaults, varargs flags, fields) of every generated class; -Ycheck sampled on 1 seed in 20.",
+  "cases": 449,
+  "seconds": 230,
+  "compile_rate": "99.1% (445 of 449: one WP5 and one WP10 on the reference, one OutOfMemoryError of the driver JVM, one more WP5)",
+  "signatures_new": 1,
+  "signatures_known": 8,
+  "false_alarms": "4 signatures from one OutOfMemoryError of the 2 GB driver JVM with 3 programs in flight (harness; the next rounds run 2 in flight); 5 delambdafy-inline serialization differences (dl-ser: under -Ydelambdafy:inline a closure nested in a closure holds its enclosing closure, by design), now excluded; smoke run only: @varargs on a method with a ClassTag context bound (correctly rejected), fixed in the generator",
+  "oracle_disagreements": {
+   "opt-local": "2/309",
+   "delambdafy-inline": "7/448",
+   "separate": "1/448 (the OOM)",
+   "v18": "143/448 (all fixed by earlier waves)",
+   "ycheck": "20/23"
+  },
+  "known_hits": {
+   "v18-wavefix": 143,
+   "WP9": 10,
+   "WP6": 7,
+   "dl-ser": 5,
+   "WP8": 2,
+   "WP5": 2,
+   "WP1": 1,
+   "WP10": 1
+  },
+  "coverage": {
+   "transform": [
+    4035,
+    5328
+   ],
+   "transform/patmat": [
+    1628,
+    2186
+   ],
+   "backend/jvm": [
+    2776,
+    3905
+   ],
+   "backend/jvm/opt": [
+    1790,
+    2955
+   ],
+   "typechecker": [
+    7289,
+    13867
+   ]
+  },
+  "coverage_union": "union over all three campaigns: transform 4076 -> 4089, patmat 1730, backend/jvm 2841 -> 2846 (Erasure 11 new lines)",
+  "largest_unreached": [
+   "BCodeSkelBuilder.appendToStaticCtor (30)",
+   "CleanUp.transformApplyDynamic (26 of 47)",
+   "PlainBodyBuilder.genStringConcat lambda (26)",
+   "BCJGenSigGen.getGenericSignature (25 of 36)",
+   "CleanUp.transformApply (23 of 66)"
+  ],
+  "next": "Arrays and symbols: array literals and creation of every element type (Byte, Short, Char, Float, Boolean, Unit, Nothing, Null, value classes, nested), Array.apply varargs and ofDim/fill paths, ClassTag-generic arrays, array patterns, symbol literals, for CleanUp.transformApply and the backend array paths.",
+  "notes": "New: WP10 (wrong rejection: `if (false) 1 else f(xs: _*)`; refchecks reduces the constant if and transforms the branch's children only). Same cause as the second half of the current retronym/scala#750 revision, which w4-int predates. Two JVMs: 19.4 (JaCoCo, 75 programs) and 93.7 programs/min (374)."
+ }
+]

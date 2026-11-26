@@ -52,8 +52,8 @@
       "w4 tests WP4 WP6 WP8 WP9",
       "Sonnet",
       "Test-only branches for the four -Ycheck findings",
-      "running",
-      ""
+      "done",
+      "Four test-only pull requests (retronym/scala#780 to #783), each a pos test under -Ycheck:all -Werror. The failure was checked against the older base build by hand, not through partest"
     ],
     [
       "w4c programs3",
@@ -386,6 +386,10 @@
     ]
   ],
   "log": [
+    [
+      "27 Nov 01:26",
+      "retronym/scala#780 to #783 opened: failing tests for the four -Ycheck findings WP4, WP6, WP8, WP9."
+    ],
     [
       "27 Nov 01:23",
       "#778 passed diff review and is out of draft; #779 is being narrowed so that only binders nested inside the checked type count as bound."
@@ -843,6 +847,34 @@
       ],
       "state": "fixed",
       "note": "Fix (stacked on retronym/scala#459; draft until read): referencesInType now treats PolyType type parameters in the checked info as bound (with a Set instead of List.contains), and the per-reference messages for a tree are merged into one, so the tree and signature are rendered once per tree."
+    },
+    "WP4": {
+      "prs": [
+        780
+      ],
+      "state": "fixed",
+      "note": "Test only, no fix yet: Pos test with `//> using options -Ycheck:all -Werror`; belongs with retronym/scala#460."
+    },
+    "WP6": {
+      "prs": [
+        781
+      ],
+      "state": "fixed",
+      "note": "Test only, no fix yet: Pos test with `//> using options -Ycheck:all -Werror`; belongs with retronym/scala#460."
+    },
+    "WP8": {
+      "prs": [
+        782
+      ],
+      "state": "fixed",
+      "note": "Test only, no fix yet: Pos test with `//> using options -Ycheck:all -Werror`; belongs with retronym/scala#509."
+    },
+    "WP9": {
+      "prs": [
+        783
+      ],
+      "state": "fixed",
+      "note": "Test only, no fix yet: Pos test with `//> using options -Ycheck:all -Werror`; belongs with retronym/scala#509."
     }
   }
 }

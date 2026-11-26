@@ -1,0 +1,1 @@
+Test -Ycheck on a return in a partial function literal

@@ -42,7 +42,7 @@ class Gen(seed: Long, opts: GenOpts = GenOpts()) {
   def chance(p: Double): Boolean = r.nextDouble() < p
   /** Construct families by the round that added them; each program favours two of those switched on, so that
    *  constructs of different rounds meet in one program. */
-  val families = List(2 -> "switch", 3 -> "struct", 4 -> "narrow", 5 -> "return", 6 -> "patmat", 7 -> "nested", 8 -> "linear", 9 -> "vcmix", 10 -> "dyn", 11 -> "jface")
+  val families = List(2 -> "switch", 3 -> "struct", 4 -> "narrow", 5 -> "return", 6 -> "patmat", 7 -> "nested", 8 -> "linear", 9 -> "vcmix", 10 -> "dyn", 11 -> "jface", 12 -> "arr")
   val focus: Set[String] = r.shuffle(families.filter(_._1 <= Gen.round).map(_._2)).take(2).toSet
   def weight(f: String): Int = if (focus(f)) 4 else 1
 
@@ -263,6 +263,47 @@ class Gen(seed: Long, opts: GenOpts = GenOpts()) {
       nodes += (() => { val x = fresh("x"); s"({ case $x if $x > 1 => ${gen(t, w(Var(x, TInt)), d - 1)} }: PartialFunction[Int, ${show(t)}]).applyOrElse(${g(TInt)}, (($x: Int) => ${g(t)}))" })
       env.vars.filter(_.mutable).foreach(v => nodes += (() => s"({ ${v.name} = ${g(v.ty)}; ${g(t)} })"))
       def addF(f: String)(th: () => String): Unit = for (_ <- 0 until weight(f)) nodes += th
+      if (Gen.round >= 12) { // arrays of every element type: literals, Array.apply, ofDim/fill/tabulate, ClassTag-generic creation, nesting, array patterns; symbols
+        def b(t2: Ty, vs: Var*) = gen(t2, w(vs: _*), d - 2)
+        def vt(): TVC = { val dd = pick(vcs); TVC(dd.name, dd.tparam.toList.map(_ => pick(List(TInt, TLong, TStr, TDouble)))) }
+        /** An element type and a generator of its values. */
+        def el(): (String, () => String) = r.nextInt(16) match {
+          case 0 => ("Byte", () => s"${g(TInt)}.toByte"); case 1 => ("Short", () => s"${g(TInt)}.toShort")
+          case 2 => ("Char", () => s"(${g(TInt)} + 'a').toChar"); case 3 => ("Float", () => s"${g(TInt)}.toFloat")
+          case 4 => ("Boolean", () => g(TBool)); case 5 => ("Unit", () => s"Tr.t(${fresh("")}, ())")
+          case 6 => ("Long", () => g(TLong)); case 7 => ("Double", () => g(TDouble)); case 8 => ("String", () => g(TStr))
+          case 9 => ("Sh", () => g(TAdt)); case 10 if vcs.nonEmpty => val v = vt(); (show(v), () => g(v))
+          case 11 => ("Array[Int]", () => s"Array[Int](${g(TInt)})"); case 12 => ("Any", () => { val o = other(); g(o) })
+          case 13 => ("AnyVal", () => pick(List(g(TInt), s"${g(TInt)}.toChar", "()", g(TLong))))
+          case 14 => ("Option[Int]", () => g(TOpt(TInt)))
+          case _ => ("Int", () => g(TInt))
+        }
+        if (t == TStr) addF("arr")(() => { val (et, e) = el(); val (a, i) = (fresh("arr"), fresh("i")); r.nextInt(14) match {
+          case 0 => s"Refl.show(Array[$et](${e()}, ${e()}))"
+          case 1 => s"Refl.show(Array(${e()}, ${e()}, ${e()}))"
+          case 2 => s"Refl.show(Arr.two[$et](${e()}, ${e()}))"
+          case 3 => s"{ val $a = Arr.ofDim[$et](2); Refl.show($a) + $a.getClass.getComponentType }"
+          case 4 => s"{ val $a = Array.fill[$et](2)(${e()}); $a(0) = ${e()}; Refl.show($a) + $a.getClass.getComponentType + $a.length }"
+          case 5 => s"Refl.show(Array.ofDim[$et](2, Math.abs(${g(TInt)}) % 3 + 1))"
+          case 6 => s"Refl.show(Array[Array[$et]](Array(${e()}), Array(${e()}, ${e()}), Array.empty[$et]))"
+          case 7 => s"Array[$et](${e()}).getClass.getName"
+          case 8 => s"Refl.show(Array[Any](${e()}, ${e()})) + Refl.show(Array[AnyRef](${g(TStr)}, null)) + Refl.show(Array[Nothing]()) + Refl.show(Array[Null](null))"
+          case 9 => s"(Symbol(${g(TStr)}).name + (Symbol(\"ab\") eq Symbol(\"a\" + \"b\")) + Arr.sym.name)"
+          case 10 => s"{ val $a = Array.tabulate[$et](3)(($i: Int) => ${e()}); Refl.show($a.reverse) + Refl.show($a.clone()) + $a.sameElements($a.clone()) }"
+          case 11 => s"Refl.show(Arr.gen[$et](Array(${e()}), ${e()}))"
+          case 12 => s"Refl.show(Arr.ofDim[$et](${r.nextInt(3)}) :+ ${e()})"
+          case _ => s"Refl.show(Array[$et](${e()}).map(($i: $et) => Array($i, $i)))"
+        } })
+        if (t == TInt) addF("arr")(() => { val (et, e) = el(); val (a, x, y, rs) = (fresh("arr"), fresh("x"), fresh("y"), fresh("rs")); r.nextInt(5) match {
+          case 0 => s"(Array[$et](${List.fill(r.nextInt(4))(e()).mkString(", ")}) match { case Array() => ${gen(t, env, d - 2)}; case Array($x) => ${g(TInt)}; case Array($x, $y, $rs @ _*) => ${b(t, Var(rs + ".length", TInt))}; case _ => -1 })"
+          case 1 => s"{ val $a = new Array[$et](${r.nextInt(3)}); $a.length + Arr.ofDim[$et](2).length }"
+          case 2 => s"{ val $a = Array[Int](${g(TInt)}, ${g(TInt)}); $a(1) += ${g(TInt)}; $a(0) *= 2; $a.update(0, $a(0) - 1); $a.sum + Va.sumi($a: _*) }"
+          case 3 => s"{ val $a = Array[Long](${g(TLong)}); $a(0) += ${g(TInt)}; ($a(0) + Array[Char]('a').apply(0) + Array[Byte](${g(TInt)}.toByte).apply(0) + Array[Short](3).apply(0)).toInt }"
+          case _ => s"((Array[$et](${e()}): Any) match { case $x: Array[Int] => $x.length; case $x: Array[AnyRef] => $x.length + 10; case $x: Array[_] => $x.length + 20; case _ => 0 })"
+        } })
+        if (arrayable(t, env) && !t.isInstanceOf[TArr]) addF("arr")(() => { val (x, y, rs) = (fresh("x"), fresh("y"), fresh("rs"))
+          s"(Arr.two[${show(t)}](${g(t)}, ${g(t)}) match { case Array($x, $y) if ${g(TBool)} => ${b(t, Var(y, t))}; case Array($x, $rs @ _*) => ${b(t, Var(x, t))}; case _ => ${gen(t, env, d - 2)} })" })
+      }
       if (Gen.round >= 11) { // members seen from Java: serialization round trips of lambdas and objects, bean accessors, trait defaults through bridges, @varargs forwarders, reflection
         def b(t2: Ty, vs: Var*) = gen(t2, w(vs: _*), d - 2)
         if (showable(t)) addF("jface")(() => { val x = fresh("x"); s"Refl.ser[Function1[Int, ${show(t)}]](($x: Int) => ${b(t, Var(x, TInt))}).apply(${g(TInt)})" })
@@ -657,6 +698,7 @@ class Gen(seed: Long, opts: GenOpts = GenOpts()) {
       "  def getters(o: AnyRef): String = o.getClass.getMethods.toList.filter(m => m.getParameterCount == 0 && m.getDeclaringClass != classOf[Object] && m.getName.matches(\"(get|is)[A-Z].*\") && !Modifier.isStatic(m.getModifiers)).sortBy(m => (m.getName, m.getReturnType.getName)).map(inv(_, o)).mkString(\" \")",
       "  def statics(c: Class[_]): String = c.getDeclaredMethods.toList.filter(m => m.getParameterCount == 0 && Modifier.isStatic(m.getModifiers) && Modifier.isPublic(m.getModifiers) && !m.getName.contains(\"$\")).sortBy(m => (m.getName, m.getReturnType.getName)).map(inv(_, null)).mkString(\" \")",
       "  def ser[T](x: T): T = { val bo = new java.io.ByteArrayOutputStream; val oo = new java.io.ObjectOutputStream(bo); oo.writeObject(x); oo.close(); val l = Refl.getClass.getClassLoader; new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bo.toByteArray)) { override def resolveClass(d: java.io.ObjectStreamClass): Class[_] = try Class.forName(d.getName, false, l) catch { case _: ClassNotFoundException => super.resolveClass(d) } }.readObject().asInstanceOf[T] } }",
+      "object Arr { def two[T: ClassTag](a: T, b: T): Array[T] = Array(a, b); def ofDim[T: ClassTag](n: Int): Array[T] = new Array[T](n); def gen[T: ClassTag](xs: Array[T], x: T): Array[T] = xs :+ x; val sym = 'arrSym }",
       "object Ipx { implicit class Ip(private val sc: StringContext) extends AnyVal { def ip(args: Any*): String = sc.parts.zipAll(args, \"\", \"\").map { case (p, a) => p + \"[\" + a + \"]\" }.mkString; def ip: IpPat = new IpPat(sc) } }",
       "class IpPat(sc: StringContext) { def unapplySeq(s: String): Option[Seq[String]] = if (sc.parts.length == 2 && s.startsWith(sc.parts(0)) && s.endsWith(sc.parts(1)) && s.length >= sc.parts(0).length + sc.parts(1).length) Some(Seq(s.substring(sc.parts(0).length, s.length - sc.parts(1).length))) else None }",
       "object Digits { def unapplySeq(s: String): Option[Seq[Int]] = if (s.forall(_.isLetter)) Some(s.map(_.toInt).toSeq) else None }",

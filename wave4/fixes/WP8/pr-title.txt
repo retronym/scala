@@ -1,0 +1,1 @@
+Test -Ycheck on a non-local return in a generic method

@@ -1,0 +1,22 @@
+{
+ "id": "WP10",
+ "theme": "generated",
+ "track": "programs3",
+ "area": "typechecker (refchecks)",
+ "area_code": "C",
+ "title": "A call with a `: _*` argument as the surviving branch of an if with a constant condition is rejected: \"Sequence argument type annotation `: _*` cannot be used here\"",
+ "kind": "wrong rejection",
+ "oracle": "reference compile error on generated valid code (Scala 3.7.4 accepts it)",
+ "generator": "wave4/harness/programs/Gen.scala, value-class family (Vs.f(a, xs: _*)) inside a generated if with a literal condition",
+ "signature": "ref|compile-error|Sequence argument type annotation `: _*` cannot be used here:",
+ "seed": "seed 110077 (smoke run of programs3 round 11)",
+ "measure": "n/a",
+ "detail": "`final val Debug = false; def f(xs: Seq[Int]) = if (Debug) -1 else g(xs: _*)` fails to compile, as does `if (true) String.format(fmt, args: _*) else \"\"`. RefChecks replaces an if with a foldable constant condition by its surviving branch and then calls `res.transform(this)`, which transforms the branch's children without passing the branch itself through `RefChecks.transform`. When the branch is an application, the `Application` case that sets `currentApplication` is skipped, so `checkRepeatedParamArg` on the `: _*` argument sees the enclosing application (or none) and reports the argument as misplaced. Anything else the `Application` case does for the branch (bounds checks, sensibility warnings) is skipped too. Ordinary code reaches it through a constant feature flag in front of a varargs forwarding call. Present on the integration build, the base and 2.13.18; Scala 3.7.4 compiles and runs it.",
+ "fix_sketch": "In the `If` case of `RefChecks.transform`, send a reduced branch through `transform(res)` rather than `res.transform(this)`. The current revision of retronym/scala#750 (GF1) makes this change for other reasons; the integration build carries an earlier revision of #750 without it. No compatibility cost beyond the warnings #750 already lists: the programs do not compile today.",
+ "on_integration": "present",
+ "on_base": "same",
+ "on_2_13_18": "same",
+ "scala3": "absent",
+ "prior": "Same root cause as GF1's second half; fixed, by reading, in the current revision of retronym/scala#750 ('The if case also sends the surviving branch through the transform itself'), which has no test with a `: _*` argument; the integration build (w4-int, e298f8de2f) has the earlier revision 73152c2f02 and still fails. No scala/bug ticket found.",
+ "confidence": "confirmed"
+}
