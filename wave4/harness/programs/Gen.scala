@@ -42,7 +42,7 @@ class Gen(seed: Long, opts: GenOpts = GenOpts()) {
   def chance(p: Double): Boolean = r.nextDouble() < p
   /** Construct families by the round that added them; each program favours two of those switched on, so that
    *  constructs of different rounds meet in one program. */
-  val families = List(2 -> "switch", 3 -> "struct", 4 -> "narrow", 5 -> "return", 6 -> "patmat", 7 -> "nested", 8 -> "linear", 9 -> "vcmix", 10 -> "dyn")
+  val families = List(2 -> "switch", 3 -> "struct", 4 -> "narrow", 5 -> "return", 6 -> "patmat", 7 -> "nested", 8 -> "linear", 9 -> "vcmix", 10 -> "dyn", 11 -> "jface")
   val focus: Set[String] = r.shuffle(families.filter(_._1 <= Gen.round).map(_._2)).take(2).toSet
   def weight(f: String): Int = if (focus(f)) 4 else 1
 
@@ -263,6 +263,16 @@ class Gen(seed: Long, opts: GenOpts = GenOpts()) {
       nodes += (() => { val x = fresh("x"); s"({ case $x if $x > 1 => ${gen(t, w(Var(x, TInt)), d - 1)} }: PartialFunction[Int, ${show(t)}]).applyOrElse(${g(TInt)}, (($x: Int) => ${g(t)}))" })
       env.vars.filter(_.mutable).foreach(v => nodes += (() => s"({ ${v.name} = ${g(v.ty)}; ${g(t)} })"))
       def addF(f: String)(th: () => String): Unit = for (_ <- 0 until weight(f)) nodes += th
+      if (Gen.round >= 11) { // members seen from Java: serialization round trips of lambdas and objects, bean accessors, trait defaults through bridges, @varargs forwarders, reflection
+        def b(t2: Ty, vs: Var*) = gen(t2, w(vs: _*), d - 2)
+        if (showable(t)) addF("jface")(() => { val x = fresh("x"); s"Refl.ser[Function1[Int, ${show(t)}]](($x: Int) => ${b(t, Var(x, TInt))}).apply(${g(TInt)})" })
+        if (showable(t)) addF("jface")(() => { val x = fresh("x"); val o = other(); s"Refl.ser[Function2[${show(o)}, Int, ${show(t)}]](($x: ${show(o)}, y: Int) => ${b(t, Var(x, o), Var("y", TInt))}).apply(${g(o)}, ${g(TInt)})" })
+        if (t == TStr) addF("jface")(() => pick(List(s"Refl.show(Refl.ser((K1(${g(TAdt)}, ${g(TLong)}), K2, Option(${g(TStr)}), List(${g(TInt)}), JS(${g(TInt)}, List(${g(TStr)})))))",
+          s"Refl.getters(new JB(${g(TStr)}, ${g(TBool)}))", s"Refl.getters(Refl.ser(JB.make(${g(TStr)})))", s"new JDI().e(${g(TInt)})", s"(new JDI: JD[Int]).d(${g(TInt)})",
+          s"String.valueOf(classOf[JD[_]].getMethod(\"e\", classOf[Object]).invoke(new JDI, Int.box(${g(TInt)})))", s"Refl.show(Refl.ser(Array[Any](${g(TInt)}, ${g(TStr)}, K2)))")))
+        if (t == TBool) addF("jface")(() => pick(List("(Refl.ser(K2) eq K2)", "(Refl.ser(JSo) eq JSo)", s"(Refl.ser(JS(${g(TInt)}, Nil)) == JS(${g(TInt)}, Nil))", s"new JB(${g(TStr)}, ${g(TBool)}).isOk")))
+        if (t == TInt) addF("jface")(() => { val o = other(); pick(List(s"JB.vs[${show(o)}](${List.fill(r.nextInt(3))(g(o)).mkString(", ")})", s"(try JB.make(${g(TStr)}).io(${g(TInt)} - 3) catch { case e: java.io.IOException => -1 })", s"{ val jb = new JB(${g(TStr)}, true); jb.setName(${g(TStr)}); jb.getN + jb.getName.length }")) })
+      }
       if (Gen.round >= 10) { // Dynamic, string interpolators (standard, user-defined, in patterns), for comprehensions with pattern generators over several collections
         def b(t2: Ty, vs: Var*) = gen(t2, w(vs: _*), d - 2)
         if (t == TStr) addF("dyn")(() => pick(List(s"new Dyn().foo", s"new Dyn().bar(${g(TInt)}, ${g(TStr)})", s"new Dyn().baz(x = ${g(TInt)}, ${g(TStr)})", s"{ val dy = new Dyn; dy.q = ${g(TInt)}; dy.fields.toString + dy.q2 }")))
@@ -453,6 +463,9 @@ class Gen(seed: Long, opts: GenOpts = GenOpts()) {
   class Tpl(val kind: String, val name: String, val tps: List[TPDef], val parent: Option[(Tpl, List[Ty])]) {
     val lines = ArrayBuffer[String]()
     var meths: List[Meth] = Nil // all members, in this template's own type terms
+    var ser = false
+    var comp: List[Meth] = Nil
+    var compLines: List[String] = Nil
     def isLeaf = kind == "class"
   }
   var nextIdx = 0
@@ -508,6 +521,13 @@ class Gen(seed: Long, opts: GenOpts = GenOpts()) {
           val ann = if (Gen.round >= 8) pick(List("", "", "@volatile ", "@transient ", "private[this] ".take(0))) else ""
           t.lines += s"  $ann${sig(m)} = ${gen(ty, env, 3)}"
           all = all :+ m
+        case 6 | 7 if Gen.round >= 11 && chance(0.3 * weight("jface")) => // a bean property
+          val k = if (chance(0.5)) "var" else "val"; val bool = chance(0.3)
+          val e = Env(eager, Nil, if (t.isLeaf) cenv.ctags else Set(), if (t.isLeaf) cenv.tps else Set())
+          val ty = if (bool) TBool else retTy(e)
+          val m = Meth(idx(), fresh("bp"), k, Nil, Nil, ty)
+          t.lines += s"  @scala.beans.${if (bool) "BooleanBeanProperty" else "BeanProperty"} ${sig(m)} = ${gen(ty, e, 2)}"
+          all = all :+ m; eager = Var(m.name, ty) :: eager
         case 5 if Gen.round >= 7 && chance(0.5) => // a member class using the outer instance's members
           val ty = retTy(env); val c = fresh("In"); val m = Meth(idx(), fresh("m"), "def", Nil, Nil, ty); val x = fresh("x")
           val e = env.copy(meths = env.meths.filter(_.idx < m.idx), vars = List(Var(x, TInt)), ret = Some(ty))
@@ -533,17 +553,34 @@ class Gen(seed: Long, opts: GenOpts = GenOpts()) {
           }
         case _ =>
           val m = newMeth(idx(), env)
-          if (!t.isLeaf && chance(0.3)) { t.lines += s"  ${sig(m)}"; all = all :+ m.copy(isAbstract = true) }
-          else { t.lines += s"  ${sig(m)} = ${gen(m.ret, bodyEnv(m, env), 3)}"; all = all :+ m }
+          val ann = javaAnn(m)
+          if (!t.isLeaf && chance(0.3)) { t.lines += s"  $ann${sig(m)}"; all = all :+ m.copy(isAbstract = true) }
+          else { t.lines += s"  $ann${sig(m)} = ${gen(m.ret, bodyEnv(m, env), 3)}"; all = all :+ m }
       }
     }
     t.meths = all
+    if (t.isLeaf && Gen.round >= 11 && chance(0.3 * weight("jface"))) t.ser = true
+    if (t.isLeaf && Gen.round >= 11 && chance(0.3 * weight("jface"))) { // a companion object: static forwarders
+      val ce = Env(Nil, Nil, Set(), Set())
+      val ls = ArrayBuffer[String]()
+      for (_ <- 0 until 1 + r.nextInt(3)) {
+        if (chance(0.3)) { val ty = retTy(ce); val m = Meth(idx(), fresh("cb"), if (chance(0.5)) "var" else "val", Nil, Nil, ty); ls += s"  @scala.beans.BeanProperty ${sig(m)} = ${gen(ty, ce, 2)}"; t.comp = t.comp :+ m }
+        else if (chance(0.3)) { val ty = retTy(ce); val m = Meth(idx(), fresh("cl"), "lazy val", Nil, Nil, ty); ls += s"  ${sig(m)} = ${gen(ty, ce, 2)}"; t.comp = t.comp :+ m }
+        else { val m = newMeth(idx(), ce); ls += s"  ${javaAnn(m)}${sig(m)} = ${gen(m.ret, bodyEnv(m, ce.copy(meths = t.comp)), 3)}"; t.comp = t.comp :+ m }
+      }
+      t.compLines = s"object ${t.name} {" :: ls.toList ::: List("}")
+    }
     t
   }
+  /** Java-facing annotations on a method: @throws, @deprecated, @varargs when the last parameter is repeated. */
+  def javaAnn(m: Meth): String = if (Gen.round < 11 || !chance(0.25 * weight("jface"))) "" else
+    pick(List("@throws[IllegalStateException](\"st\") ", "@throws(classOf[java.io.IOException]) ", "@deprecated(\"d\", \"1\") ", "")) +
+      (if (m.params.lastOption.exists(_.vararg) && !m.tps.exists(_.ctag) && chance(0.7)) "@scala.annotation.varargs " else "") // a context bound adds a parameter list after the repeated one
   def header(t: Tpl): String = {
     val ctor = if (t.isLeaf) t.meths.filter(_.idx == -1).map(z => s"val ${z.name}: ${show(z.ret)}").mkString("(", ", ", ")") else ""
     val ext = t.parent.fold("")(p => s" extends ${p._1.name}${p._2.map(show).mkString("[", ", ", "]")}")
-    s"${t.kind} ${t.name}${showTps(t.tps)}$ctor$ext {"
+    val ser = if (t.ser) (if (t.parent.isEmpty) " extends Serializable" else " with Serializable") else ""
+    s"${if (t.ser) s"@SerialVersionUID(${t.name.length}L) " else ""}${t.kind} ${t.name}${showTps(t.tps)}$ctor$ext$ser {"
   }
 
   def genVC(i: Int): List[String] = {
@@ -611,6 +648,15 @@ class Gen(seed: Long, opts: GenOpts = GenOpts()) {
       "object Df { def f(a: Int, b: Int = Tr.t(930, 1) + 1, c: String = \"c\")(d: Int = b * 2): String = a + \",\" + b + \",\" + c + \",\" + d }; class DfC(val a: Int, val b: String = \"x\")(val c: Int = a * 2)",
       "object Vs { def f(a: Int, xs: Int*): Int = a * 10 + xs.sum; def g(xs: Int*): Int = xs.length }",
       "import scala.language.dynamics; class Dyn extends scala.Dynamic { def selectDynamic(n: String): String = \"sel:\" + n; def applyDynamic(n: String)(args: Any*): String = n + args.mkString(\"(\", \",\", \")\"); def applyDynamicNamed(n: String)(args: (String, Any)*): String = n + args.mkString; var fields = Map.empty[String, Any]; def updateDynamic(n: String)(v: Any): Unit = fields += n -> v }",
+      "class JB(@scala.beans.BeanProperty var name: String, @scala.beans.BooleanBeanProperty val ok: Boolean) extends Serializable { @scala.beans.BeanProperty val n: Int = name.length; @throws[java.io.IOException](\"io\") def io(x: Int): Int = if (x < 0) throw new java.io.IOException(\"neg\") else x }",
+      "object JB { @scala.annotation.varargs def vs[T](xs: T*): Int = xs.length; def make(s: String): JB = new JB(s, s.nonEmpty) }; @SerialVersionUID(42L) case class JS(a: Int, b: List[String]); object JSo extends Serializable { val x = 1 }",
+      "trait JD[A] { def d(a: A): String = \"d\" + a; def e(a: A): String = d(a) + \"!\" }; class JDI extends JD[Int] { override def d(a: Int): String = \"i\" + super.d(a) }",
+      "object Refl { import java.lang.reflect.Modifier; def clean(s: String): String = s.replaceAll(\"\\\\$\\\\$Lambda[^ ,)\\\\]]*\", \"L\").replaceAll(\"@[0-9a-f]{3,}\", \"@h\"); def show(v: Any): String = clean(scala.runtime.ScalaRunTime.stringOf(v))",
+      "  def desc(c: Class[_]): String = try { val ms = c.getDeclaredMethods.toList.filterNot(_.getName.contains(\"$\")).map(m => (if (m.isBridge) \"b \" else \"\") + (if (m.isDefault) \"d \" else \"\") + (if (m.isVarArgs) \"v \" else \"\") + m.toGenericString).sorted; val fs = c.getDeclaredFields.toList.filterNot(_.getName.contains(\"$\")).map(_.toGenericString).sorted; c.toGenericString + \" <: \" + c.getGenericSuperclass + \" \" + c.getGenericInterfaces.mkString(\",\") + ms.mkString(\"\\n  M \", \"\\n  M \", \"\") + fs.mkString(\"\\n  F \", \"\\n  F \", \"\") } catch { case e: Throwable => c.getName + \" !\" + e.getClass.getName }",
+      "  def inv(m: java.lang.reflect.Method, o: AnyRef): String = m.getName + \"=\" + (try show(m.invoke(o)) catch { case e: java.lang.reflect.InvocationTargetException => \"!\" + e.getCause.getClass.getName })",
+      "  def getters(o: AnyRef): String = o.getClass.getMethods.toList.filter(m => m.getParameterCount == 0 && m.getDeclaringClass != classOf[Object] && m.getName.matches(\"(get|is)[A-Z].*\") && !Modifier.isStatic(m.getModifiers)).sortBy(m => (m.getName, m.getReturnType.getName)).map(inv(_, o)).mkString(\" \")",
+      "  def statics(c: Class[_]): String = c.getDeclaredMethods.toList.filter(m => m.getParameterCount == 0 && Modifier.isStatic(m.getModifiers) && Modifier.isPublic(m.getModifiers) && !m.getName.contains(\"$\")).sortBy(m => (m.getName, m.getReturnType.getName)).map(inv(_, null)).mkString(\" \")",
+      "  def ser[T](x: T): T = { val bo = new java.io.ByteArrayOutputStream; val oo = new java.io.ObjectOutputStream(bo); oo.writeObject(x); oo.close(); val l = Refl.getClass.getClassLoader; new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bo.toByteArray)) { override def resolveClass(d: java.io.ObjectStreamClass): Class[_] = try Class.forName(d.getName, false, l) catch { case _: ClassNotFoundException => super.resolveClass(d) } }.readObject().asInstanceOf[T] } }",
       "object Ipx { implicit class Ip(private val sc: StringContext) extends AnyVal { def ip(args: Any*): String = sc.parts.zipAll(args, \"\", \"\").map { case (p, a) => p + \"[\" + a + \"]\" }.mkString; def ip: IpPat = new IpPat(sc) } }",
       "class IpPat(sc: StringContext) { def unapplySeq(s: String): Option[Seq[String]] = if (sc.parts.length == 2 && s.startsWith(sc.parts(0)) && s.endsWith(sc.parts(1)) && s.length >= sc.parts(0).length + sc.parts(1).length) Some(Seq(s.substring(sc.parts(0).length, s.length - sc.parts(1).length))) else None }",
       "object Digits { def unapplySeq(s: String): Option[Seq[Int]] = if (s.forall(_.isLetter)) Some(s.map(_.toInt).toSeq) else None }",
@@ -623,7 +669,7 @@ class Gen(seed: Long, opts: GenOpts = GenOpts()) {
     if (chance(0.6)) { top = genTpl("abstract class", "AC", Some(top)); tpls += top }
     val leaves = List.tabulate(1 + r.nextInt(2))(i => genTpl("class", "C" + i, Some(if (chance(0.8)) top else pick(tpls))))
     tpls ++= leaves
-    tpls.foreach(t => units += (imp :: header(t) :: t.lines.toList) :+ "}")
+    tpls.foreach(t => units += ((imp :: header(t) :: t.lines.toList) :+ "}") ::: t.compLines)
     // Main.run calls one small method per instance and per ancestor view, so no method grows with the program
     val fields = ArrayBuffer[String](); val meths = ArrayBuffer[ArrayBuffer[String]]()
     def newM(): ArrayBuffer[String] = { val b = ArrayBuffer[String](); meths += b; b }
@@ -652,6 +698,23 @@ class Gen(seed: Long, opts: GenOpts = GenOpts()) {
           ms.foreach(m => exercise(w, w, substM(m, ps), mk))
         }
         anc = p.parent; sub = ps
+      }
+    }
+    if (Gen.round >= 11) {
+      def cls(t: Tpl) = s"classOf[${t.name}${if (t.tps.isEmpty) "" else t.tps.map(_ => "_").mkString("[", ", ", "]")}]"
+      val mk = newM()
+      tpls.foreach(t => mk += s"    sb.append(Refl.desc(${cls(t)})).append('\\n')")
+      vcs.foreach(d => mk += s"    sb.append(Refl.desc(classOf[${d.name}${if (d.tparam.isEmpty) "" else "[_]"}])).append(Refl.desc(${d.name}.getClass)).append('\\n')")
+      var k = 0
+      for (c <- leaves; _ <- 0 until (if (c.tps.isEmpty) 1 else 2)) {
+        k += 1; val v = "c" + k; val mg = newM()
+        mg += s"""    try { sb.append("$v.getters " + Refl.getters($v)) } catch { case e: Throwable => sb.append("$v.getters!" + e.getClass.getName) }; sb.append('\\n')"""
+        if (c.ser) mg += s"""    try { val d = Refl.ser($v); sb.append("$v.ser " + Refl.getters(d) + " " + java.io.ObjectStreamClass.lookup(d.getClass).getSerialVersionUID) } catch { case e: Throwable => sb.append("$v.ser!" + e.getClass.getName) }; sb.append(" [" + Tr.take() + "]\\n")"""
+      }
+      leaves.filter(_.comp.nonEmpty).foreach { c =>
+        val mc = newM()
+        mc += s"""    sb.append(Refl.desc(${c.name}.getClass)).append(Refl.statics(${cls(c)})).append(" [" + Tr.take() + "]\\n")"""
+        c.comp.foreach(m => exercise(c.name, c.name, m, mc))
       }
     }
     for (d <- vcs) {

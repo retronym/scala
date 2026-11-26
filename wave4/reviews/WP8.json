@@ -1,0 +1,11 @@
+{
+ "id": "WP8",
+ "verdict": "real",
+ "severity": "low",
+ "reran": "cmd.sh on w4-int: 'Tree has erroneous type: ex.value()' at fields, program prints List(Some(a), None). w3-base and 2.13.18: same plus NullPointerExceptions in the checker; program still runs.",
+ "user_impact": "Only -Ycheck users on a generic method with a non-local return; no effect on the bytecode.",
+ "fixability": "clear cut: build the NonLocalReturnControl handler in UnCurry.nonLocalReturnTry from the rhs's (skolemized) result type rather than meth.tpe_.finalResultType. Checker-visible types only.",
+ "regression": "no",
+ "links": "Belongs with retronym/scala#509, whose third part deals with skolems from the original typing in the checker.",
+ "note": "The 'needs a second look' is resolved: -uniqid -Vprint:uncurry shows the parameter p typed with the skolem B#6891 and the handler's NonLocalReturnControl[Option[B#6890]] with the type parameter B#6890, so the handler is ill-typed against the skolemized body. A real (harmless) tree inconsistency made by uncurry, not a checker bug."
+}

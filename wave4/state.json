@@ -28,6 +28,27 @@
   ],
   "agents": [
     [
+      "w4 fix WP7",
+      "Opus",
+      "Fix for WP7: erased value type with a constant argument",
+      "running",
+      ""
+    ],
+    [
+      "w4 fix WP5",
+      "Opus",
+      "WP5 (scala/bug#10183): a return in operand position under try/finally",
+      "running",
+      ""
+    ],
+    [
+      "w4 tests WP4 WP6 WP8 WP9",
+      "Sonnet",
+      "Test-only branches for the four -Ycheck findings",
+      "running",
+      ""
+    ],
+    [
       "w4c programs3",
       "Opus",
       "Campaign 3: generated programs, wrong-result and crash oracles, up to five rounds",
@@ -38,8 +59,8 @@
       "w4 review campaign 4",
       "Opus",
       "Independent review of WP4 to WP9",
-      "running",
-      ""
+      "done",
+      "WP4, WP7, WP8, WP9 real; WP5 and WP6 real and known (scala/bug#10183; the rest of retronym/scala#460). WP5 critical, WP7 high, the four -Ycheck reports low. WP7: (if (ok) Meters(d) else Meters(0)).value crashes erasure since 2.11.0, because a value-class construction with a literal argument keeps the literal's constant type. WP5: the crash against a VerifyError on 2.13.18 comes from the upstream ASM 9.11.1 upgrade, not a draft fix"
     ],
     [
       "w4 diff review campaign 3",
@@ -358,6 +379,10 @@
     ]
   ],
   "log": [
+    [
+      "27 Nov 01:22",
+      "Review of WP4 to WP9: all real, two already known upstream. Fix workers started for the two crashes (WP7, WP5); the four -Ycheck findings get test-only branches."
+    ],
     [
       "27 Nov 01:11",
       "#773 to #776 passed diff review and are out of draft. Second programs campaign done: WP4 to WP9, two of them compiler crashes on ordinary code; with an independent reviewer."

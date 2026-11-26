@@ -24,7 +24,7 @@ object Hunt {
          Config("delambdafy-inline", int, List("-Ydelambdafy:inline")),
          Config("separate", int, separate = true),
          Config("v18", v18)) :::
-    (if (seed % 10 == 0) List(Config("ycheck", int, List("-Ycheck:all"))) else Nil) :::
+    (if (seed % 20 == 10) List(Config("ycheck", int, List("-Ycheck:all"))) else Nil) :::
     (if (seed % 20 == 0 && src.length <= inlineMaxChars) List(Config("inline", int, List("-opt:inline:**", "-opt:local"))) else Nil)
 
   /** Known defects (wave4/known-signatures.md), excluded and counted. */
@@ -32,13 +32,16 @@ object Hunt {
                    "WP1" -> "^ycheck\\|log\\|.*Tree has erroneous type: (N\\(\\)$|scala\\.[A-Za-z]+\\.box\\()".r,
                    "WP8" -> "^ycheck\\|log\\|.*Tree has erroneous type: ex\\.value\\(\\)$".r,
                    "WP9" -> "^ycheck\\|log\\|.*Tree has erroneous type: \\(head: [^,]*, next: List\\[".r,
-                   "WP4" -> "^ycheck\\|log\\|.*Tree has erroneous type: N\\.this\\.N\\(\\)$".r, "WP2" -> "^ycheck\\|log\\|.*Tree has erroneous type: s\\.get\\(".r)
+                   "WP4" -> "^ycheck\\|log\\|.*Tree has erroneous type: N\\.this\\.N\\(\\)$".r, "WP2" -> "^ycheck\\|log\\|.*Tree has erroneous type: s\\.get\\(".r,
+                   // -Ydelambdafy:inline: a closure nested in a closure is an inner class holding its enclosing closure (and that one's outer); serialization differs by design
+                   "dl-ser" -> "^delambdafy-inline\\|diff\\|.*java\\.io\\.(NotSerializable|InvalidClass)Exception".r)
   def knownId(sig: String): Option[String] = known.collectFirst { case (id, rx) if rx.findFirstIn(sig).nonEmpty => id }
   val prePhases = Set("typer", "superaccessors", "extmethods", "pickler", "refchecks", "patmat")
   /** Known defects recognised from more than the signature: the configuration's whole log and the source. */
   def knownFull(c: Config, o: Outcome, src: String): Option[String] = {
     val phases = "during phase: (\\w+)".r.findAllMatchIn(o.log).map(_.group(1)).toSet
-    if (c.name == "opt-local" && o.kind == "crash" && o.text.contains("AnalyzerException") && src.contains("return ") && src.contains("finally")) Some("WP5")
+    if (c.name == "v18" && o.text.contains("Index 0 out of bounds for length 0")) Some("WP5") // fixed on the integration build
+    else if (c.name == "opt-local" && o.kind == "crash" && o.text.contains("AnalyzerException") && src.contains("return ") && src.contains("finally")) Some("WP5")
     else if (c.name == "ycheck" && o.log.contains("erroneous type") && phases.nonEmpty && phases.subsetOf(prePhases) && src.contains("PartialFunction") && src.contains("return ")) Some("WP6")
     else None
   }
@@ -168,6 +171,7 @@ object Hunt {
       val refKnown =
         if (base.kind == "compile-error" && (base.text.contains("Index 0 out of bounds for length 0") || base.text.startsWith("0: Error while emitting") && src.contains("return ") && src.contains("finally"))) Some("WP5")
         else if (base.kind == "crash" && base.text.contains("mergePrefixAndArgs(List(ErasedValueType")) Some("WP7")
+        else if (base.kind == "compile-error" && base.text.contains("Sequence argument type annotation")) Some("WP10")
         else None
       refKnown.foreach(countKnown)
       val wp5 = refKnown.nonEmpty
