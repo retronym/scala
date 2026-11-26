@@ -5,13 +5,15 @@
   publish_fix4.py push ID...    push the branch to retronym/scala, open the fork PR, record it in wave4/state.json
   publish_fix4.py pending       ids with a result.json and no PR yet
 
-Fork PRs only (retronym/scala). Labels: code-review-2026-11-19, severity:<the reviewer's level>, no-fix for test-only,
+Fork PRs only (retronym/scala). Labels: code-review-2026-11-19, severity:<the reviewer's level>, area:<area>, no-fix for test-only,
 port-to-scala3 for a compiler finding that Scala 3 shares. ID=severity overrides the level."""
 import json, os, re, subprocess, sys, glob
 W = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BASE = "4a67cb8202"
 STATE = os.path.join(W, "state.json")
 LIB = {"GA", "GC"}
+# the fork's area:* labels, as sync_labels.py derives them from the dashboard areas in merge_wave4.py
+AREA_LABEL = dict(GA="area:collections", GC="area:collections", GJ="area:java-sources", GF="area:typechecker", GE="area:specialization", GE6="area:optimizer")
 def sh(*a, cwd=None, check=True):
     r = subprocess.run(a, cwd=cwd, capture_output=True, text=True)
     if check and r.returncode: raise SystemExit("FAILED %s\n%s%s" % (" ".join(a), r.stdout, r.stderr))
@@ -51,6 +53,7 @@ def labels_for(i, lv, testonly, override):
     rvp = os.path.join(W, "reviews", i + ".json"); rv = json.load(open(rvp)) if os.path.exists(rvp) else {}
     l = override.get(i, lv.get(i, "low"))
     out = ["code-review-2026-11-19", "performance" if l == "performance" else "severity:" + l]
+    out.append(AREA_LABEL.get(i) or AREA_LABEL[re.sub(r"\d+$", "", i)])
     if testonly: out.append("no-fix")
     s3 = (str(f.get("scala3", "")) + " | " + str(rv.get("scala3", ""))).lower()
     if re.sub(r"\d+$", "", i) not in LIB and re.search(r"(^|\| )(same|present)", s3): out.append("port-to-scala3")

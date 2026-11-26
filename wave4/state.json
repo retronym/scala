@@ -23,18 +23,32 @@
   ],
   "agents": [
     [
+      "w4 rework #750",
+      "Opus",
+      "Second rework of retronym/scala#750; bodies of #758 and #759",
+      "running",
+      ""
+    ],
+    [
+      "w4 rework specialization",
+      "Opus",
+      "Rework of retronym/scala#763 after diff review",
+      "running",
+      ""
+    ],
+    [
       "w4 diff review rework",
       "Opus",
       "Second read of the reworked #750, #756, #758, #759, #760",
-      "running",
-      ""
+      "done",
+      "2 ok (#756, #760), 2 concern (#758, #759: a source whose termination depends on the receiver growing now never ends, which belongs in the choice between copying first and failing fast), 1 defect (#750: a match that is the surviving branch of another reduced if is still mis-handled). The bytecode concern on #750 is settled"
     ],
     [
       "w4 diff review specialization",
       "Opus",
       "Independent read of #762, #763, #764, #766, #768",
-      "running",
-      ""
+      "done",
+      "4 ok (#762, #764, #766, #768), 1 defect (#763: selecting the variant by name crashes in erasure when the method is overloaded). For all five, compiling the whole standard library and 113 existing specialization tests with the patched compiler gives class files byte-identical to the base. #764 adds an on-by-default warning that could break a -Werror build with def m[@specialized X](q: => X); no such signature exists in scala/scala"
     ],
     [
       "w4 rework compiler",
@@ -150,6 +164,14 @@
     ]
   ],
   "log": [
+    [
+      "26 Nov 23:06",
+      "Second read of the reworked pull requests: #756 and #760 ok and ready; #750 back to draft for a nested case; #758 and #759 stay drafts on an owner decision. Wave-four pull requests relabelled with the area of the compiler or library they touch (collections, java-sources, typechecker, specialization, optimizer). scala/scala#11427 was opened from #753 by another session."
+    ],
+    [
+      "26 Nov 22:58",
+      "Diff review of the specialization fixes: #762, #764, #766 and #768 ok and out of draft; #763 has a defect with overloaded methods and is being reworked."
+    ],
     [
       "26 Nov 22:56",
       "Reworked self-aliasing fixes pushed over #758, #759 and #760. A second reviewer is reading all five reworked pull requests, and another the five specialization fixes."

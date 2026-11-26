@@ -13,8 +13,10 @@ P = os.path.join(DASH, "index.html")
 e = html.escape
 def natkey(s):
     m = re.match(r"([A-Z]+)(\d+)", s); return (m.group(1), int(m.group(2))) if m else (s, 0)
-AREA4 = dict(GA="GENLIB", GC="GENLIB", GJ="GENJAVA", GF="GENEXPR", GE="GENPROG")
-AREAS4 = 'GENLIB: "generated: library calls", GENJAVA: "generated: Java sources", GENEXPR: "generated: expressions", GENPROG: "generated: programs", '
+# Wave four uses the page's existing areas, so the fork's area:* labels stay meaningful; the Wave filter says how a finding was found.
+# Keys are id prefixes or, for an exception, a full id.
+AREA4 = dict(GA="M", GC="M", GJ="J", GF="C", GE="SPZ", GE6="O")
+OLD_AREAS4 = 'GENLIB: "generated: library calls", GENJAVA: "generated: Java sources", GENEXPR: "generated: expressions", GENPROG: "generated: programs", '
 st = json.load(open(os.path.join(W4, "state.json"))) if os.path.exists(os.path.join(W4, "state.json")) else {}
 def level4(f):
     k = str(f.get("kind", "")).lower()
@@ -89,6 +91,8 @@ def sub1(old, new):
 if "WAVE2.w4.has" not in s:  # template patches, once
     sub1('wave: WAVE2.w3.has(f[0]) ? "three" :', 'wave: WAVE2.w4.has(f[0]) ? "four" : WAVE2.w3.has(f[0]) ? "three" :')
     sub1('["one", "two", "three"], v => v === "one" ? "one: code review" :', '["one", "two", "three", "four"], v => v === "four" ? "four: generated inputs and oracles" : v === "one" ? "one: code review" :')
-    sub1('const AREAS = { ', 'const AREAS = { ' + AREAS4)
+s = s.replace(OLD_AREAS4, "")  # an earlier version of this script added wave-four areas of its own
+OLDA, NEWA = 'WAVE2.ids.has(f[0]) ? WAVE2.area[p] || p : p', 'WAVE2.ids.has(f[0]) ? WAVE2.area[f[0]] || WAVE2.area[p] || p : p'
+if NEWA not in s: sub1(OLDA, NEWA)
 open(P, "w").write(s)
 print(len(rows), "wave-four findings:", " ".join(ids), ";", len(s), "bytes")
