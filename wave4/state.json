@@ -28,6 +28,13 @@
   ],
   "agents": [
     [
+      "w4 diff review #785",
+      "Opus",
+      "Independent read of the WP7 fix in erasure",
+      "running",
+      ""
+    ],
+    [
       "w4 diff review #784",
       "Opus",
       "Independent read of the WP5 fix in the back end",
@@ -45,8 +52,8 @@
       "w4 fix WP7",
       "Opus",
       "Fix for WP7: erased value type with a constant argument",
-      "running",
-      ""
+      "done",
+      "WP7 fixed (retronym/scala#785, draft): a value-class construction is typed with the class's erased underlying type, not the argument's own type. The reviewer's suggestion to widen would not cover a narrower non-constant argument, null, or a literal-typed class, all of which crash the base too. The standard library and 137 value-class tests compile byte-identical"
     ],
     [
       "w4 fix WP5",
@@ -393,6 +400,10 @@
     ]
   ],
   "log": [
+    [
+      "27 Nov 01:46",
+      "retronym/scala#785 opened as a draft for WP7. Every reviewed wave-four finding now has a pull request."
+    ],
     [
       "27 Nov 01:42",
       "retronym/scala#784 opened as a draft: a back-end fix for WP5, the 2017 ticket scala/bug#10183; with an independent reviewer. #779 out of draft after its rework."
@@ -897,6 +908,13 @@
       ],
       "state": "fixed",
       "note": "Fix (draft until read): Back-end fix (option a): after emitting a method, find the stack at each return-to-cleanup jump with an ASM analysis and pop it, so all jumps to a cleanup arrive with an empty stack; empty-stack returns are unchanged (library class files identical)."
+    },
+    "WP7": {
+      "prs": [
+        785
+      ],
+      "state": "fixed",
+      "note": "Fix (draft until read): Type the InjectDerivedValue tree with ErasedValueType(cls, erasedValueClassArg(tref)) instead of the argument's type, so injections agree with each other and with other values of the class and the lub taken when erasure retypes a conditional receiver succeeds. Regression in 2.11.0 from scala/scala#3082."
     }
   }
 }
