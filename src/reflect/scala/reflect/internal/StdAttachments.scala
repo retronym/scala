@@ -196,9 +196,8 @@ trait StdAttachments {
   /** Force desugaring Match trees, don't emit switches. Attach to DefDef trees or their symbol. */
   case object ForceMatchDesugar extends PlainAttachment
 
-  /** The name that a class that is local to a block goes by in the expanded names of its members. Attached to
-   *  the class symbol when a private member is made public under an expanded name before lambdalift, see
-   *  `nme.chooseLocalClassDiscriminators`. It is not the name that lambdalift gives to the class.
+  /** The prefix of the names expanded relative to a class that is, or is nested in, a class local to a block.
+   *  See `nme.expandedName`.
    */
-  case class LocalClassDiscriminator(name: String) extends PlainAttachment
+  case class ExpandedNamePrefix(prefix: String) extends PlainAttachment
 }

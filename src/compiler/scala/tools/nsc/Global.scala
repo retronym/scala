@@ -1051,7 +1051,8 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
   def runReporting: PerRunReporting = currentRun.reporting
   def currentFreshNameCreator       = if (curFreshNameCreator == null) currentUnit.fresh else curFreshNameCreator
   private[this] var curFreshNameCreator: FreshNameCreator = null
-  override def currentUnitFreshNameCreator = currentUnit.fresh
+  override def freshNameCreatorForLocalClasses =
+    if (isRunGlobalInitialized && globalPhase.id >= currentRun.lambdaliftPhase.id) None else Some(currentUnit.fresh)
   private[scala] def currentFreshNameCreator_=(fresh: FreshNameCreator): Unit = curFreshNameCreator = fresh
 
   def isGlobalInitialized = definitions.isDefinitionsInitialized && rootMirror.isMirrorInitialized

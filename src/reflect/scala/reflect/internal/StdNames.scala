@@ -17,7 +17,7 @@ package internal
 import java.security.MessageDigest
 
 import Chars.isOperatorPart
-import scala.annotation.{switch, tailrec}
+import scala.annotation.switch
 import scala.collection.immutable
 import scala.io.Codec
 
@@ -453,38 +453,28 @@ trait StdNames {
     private def expandedNameInternal(name: TermName, base: Symbol, separator: String): TermName =
       newTermNameCached(expandedNamePrefix(base) + separator + name)
 
-    /** The prefix of a name expanded relative to `base`: its full name, in which a class that is local to a block
-     *  goes by the name chosen in `chooseLocalClassDiscriminators`, if any.
+    /** The prefix of a name expanded relative to `base`: its full name, except that a class that is local to a
+     *  block needs a unique name to go by.
+     *
+     *  Such a class is only renamed to something unique by lambdalift, whereas earlier phases already expand names
+     *  relative to it, which would clash in a class that inherits from two local classes of the same name. So a name
+     *  is drawn from a counter of its own (`T$local1`), which leaves the names of the classes unchanged. The prefix
+     *  is recorded, as phases after lambdalift must find the members under the same names.
      */
     private def expandedNamePrefix(base: Symbol): String =
-      if (!isNestedInBlock(base)) base.fullName('$')
-      else {
-        val simpleName = base.attachments.get[LocalClassDiscriminator] match {
-          case Some(discriminator) => discriminator.name
-          case _                   => base.name.toString
-        }
-        expandedNamePrefix(base.effectiveOwner.enclClass) + "$" + simpleName
-      }
-
-    private def isNestedInBlock(base: Symbol) = base.isClass && !base.hasPackageFlag && base.ownersIterator.exists(_.isTerm)
-
-    /** Choose the names that `base` and the classes that enclose it go by in expanded names, where these are local
-     *  to a block.
-     *
-     *  Such a class is only renamed to something unique by lambdalift, whereas the fields phase and explicitouter
-     *  already make private members public under an expanded name. Until lambdalift, the full name of a local class
-     *  is that of any other local class of the same name in the same enclosing class, and the expanded members of
-     *  two such classes would clash in a class that inherits from both. So a unique name is chosen before the first
-     *  private member of the class is expanded, and recorded in a `LocalClassDiscriminator` attachment.
-     *
-     *  The name is drawn from a counter of its own (`T$local1`), not from the one that lambdalift numbers the
-     *  classes with (`T$1`), so that it does not change the name of any class.
-     */
-    @tailrec final def chooseLocalClassDiscriminators(base: Symbol): Unit =
-      if (isNestedInBlock(base)) {
-        if (base.isLocalToBlock && !base.hasAttachment[LocalClassDiscriminator])
-          base.updateAttachment(LocalClassDiscriminator(currentUnitFreshNameCreator.newName(base.name.toString + NAME_JOIN_STRING + "local")))
-        chooseLocalClassDiscriminators(base.effectiveOwner.enclClass)
+      base.attachments.get[ExpandedNamePrefix] match {
+        case Some(cached) => cached.prefix
+        case _ =>
+          freshNameCreatorForLocalClasses match {
+            case Some(fresh) if base.isClass && !base.hasPackageFlag && base.ownersIterator.exists(_.isTerm) =>
+              val simpleName =
+                if (base.isLocalToBlock) fresh.newName(base.name.toString + NAME_JOIN_STRING + "local")
+                else base.name.toString
+              val prefix = expandedNamePrefix(base.effectiveOwner.enclClass) + "$" + simpleName
+              base.updateAttachment(ExpandedNamePrefix(prefix))
+              prefix
+            case _ => base.fullName('$')
+          }
       }
 
     /** The expanded name of `name` relative to this class `base`
