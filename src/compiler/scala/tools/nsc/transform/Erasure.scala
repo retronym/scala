@@ -821,7 +821,9 @@ abstract class Erasure extends InfoTransform
                 log(s"transforming inject $arg -> $tref/$argPt")
                 val result = typed(arg, mode, argPt)
                 log(s"transformed inject $arg -> $tref/$argPt = $result:${result.tpe}")
-                return result setType ErasedValueType(tref.sym, result.tpe)
+                // Type the injection as any other value of type `tref`, not with the argument's own (possibly
+                // constant or narrower) type: the lub of two injections, as when an `if` is a receiver, needs them equal.
+                return result setType ErasedValueType(tref.sym, argPt)
 
             }
           case tree @ Block(_, _: LabelDef) =>
