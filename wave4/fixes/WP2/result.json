@@ -1,0 +1,13 @@
+{
+ "id": "WP2",
+ "outcome": "FIXED",
+ "branch": "review/w4-wp2-extmethods-stale-refinement-member",
+ "commit": "dc9ea9f1c2",
+ "workspace": "/Users/jzaugg-virtus/code/.worktrees/scala/w4-fix-m",
+ "files": "src/compiler/scala/tools/nsc/transform/ExtensionMethods.scala, test/files/pos/vc-structural-ycheck.scala",
+ "failing_before": "partest test/files/pos/vc-structural-ycheck.scala on the base: crashed, NullPointerException ('tp' is null) after 'Tree has erroneous type: s.get(1)' assertions. Same with the golden 713241d26f scalac and -Ycheck:extmethods,pickler,refchecks,uncurry,fields,tailcalls: 2 erroneous-type assertions plus NPE error.",
+ "ran_after": "sbt partest of the new test, 'partest --grep AnyVal' (225 tests) and 'partest --grep reflectiveCalls' (52 tests): all ok. By hand with the workspace's own build/quick/classes: same -Ycheck phases on the test: no assertions, 3 'Out of scope symbol reference' warnings remain (refinement class owner); finding's case-class repro compiles and prints List(x).",
+ "prior_work": "none; retronym/scala#427 fixes the separate post-erasure -Ycheck failure on generic value classes (reason the test checks only pre-erasure phases).",
+ "unsure": "Test uses a phase list instead of -Ycheck:all because of retronym/scala#427; with #427 merged it could be -Ycheck:all (case class V0 as in the finding also needs non-destructive -Ycheck, retronym/scala#419). The cloned refinement class keeps the value class as owner, so the checker's out-of-scope warning remains. The rebind looks up qual.tpe.member(name) filtered by memberType matches sel.tpe and requires a refinement owner, so it cannot turn a structural call into a direct one.",
+ "note": "After substituting type parameters into the extension method body, Selects of refinement members are rebound to the matching member of the qualifier's rebuilt refinement."
+}

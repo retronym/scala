@@ -1,0 +1,1 @@
+Select the substituted refinement's members in extension methods

@@ -263,6 +263,38 @@ class Gen(seed: Long, opts: GenOpts = GenOpts()) {
       nodes += (() => { val x = fresh("x"); s"({ case $x if $x > 1 => ${gen(t, w(Var(x, TInt)), d - 1)} }: PartialFunction[Int, ${show(t)}]).applyOrElse(${g(TInt)}, (($x: Int) => ${g(t)}))" })
       env.vars.filter(_.mutable).foreach(v => nodes += (() => s"({ ${v.name} = ${g(v.ty)}; ${g(t)} })"))
       def addF(f: String)(th: () => String): Unit = for (_ <- 0 until weight(f)) nodes += th
+      if (Gen.round >= 10) { // Dynamic, string interpolators (standard, user-defined, in patterns), for comprehensions with pattern generators over several collections
+        def b(t2: Ty, vs: Var*) = gen(t2, w(vs: _*), d - 2)
+        if (t == TStr) addF("dyn")(() => pick(List(s"new Dyn().foo", s"new Dyn().bar(${g(TInt)}, ${g(TStr)})", s"new Dyn().baz(x = ${g(TInt)}, ${g(TStr)})", s"{ val dy = new Dyn; dy.q = ${g(TInt)}; dy.fields.toString + dy.q2 }")))
+        if (t == TStr) addF("dyn")(() => pick(List("f\"${" + g(TInt) + "}%03d-${" + g(TDouble) + "}%.2f-${" + g(TStr) + "}%s\"", "raw\"a\\n${" + g(TStr) + "}\"", "ip\"x${" + g(TInt) + "}y${" + g(TStr) + "}z\"", "ip\"${" + g(TLong) + "}\"")))
+        addF("dyn")(() => { val (x, y) = (fresh("x"), fresh("y"))
+          "(" + g(TStr) + " match { case s\"a$" + x + "\" => " + b(t, Var(x, TStr)) + "; case s\"$" + x + "-$" + y + "\" => " + b(t, Var(x, TStr), Var(y, TStr)) + "; case ip\"<$" + x + ">\" => " + b(t, Var(x, TStr)) + "; case _ => " + g(t) + " })" })
+        addF("dyn")(() => { val (k, v, x, y, z) = (fresh("k"), fresh("v"), fresh("x"), fresh("y"), fresh("z"))
+          val all = r.shuffle(List(
+            (s"($k, $v) <- Map[Int, String](1 -> ${g(TStr)}, 2 -> ${g(TStr)}).toList", List(Var(k, TInt), Var(v, TStr))),
+            (s"Some($x) <- List[Option[Int]](Option(${g(TInt)}), None, Some(3))", List(Var(x, TInt))),
+            (s"$y <- Vector[Int](1, ${g(TInt)})", List(Var(y, TInt))),
+            (s"$z <- Set[Long](${g(TLong)}, 2L).toList.sorted", List(Var(z, TLong)))))
+          val used = all.take(2 + r.nextInt(3)); val bound = used.flatMap(_._2)
+          val filt = used.head._2.find(_.ty == TInt).fold("")(vv => s" if ${vv.name} > ${g(TInt)}")
+          s"(for (${used.head._1}$filt; ${used.tail.map(_._1).mkString("; ")}) yield ${b(t, bound: _*)}).headOption.getOrElse(${gen(t, env, d - 2)})" })
+        addF("dyn")(() => { val (x, i, l) = (fresh("x"), fresh("i"), fresh("last"))
+          s"({ val it = Iterator[Int](1, 2, ${g(TInt)}); var $l: ${show(t)} = ${gen(t, env, d - 2)}; for ($x <- it if $x != 2; $i <- 0 until $x by 2) $l = ${b(t, Var(x, TInt), Var(i, TInt), Var(l, t))}; $l })" })
+      }
+      if (Gen.round >= 9 && vcs.nonEmpty) { // value classes as scrutinee, capture, lazy val, by-name argument, array and Seq element; defaults, named arguments, varargs with sequences
+        def b(t2: Ty, vs: Var*) = gen(t2, w(vs: _*), d - 2)
+        def vt(): TVC = { val dd = pick(vcs); TVC(dd.name, dd.tparam.toList.map(_ => pick(List(TInt, TLong, TStr, TDouble)))) }
+        addF("vcmix")(() => { val v = vt(); val x = fresh("x"); val vv = fresh("vv")
+          s"(${g(v)} match { case ${v.name}($x) if ${gen(TBool, w(Var(x, under(v))), d - 1)} => ${b(t, Var(x, under(v)))}; case $vv => ${b(t, Var(vv, v))} })" })
+        addF("vcmix")(() => { val v = vt(); val x = fresh("v"); s"({ val $x: ${show(v)} = ${g(v)}; ((i: Int) => ${b(t, Var(x, v))}).apply(1) })" })
+        addF("vcmix")(() => { val v = vt(); val x = fresh("v"); s"({ lazy val $x: ${show(v)} = Tr.t(${fresh("")}, ${g(v)}); ${b(t, Var(x, v))} })" })
+        addF("vcmix")(() => { val v = vt(); val x = fresh("v"); s"({ val $x: ${show(v)} = Bn(${g(v)}); Bn.twice(${b(t, Var(x, v))})._1 })" })
+        addF("vcmix")(() => { val v = vt(); val a = fresh("arr"); s"({ val $a = Array[${show(v)}](${g(v)}, ${g(v)}); $a(1) = ${g(v)}; ${b(t, Var(a, TArr(v)))} })" })
+        addF("vcmix")(() => { val v = vt(); val q = fresh("sq"); s"({ val $q: Seq[${show(v)}] = Seq(${g(v)}, ${g(v)}).reverse; ${b(t, Var(q, TSeq(v)))} })" })
+        if (t == TStr) addF("vcmix")(() => pick(List(s"Df.f(c = Tr.t(${fresh("")}, ${g(TStr)}), a = Tr.t(${fresh("")}, ${g(TInt)}))()", s"Df.f(Tr.t(${fresh("")}, ${g(TInt)}))(d = ${g(TInt)})", s"Df.f(b = ${g(TInt)}, a = ${g(TInt)})()", s"{ val dc = new DfC(b = Tr.t(${fresh("")}, ${g(TStr)}), a = Tr.t(${fresh("")}, ${g(TInt)}))(); dc.b + dc.c }")))
+        if (t == TInt) addF("vcmix")(() => pick(List(s"Va.sumi(${g(TList(TInt))}: _*)", s"Va.sumi(Array[Int](${g(TInt)}, 2).toIndexedSeq: _*)", s"Vs.f(${g(TInt)}, Vector(${g(TInt)}): _*)", s"Vs.f(${g(TInt)})", s"Vs.g(List(1, ${g(TInt)}): _*)")))
+        if (t == TStr) addF("vcmix")(() => s"Va.cat(Seq(${g(TStr)}, ${g(TStr)}): _*)")
+      }
       if (Gen.round >= 8 && !env.inVC) { // stackable traits, trait field initialisation order, super calls through the linearization, lazy vals in objects
         if (t == TStr) addF("linear")(() => { val ts = r.shuffle(List("SA", "SB", "SC", "SD")).take(2 + r.nextInt(3)); val o = s"(new Im with ${ts.mkString(" with ")})"
           pick(List(s"$o.f(${g(TInt)})", s"{ val q = $o; q.f(${g(TInt)}) + q.tag + q.f(1) }", s"($o: Bs).f(${g(TInt)})")) })
@@ -270,40 +302,40 @@ class Gen(seed: Long, opts: GenOpts = GenOpts()) {
         if (t == TInt) addF("linear")(() => pick(List("(new FI2 with FI3 {}).c", "(new FI3 with FI2 {}).c", "(new FI2 {}).c", "LzO.x", "(new Im with SB with SA).lb", "(new Im with SD with SB).ld", s"{ val q = new Im with SD; q.vd = ${g(TInt)}; q.ld }")))
       }
       if (Gen.round >= 7 && !env.inVC) { // local and nested classes and objects capturing variables and each other (lambdalift, explicitouter, constructors)
-        def b(t2: Ty, e: Env) = gen(t2, e, d - 1)
+        def b(t2: Ty, e: Env) = gen(t2, e, d - 2)
         addF("nested")(() => { val (c, l, k) = (fresh("c"), fresh("L"), fresh("l")); val e = w(Var(c, TInt, mutable = true))
           s"({ var $c: Int = ${g(TInt)}; class $l { val k: ${show(t)} = ${b(t, e.copy(ret = None))}; def inc(): Int = { $c += 1; $c } }; val $k = new $l; $k.inc(); ${b(t, w(Var(c, TInt), Var(k + ".k", t)))} })" })
         addF("nested")(() => { val (c, o) = (fresh("c"), fresh("LO")); val e = w(Var(c, TStr, mutable = true))
           s"({ var $c: String = ${g(TStr)}; object $o { def f(): String = { $c = $c + \"!\"; $c }; lazy val k: ${show(t)} = ${b(t, e.copy(ret = None))} }; $o.f(); val r = $o.k; $c = \"z\"; Tr.t(${fresh("")}, $o.f()); r })" })
         addF("nested")(() => { val (a, bb, n) = (fresh("A"), fresh("B"), fresh("n"))
-          s"({ class $a { def f($n: Int): Int = if ($n <= 0) ${gen(TInt, env.copy(ret = None), d - 1)} else new $bb().g($n - 1) + 1 }; class $bb { def g($n: Int): Int = new $a().f($n) * 2 }; Tr.t(${fresh("")}, new $a().f(3)); ${g(t)} })" })
+          s"({ class $a { def f($n: Int): Int = if ($n <= 0) ${gen(TInt, env.copy(ret = None), d - 1)} else new $bb().g($n - 1) + 1 }; class $bb { def g($n: Int): Int = new $a().f($n) * 2 }; Tr.t(${fresh("")}, new $a().f(3)); ${gen(t, env, d - 2)} })" })
         addF("nested")(() => { val (acc, f, x) = (fresh("acc"), fresh("add"), fresh("x"))
-          s"({ var $acc = 0; def $f($x: Int): Int = { $acc += $x; $acc }; List[Int](1, 2, ${g(TInt)}).map($f); Tr.t($acc, ${g(t)}) })" })
+          s"({ var $acc = 0; def $f($x: Int): Int = { $acc += $x; $acc }; List[Int](1, 2, ${g(TInt)}).map($f); Tr.t($acc, ${gen(t, env, d - 2)}) })" })
         addF("nested")(() => { val (c, x) = (fresh("c"), fresh("x")); val e = w(Var(c, TInt, mutable = true), Var(x, TInt))
           s"({ var $c: Int = ${g(TInt)}; val s = new Sam0[Int, ${show(t)}] { var hits = 0; def ap($x: Int): ${show(t)} = { hits += 1; $c += $x; ${b(t, e.copy(ret = Some(t)))} } }; s.ap(${g(TInt)}) })" })
         addF("nested")(() => { val (l, a, s1) = (fresh("L"), fresh("a"), fresh("s"))
-          s"({ class $l(val $a: Int, val $s1: String) { def this($a: Int) = this($a, \"d\" + $a); def this() = this(${lit(TInt)}); def show = $s1 + $a }; Tr.t(${fresh("")}, new $l(${g(TInt)}).show + new $l().show); ${g(t)} })" })
+          s"({ class $l(val $a: Int, val $s1: String) { def this($a: Int) = this($a, \"d\" + $a); def this() = this(${lit(TInt)}); def show = $s1 + $a }; Tr.t(${fresh("")}, new $l(${g(TInt)}).show + new $l().show); ${gen(t, env, d - 2)} })" })
         addF("nested")(() => { val (c, l, m) = (fresh("c"), fresh("L"), fresh("M")); val e = w(Var(c, TInt))
           s"({ val $c: Int = ${g(TInt)}; class $l { class $m { def f: ${show(t)} = ${b(t, e.copy(ret = Some(t)))}; def g = $c + h }; def h = $c * 2 }; val o = new $l; new o.$m().g; new o.$m().f })" })
       }
       if (Gen.round >= 6) { // pattern matching: nested case classes with binders, alternatives, extractors (Boolean, name-based, unapplySeq), type patterns, catch patterns
-        def b(t2: Ty, vs: Var*) = gen(t2, w(vs: _*), d - 1)
+        def b(t2: Ty, vs: Var*) = gen(t2, w(vs: _*), d - 2)
         addF("patmat")(() => { val (p, a, s1, x, rest, q, xs) = (fresh("p"), fresh("a"), fresh("s"), fresh("x"), fresh("r"), fresh("q"), fresh("xs"))
-          s"(P3(P2(${g(TInt)}, ${g(TOpt(TStr))}), ${g(TList(TInt))}) match { case P3($p @ P2($a, Some($s1)), $x :: $rest) if $a > $x => ${b(t, Var(a, TInt), Var(s1, TStr), Var(x, TInt), Var(rest, TList(TInt)))}; case P3(P2($a, None), Nil) => ${b(t, Var(a, TInt))}; case P3(P2(0 | 1, _), _ :: _) => ${g(t)}; case P3($q, $xs) => ${b(t, Var(xs, TList(TInt)))} })" })
+          s"(P3(P2(${g(TInt)}, ${g(TOpt(TStr))}), ${g(TList(TInt))}) match { case P3($p @ P2($a, Some($s1)), $x :: $rest) if $a > $x => ${b(t, Var(a, TInt), Var(s1, TStr), Var(x, TInt), Var(rest, TList(TInt)))}; case P3(P2($a, None), Nil) => ${b(t, Var(a, TInt))}; case P3(P2(0 | 1, _), _ :: _) => ${gen(t, env, d - 2)}; case P3($q, $xs) => ${b(t, Var(xs, TList(TInt)))} })" })
         addF("patmat")(() => { val (k, n) = (fresh("k"), fresh("n"))
-          s"(${g(TInt)} match { case Pos() if ${g(TBool)} => ${g(t)}; case NB($k) => ${b(t, Var(k, TInt))}; case NB2($k, $n) => ${b(t, Var(k, TInt), Var(n, TStr))}; case _ => ${g(t)} })" })
+          s"(${g(TInt)} match { case Pos() if ${g(TBool)} => ${gen(t, env, d - 2)}; case NB($k) => ${b(t, Var(k, TInt))}; case NB2($k, $n) => ${b(t, Var(k, TInt), Var(n, TStr))}; case _ => ${gen(t, env, d - 2)} })" })
         addF("patmat")(() => { val (a, c, xs) = (fresh("a"), fresh("c"), fresh("xs"))
-          s"(${g(TStr)} match { case Digits() => ${g(t)}; case Digits($a) => ${b(t, Var(a, TInt))}; case Digits($a, $c, $xs @ _*) => ${b(t, Var(a, TInt), Var(c, TInt), Var(xs, TSeq(TInt)))}; case _ => ${g(t)} })" })
+          s"(${g(TStr)} match { case Digits() => ${gen(t, env, d - 2)}; case Digits($a) => ${b(t, Var(a, TInt))}; case Digits($a, $c, $xs @ _*) => ${b(t, Var(a, TInt), Var(c, TInt), Var(xs, TSeq(TInt)))}; case _ => ${gen(t, env, d - 2)} })" })
         addF("patmat")(() => { val (a, c, tl, rs) = (fresh("a"), fresh("c"), fresh("tl"), fresh("rs"))
-          s"(${g(TList(TInt))} match { case List(1, _) | List(_, 2) => ${g(t)}; case List($a, $c) => ${b(t, Var(a, TInt), Var(c, TInt))}; case $a :: $c :: $tl => ${b(t, Var(a, TInt), Var(tl, TList(TInt)))}; case Seq($a, $rs @ _*) => ${b(t, Var(a, TInt), Var(rs, TSeq(TInt)))}; case _ => ${g(t)} })" })
+          s"(${g(TList(TInt))} match { case List(1, _) | List(_, 2) => ${gen(t, env, d - 2)}; case List($a, $c) => ${b(t, Var(a, TInt), Var(c, TInt))}; case $a :: $c :: $tl => ${b(t, Var(a, TInt), Var(tl, TList(TInt)))}; case Seq($a, $rs @ _*) => ${b(t, Var(a, TInt), Var(rs, TSeq(TInt)))}; case _ => ${gen(t, env, d - 2)} })" })
         addF("patmat")(() => { val o = other(); val (x, y, a, c) = (fresh("x"), fresh("y"), fresh("a"), fresh("c"))
-          s"((${g(o)}: Any) match { case $x: List[_] => ${b(t, Var(x + ".length", TInt))}; case Some($y: Int) => ${b(t, Var(y, TInt))}; case ($a: Int, $c) => ${b(t, Var(a, TInt))}; case $x: Array[Int] => ${g(t)}; case Gen1($y: String) => ${b(t, Var(y, TStr))}; case $x: Sh with Product => ${g(t)}; case _ => ${g(t)} })" })
+          s"((${g(o)}: Any) match { case $x: List[_] => ${b(t, Var(x + ".length", TInt))}; case Some($y: Int) => ${b(t, Var(y, TInt))}; case ($a: Int, $c) => ${b(t, Var(a, TInt))}; case $x: Array[Int] => ${gen(t, env, d - 2)}; case Gen1($y: String) => ${b(t, Var(y, TStr))}; case $x: Sh with Product => ${gen(t, env, d - 2)}; case _ => ${gen(t, env, d - 2)} })" })
         addF("patmat")(() => { val o = other(); val (y) = (fresh("y"))
-          s"((Gen1[Any](${g(o)}): Gen1[Any]) match { case Gen1($y: Int) if $y > 2 => ${b(t, Var(y, TInt))}; case Gen1(_: String) | Gen1(_: Long) => ${g(t)}; case Gen1(Some($y)) => ${g(t)}; case _ => ${g(t)} })" })
+          s"((Gen1[Any](${g(o)}): Gen1[Any]) match { case Gen1($y: Int) if $y > 2 => ${b(t, Var(y, TInt))}; case Gen1(_: String) | Gen1(_: Long) => ${gen(t, env, d - 2)}; case Gen1(Some($y)) => ${gen(t, env, d - 2)}; case _ => ${gen(t, env, d - 2)} })" })
         addF("patmat")(() => { val (a, c, e, m) = (fresh("a"), fresh("c"), fresh("e"), fresh("m"))
           s"""({ val P2($a, $c) = P2(${g(TInt)}, ${g(TOpt(TStr))}); ${b(t, Var(a, TInt), Var(c, TOpt(TStr)))} })""" })
         addF("patmat")(() => { val (e, m) = (fresh("e"), fresh("m"))
-          s"""(try { if (${g(TBool)}) throw new IllegalArgumentException(${g(TStr)}); ${g(t)} } catch { case $e @ (_: IllegalStateException | _: UnsupportedOperationException) => ${g(t)}; case ExMsg($m) if $m.length > 1 => ${b(t, Var(m, TStr))}; case $e: IllegalArgumentException => ${b(t, Var(e + ".getMessage", TStr))} })""" })
+          s"""(try { if (${g(TBool)}) throw new IllegalArgumentException(${g(TStr)}); ${gen(t, env, d - 2)} } catch { case $e @ (_: IllegalStateException | _: UnsupportedOperationException) => ${gen(t, env, d - 2)}; case ExMsg($m) if $m.length > 1 => ${b(t, Var(m, TStr))}; case $e: IllegalArgumentException => ${b(t, Var(e + ".getMessage", TStr))} })""" })
       }
       if (Gen.round >= 5 && env.ret.nonEmpty) { // return from the enclosing method: plain, from closures, by-name arguments, try/finally
         val rt = env.ret.get
@@ -319,7 +351,7 @@ class Gen(seed: Long, opts: GenOpts = GenOpts()) {
         addF("return")(() => { val (i, x) = (fresh("i"), fresh("x")); s"({ var $i = 0; while ($i < 3) { if ($i == ${g(TInt)}) return ${rv()}; $i += 1 }; ${g(t)} })" })
         addF("return")(() => { val x = fresh("x"); s"({ case $x if $x > 1 => if ($x > ${g(TInt)}) return ${rv()} else ${gen(t, w(Var(x, TInt)), d - 1)} }: PartialFunction[Int, ${show(t)}]).applyOrElse(${g(TInt)}, (($x: Int) => ${g(t)}))" })
         addF("return")(() => { val x = fresh("x"); s"({ lazy val $x: ${show(t)} = { if (${cond()}) return ${rv()}; ${g(t)} }; $x })" })
-        addF("return")(() => { val x = fresh("x"); s"(${g(TList(TInt))}.foldLeft(${g(t)})((($x: ${show(t)}, y: Int) => if (y > 5) return ${rv()} else $x)))" })
+        addF("return")(() => { val x = fresh("x"); s"(${g(TList(TInt))}.foldLeft[${show(t)}](${g(t)})((($x: ${show(t)}, y: Int) => if (y > 5) return ${rv()} else $x)))" })
       }
       if (Gen.round >= 4) { // Byte, Short, Char and Float operands, ## and getClass
         def narrow(): String = pick(List(s"${g(TInt)}.toByte", s"${g(TInt)}.toShort", s"(${g(TInt)} + 'a').toChar", s"${g(TInt)}.toFloat"))
@@ -409,7 +441,7 @@ class Gen(seed: Long, opts: GenOpts = GenOpts()) {
     val n = r.nextInt(3)
     var ps = tps.map(tp => Param(fresh("p"), TP(tp.name))) ::: List.fill(n)(Param(fresh("p"), genTy(env2, 2, false)))
     ps = ps.map(p => if (chance(0.15)) p.copy(byName = true) else p)
-    if (ps.nonEmpty && chance(0.2)) { val l = ps.last; if (!l.byName && tpsOf(l.ty).isEmpty && showable(l.ty)) ps = ps.init :+ l.copy(default = Some(gen(l.ty, Env(Nil, Nil, Set(), Set()), 1))) }
+    if (ps.nonEmpty && chance(0.2)) { val l = ps.last; if (!l.byName && tpsOf(l.ty).isEmpty && showable(l.ty)) ps = ps.init :+ l.copy(default = Some(gen(l.ty, Env(Nil, Nil, Set(), Set(), inVC = env.inVC), 1))) }
     else if (chance(0.2)) ps = ps :+ Param(fresh("p"), genTy(env2, 1, true), vararg = true)
     Meth(idx, if (name == null) fresh("m") else name, "def", tps, ps, retTy(env2))
   }
@@ -552,7 +584,7 @@ class Gen(seed: Long, opts: GenOpts = GenOpts()) {
   def program(): List[List[String]] = {
     val units = ArrayBuffer[List[String]]()
     val imp0 = "import scala.reflect.ClassTag"
-    val imp = "import scala.reflect.ClassTag; import Imp._" + (if (Gen.round >= 3) "; import scala.language.reflectiveCalls" else "")
+    val imp = "import scala.reflect.ClassTag; import Imp._" + (if (Gen.round >= 3) "; import scala.language.reflectiveCalls" else "") + (if (Gen.round >= 10) "; import scala.language.dynamics; import Ipx._" else "")
     units += List(imp0, "trait U0[A] extends Any { def uu: A; def uc(x: Int): (A, Int) = (uu, x) }")
     units += List(imp0, s"trait Sam0[${specAnn()}A, ${specAnn()}B] { def ap(a: A): B${if (chance(0.3)) "; def twice(a: A): (B, B) = (ap(a), ap(a))" else ""} }")
     units += List(imp0,
@@ -576,6 +608,11 @@ class Gen(seed: Long, opts: GenOpts = GenOpts()) {
       "trait FI1 { val a: Int = Tr.t(910, 1); val b: Int = a + 1 }; trait FI2 extends FI1 { val c: Int = b * 10 + a }; trait FI3 extends FI1 { override val a: Int = Tr.t(911, 5) }",
       "object LzO { @volatile lazy val x: Int = Tr.t(920, 3); @transient lazy val y: String = Tr.t(921, \"y\" + x) }",
       "trait G1 { def h: String = \"g1\" }; trait G2 extends G1 { override def h: String = \"g2\" + super.h }; trait G3 extends G1 { override def h: String = \"g3\" + super.h }; class GG extends G2 with G3 { override def h: String = super[G2].h + super[G3].h + super.h }",
+      "object Df { def f(a: Int, b: Int = Tr.t(930, 1) + 1, c: String = \"c\")(d: Int = b * 2): String = a + \",\" + b + \",\" + c + \",\" + d }; class DfC(val a: Int, val b: String = \"x\")(val c: Int = a * 2)",
+      "object Vs { def f(a: Int, xs: Int*): Int = a * 10 + xs.sum; def g(xs: Int*): Int = xs.length }",
+      "import scala.language.dynamics; class Dyn extends scala.Dynamic { def selectDynamic(n: String): String = \"sel:\" + n; def applyDynamic(n: String)(args: Any*): String = n + args.mkString(\"(\", \",\", \")\"); def applyDynamicNamed(n: String)(args: (String, Any)*): String = n + args.mkString; var fields = Map.empty[String, Any]; def updateDynamic(n: String)(v: Any): Unit = fields += n -> v }",
+      "object Ipx { implicit class Ip(private val sc: StringContext) extends AnyVal { def ip(args: Any*): String = sc.parts.zipAll(args, \"\", \"\").map { case (p, a) => p + \"[\" + a + \"]\" }.mkString; def ip: IpPat = new IpPat(sc) } }",
+      "class IpPat(sc: StringContext) { def unapplySeq(s: String): Option[Seq[String]] = if (sc.parts.length == 2 && s.startsWith(sc.parts(0)) && s.endsWith(sc.parts(1)) && s.length >= sc.parts(0).length + sc.parts(1).length) Some(Seq(s.substring(sc.parts(0).length, s.length - sc.parts(1).length))) else None }",
       "object Digits { def unapplySeq(s: String): Option[Seq[Int]] = if (s.forall(_.isLetter)) Some(s.map(_.toInt).toSeq) else None }",
       "object Imp { implicit class RichI(private val self: Int) extends AnyVal { def dbl: Int = self * 2 }; implicit class Pairer[T](private val self: T) { def pairUp: (T, T) = (self, self) }; implicit val defaultK: K0 = K0(7, \"imp\"); def withImp(x: Int)(implicit k: K0): Int = x + k.a }")
     for (i <- 0 until r.nextInt(3)) units += imp :: genVC(i)

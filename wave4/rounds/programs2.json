@@ -55,5 +55,60 @@
   ],
   "next": "Pattern-matching family (nested case classes with binders, alternatives, Boolean/name-based/unapplySeq extractors, type patterns on generics, catch patterns) for patmat, unchanged at 1566 lines for three rounds.",
   "notes": "New: WP4 (-Ycheck, trait lazy val in a by-name argument, from the programs campaign's round 4), WP5 (return with operands on the stack in try/finally: backend crash; VerifyError on 2.13.18 and Scala 3), WP6 (-Ycheck, return in a partial function), WP7 (erasure crash, if of value class constructions with a literal). The two JVMs: 23.9 (JaCoCo) and 102.3 programs/min."
+ },
+ {
+  "round": 2,
+  "change": "Pattern-matching family: nested case classes with binders and alternatives, Boolean, name-based and unapplySeq extractors, type patterns on generic and Any scrutinees, a val pattern, and catch clauses with alternatives and an extractor.",
+  "cases": 93,
+  "seconds": 220,
+  "compile_rate": "98.9% (92 of 93; a generator fault: foldLeft inferred a narrower accumulator type, fixed after the round)",
+  "signatures_new": 0,
+  "signatures_known": 5,
+  "false_alarms": "0; 5 -opt:local compile timeouts (GE6: the larger match-heavy programs push CopyProp past 60 s), counted as GE6",
+  "oracle_disagreements": {
+   "opt-local": "5/93",
+   "delambdafy-inline": "0/93",
+   "separate": "0/93",
+   "v18": "23/93 (21 fixed by earlier waves, 2 upstream)",
+   "ycheck": "10/10 (all WP6)"
+  },
+  "known_hits": {
+   "v18-wavefix": 21,
+   "v18-upstream": 2,
+   "WP6": 10,
+   "GE6": 4,
+   "WP5": 1
+  },
+  "largest_unreached": [
+   "PlainSkelBuilder.appendToStaticCtor (30)",
+   "CleanUp.transformApplyDynamic (26 of 47)",
+   "PlainBodyBuilder.genStringConcat lambda (26)",
+   "BCJGenSigGen.getGenericSignature (25 of 36)",
+   "CleanUp.transformApply (23 of 66)"
+  ],
+  "next": "Local and nested classes and objects capturing variables and each other, member classes using the outer instance, secondary constructors (lambdalift, explicitouter, constructors); new families now nest at depth d-2 and -opt:local skips sources over 45,000 characters, since round 2 ran at 5 and 20 programs/min.",
+  "notes": "patmat 1566 -> 1628 lines. Throughput fell to 5.2 (JaCoCo) and 19.6 programs/min: match-heavy programs grew about 1.5x and -opt:local took 26 s per program.",
+  "coverage": {
+   "backend/jvm": [
+    2731,
+    3905
+   ],
+   "backend/jvm/opt": [
+    1789,
+    2955
+   ],
+   "transform": [
+    3999,
+    5328
+   ],
+   "transform/patmat": [
+    1628,
+    2186
+   ],
+   "typechecker": [
+    6916,
+    13867
+   ]
+  }
  }
 ]

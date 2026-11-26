@@ -15,10 +15,12 @@ object Hunt {
   /** The unfixed base (upstream 2.13.x): decides whether a difference from 2.13.18 was fixed upstream or by an earlier wave. */
   lazy val baseC = Compiler("base", prop("base", ""), bridge + "/base")
   val inlineMaxChars = prop("inlineMaxChars", "15000").toInt
+  /** -opt:local costs grow steeply with the handlers in a method (GE6); larger programs skip it. */
+  val optMaxChars = prop("optMaxChars", "45000").toInt
 
   def ref = Config("ref", int)
   def configs(seed: Long, src: String): List[Config] =
-    List(Config("opt-local", int, List("-opt:local")),
+    (if (src.length <= optMaxChars) List(Config("opt-local", int, List("-opt:local"))) else Nil) ::: List(
          Config("delambdafy-inline", int, List("-Ydelambdafy:inline")),
          Config("separate", int, separate = true),
          Config("v18", v18)) :::

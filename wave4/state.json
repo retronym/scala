@@ -28,18 +28,25 @@
   ],
   "agents": [
     [
+      "w4 diff review campaign 2",
+      "Opus",
+      "Independent read of #774, #775, #776 and re-read of #773",
+      "running",
+      ""
+    ],
+    [
       "w4 fix campaign 3",
       "Opus",
       "Fixes for WS1, WS2",
-      "pending",
-      "Waiting for a build slot"
+      "running",
+      ""
     ],
     [
       "w4 rework #773",
       "Opus",
       "Rework of retronym/scala#773 after diff review",
-      "running",
-      ""
+      "done",
+      "The new typing path now applies only to Java-defined annotation classes, so Scala annotations used from Java sources are typed as on the base; a constant that Java's assignment conversion rejects is a type-mismatch error again. Pushed as a commit on top"
     ],
     [
       "w4 fix WP3",
@@ -52,8 +59,8 @@
       "w4 fix campaign 2",
       "Opus",
       "Fixes for WX1, WP1, WP2",
-      "running",
-      ""
+      "done",
+      "WX1 fixed (retronym/scala#774: a null from a void method becomes () when the refinement's result type is Any, AnyVal or an unbounded type parameter; bytecode for AnyRef-bounded results unchanged), WP1 fixed in part (#775: the default label takes the match's type; one variant still fails -Ycheck), WP2 fixed (#776: the Select is rebound to the new refinement's member). All three are drafts until read"
     ],
     [
       "w4 diff review java annotations",
@@ -323,6 +330,14 @@
     ]
   ],
   "log": [
+    [
+      "27 Nov 00:48",
+      "retronym/scala#774 to #776 opened as drafts for WX1, WP1 and WP2; a reviewer is reading them and re-reading #773."
+    ],
+    [
+      "27 Nov 00:42",
+      "Rework of #773 pushed. Fix worker for WS1 and WS2 started in the freed build slot."
+    ],
     [
       "27 Nov 00:38",
       "Review of WS1 and WS2: both real. WS1 matters more than reported, since mdoc and Scastie set the flag and a lambda in a super-constructor argument fails without it. Its fix worker starts when a build slot frees."
@@ -705,7 +720,28 @@
         773
       ],
       "state": "fixed",
-      "note": "Fix (draft until read; also covers GJ3 and wave-one J5): Element values other than arrays and annotations go through constantExprOpt (now parameterized by terminators and able to read class literals through basicType/void/qualified names plus [] brackets); the typer folds Java-unit annotation arguments with JavaConstantFolder and Java assignment conversion (shared with the namer), handling the single-element array shorthand, and falls back to the old typing for class literals and enum constants. The old copyFrom/skipAhead bail-out is gone; a rejected argument is skipped by balanced tokens and still drops only its annotation."
+      "note": "Fix (reworked after independent diff review; draft until re-read; also covers GJ3 and wave-one J5): Element values other than arrays and annotations go through constantExprOpt (now parameterized by terminators and able to read class literals through basicType/void/qualified names plus [] brackets); the typer folds Java-unit annotation arguments with JavaConstantFolder and Java assignment conversion (shared with the namer), handling the single-element array shorthand, and falls back to the old typing for class literals and enum constants. The old copyFrom/skipAhead bail-out is gone; a rejected argument is skipped by balanced tokens and still drops only its annotation. Rework: Java semantics apply only to Java-defined annotation classes; Scala annotations in Java sources keep Scala typing and are dropped for operator or cast arguments; unconvertible constants are a type mismatch error as on the base."
+    },
+    "WX1": {
+      "prs": [
+        774
+      ],
+      "state": "fixed",
+      "note": "Fix: When the refinement member's result type admits Unit, the call site keeps the looked-up Method in a local and maps a null result of a void method to BoxedUnit.UNIT; other result types generate unchanged bytecode."
+    },
+    "WP1": {
+      "prs": [
+        775
+      ],
+      "state": "fixed",
+      "note": "Fix: The switch's default label gets the match type pt, like matchEnd, except when its body is Nothing, so erasure boxes inside the label instead of retyping the LabelDef against a primitive label symbol."
+    },
+    "WP2": {
+      "prs": [
+        776
+      ],
+      "state": "fixed",
+      "note": "Fix: After substituting type parameters into the extension method body, Selects of refinement members are rebound to the matching member of the qualifier's rebuilt refinement."
     }
   }
 }
