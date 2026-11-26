@@ -8,6 +8,7 @@ import java.nio.file.Files
 import javax.tools.ToolProvider
 
 import scala.reflect.internal.util.{BatchSourceFile, SourceFile}
+import scala.util.chaining._
 import scala.tools.nsc.reporters.StoreReporter
 import scala.tools.nsc.{FileUtils, Global}
 
@@ -125,6 +126,57 @@ class JavaAnnotationArgsTest {
         |V: C(value = classOf[java.lang.Object])""".stripMargin,
       actual.mkString("\n"))
   }
+
+  /** A Scala `ConstantAnnotation` used in a Java source has its arguments typed as Scala expressions, and is dropped
+   *  if an argument has a Java operator or cast. javac rejects such annotations.
+   */
+  @Test def scalaConstantAnnotationInJava(): Unit = {
+    val sc = """
+      |import scala.annotation.ConstantAnnotation
+      |class SA(val arr: Array[Int]) extends ConstantAnnotation
+      |class SP(val i: Int, val s: String) extends ConstantAnnotation
+      |class SZ(val z: Boolean) extends ConstantAnnotation
+      |class SB(val b: Byte) extends ConstantAnnotation
+      |""".stripMargin
+    val src = """
+      |public class U {
+      |  @SA(arr = {1, 2}) public int arr;
+      |  @SP(i = 4, s = "x") public int prim;
+      |  @SZ(z = !false) public int not;
+      |  @SB(b = (byte) 3) public int cast;
+      |}
+      |""".stripMargin
+    val actual = annotations(JavaConstantsTest.newGlobal(""), List(new BatchSourceFile("SC.scala", sc), new BatchSourceFile("U.java", src)), List("U"))
+    assertEquals(
+      """U.arr: SA(arr = [1, 2])
+        |U.prim: SP(i = 4, s = "x")""".stripMargin,
+      actual.mkString("\n"))
+  }
+
+  /** A constant that javac does not convert to the element type is a type mismatch, as it is for javac. */
+  @Test def unconvertibleConstantIsAnError(): Unit = {
+    val src = """
+      |public class W {
+      |  @P(b = 300) public int b;
+      |  @P(b = 100 + 200) public int b2;
+      |  @P(i = 1L) public int i;
+      |  @P(f = 1.5) public int f;
+      |  @P(str = 1) public int str;
+      |  @P(z = 1) public int z;
+      |}
+      |""".stripMargin
+    val g = JavaConstantsTest.newGlobal("")
+    import g._
+    new Run().compileSources(List(new BatchSourceFile("Annots.java", Annots), new BatchSourceFile("W.java", src)))
+    exitingTyper {
+      val w = rootMirror.EmptyPackageClass.info.decl(TypeName("W"))
+      w.info.decls.foreach { d => d.info; d.annotations.foreach(_.completeInfo()) }
+    }
+    val errors = reporter.asInstanceOf[StoreReporter].infos.toList.filter(_.severity == reporter.ERROR)
+    assertEquals(
+      List(3, 4, 5, 6, 7, 8).map(l => s"$l: type mismatch;").mkString("\n"),
+      errors.sortBy(_.pos.line).map(e => s"${e.pos.line}: ${e.msg.linesIterator.next()}").mkString("\n"))
+  }
 }
 
 object JavaAnnotationArgsTest {
@@ -170,7 +222,7 @@ object JavaAnnotationArgsTest {
           show(name, decl) ::: (if (params) decl.paramss.flatten.flatMap(p => show(s"$name(${p.name})", p)) else Nil)
         }
       } yield line
-    }.sorted.distinct
+    }.sorted.distinct.tap(_ => assert(!reporter.hasErrors, reporter.asInstanceOf[StoreReporter].infos.mkString("\n")))
   }
 
   /** The annotations of the given classes, read from the classfiles that javac emits for `sources`. */

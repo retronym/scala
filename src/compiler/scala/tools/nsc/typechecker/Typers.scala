@@ -4149,8 +4149,9 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
           Some(LiteralAnnotArg(const))
       }
 
-      /* An argument of an annotation in a Java source that is neither an array nor an annotation: a constant
-       * expression, evaluated with Java's semantics, or a class literal or enum constant (JLS 9.7.1).
+      /* An argument of a Java annotation in a Java source that is neither an array nor an annotation: a constant
+       * expression, evaluated with Java's semantics, or a class literal or enum constant (JLS 9.7.1). The arguments
+       * of a Scala `ConstantAnnotation` used in a Java source are typed as Scala expressions by `statically`.
        */
       def javaConstArg(tree: Tree, pt: Type): Option[ClassfileAnnotArg] =
         javaConstantFolder(tree, javaConstantRef) match {
@@ -4159,8 +4160,12 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
             case _ => unmappable = true; None
           }
           case const => javaConstantFolder.assignmentConversion(const, pt) match {
-            case null => unmappable = true; None
-            case c    => Some(LiteralAnnotArg(c))
+            case null =>
+              // reports the type mismatch that javac also reports, e.g. for `300` as a `byte`
+              typed(atPos(tree.pos)(Literal(const)), pt)
+              unmappable = true
+              None
+            case c => Some(LiteralAnnotArg(c))
           }
         }
 
@@ -4176,7 +4181,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
        */
       @tailrec
       def tree2ConstArg(tree: Tree, pt: Type): Option[ClassfileAnnotArg] = tree match {
-        case _ if unit.isJava && !isJavaArrayOrAnnotation(tree) =>
+        case _ if isJava && unit.isJava && !isJavaArrayOrAnnotation(tree) =>
           if (pt.typeSymbol == ArrayClass) trees2ConstArg(tree :: Nil, pt.typeArgs.head) // a single element
           else javaConstArg(tree, pt)
 
@@ -4342,9 +4347,23 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       }
       // end statically
 
+      /* An argument that the parser of Java sources produced before it read constant expressions. The Scala typer
+       * would misread Java's operators and casts.
+       */
+      def isSimpleJavaArg(tree: Tree): Boolean = tree match {
+        case NamedArg(_, rhs)                          => isSimpleJavaArg(rhs)
+        case Literal(_) | Ident(_) | Select(_, _)      => true
+        case TypeApply(Select(_, nme.classOf), _)      => true
+        case Apply(Select(New(_), nme.CONSTRUCTOR), _) => true
+        case Apply(fun, args)                          => fun.symbol == ArrayModule_overloadedApply && args.forall(isSimpleJavaArg)
+        case _                                         => false
+      }
+
       finish {
         if (isJava)
           constantly
+        else if (unit.isJava && !argss.forall(_.forall(isSimpleJavaArg)))
+          UnmappableAnnotation // a Scala annotation in a Java source, which javac rejects
         else {
           val info = statically
           if (!info.isErroneous && annTypeSym.isNonBottomSubClass(ConstantAnnotationClass)) {
