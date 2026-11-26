@@ -1,0 +1,6 @@
+t10820-warning.scala:13: warning: catch block may intercept non-local return from method closure
+  def closure(l: List[Int]): Int = id(try { l.foreach(_ => return 1); 2 } catch { case _ => 3 })
+                                     ^
+error: No warnings can be incurred under -Werror.
+1 warning
+1 error
