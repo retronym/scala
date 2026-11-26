@@ -276,8 +276,12 @@ sealed abstract class Range(
       case _ => super.lastIndexOf(elem, end)
     }
 
+  // -1 also for an element of a range wider than Int.MaxValue elements whose position is not an Int
   private[this] def posOf(i: Int): Int =
-    if (contains(i)) ((i.toLong - start) / step).toInt else -1
+    if (contains(i)) {
+      val pos = (i.toLong - start) / step
+      if (pos <= Int.MaxValue) pos.toInt else -1
+    } else -1
 
   override def sameElements[B >: Int](that: IterableOnce[B]): Boolean = that match {
     case other: Range =>

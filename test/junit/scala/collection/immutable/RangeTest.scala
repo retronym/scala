@@ -79,6 +79,18 @@ class RangeTest {
     assertEquals(3, u.lastIndexOf(-1073741825))
   }
 
+  @Test
+  def indexOfBeyondIntIndices(): Unit = {
+    val r = Int.MinValue to 51
+    assertEquals(-1, r.lastIndexOf(3, 1073741823))
+    assertEquals(-1, r.indexOf(3, Int.MinValue))
+    assertEquals(5, r.indexOf(Int.MinValue + 5))
+    assertEquals(5, r.lastIndexOf(Int.MinValue + 5, 10))
+    assertEquals(Int.MaxValue - 1, r.indexOf(-2))
+    assertEquals(Int.MaxValue, r.indexOf(-1))
+    assertEquals(-1, r.indexOf(0))
+  }
+
   @Test(expected = classOf[IllegalArgumentException])
   def largeRangeMap(): Unit = {
     Int.MinValue to Int.MaxValue map identity
