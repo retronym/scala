@@ -12,8 +12,8 @@
     ],
     [
       "Wave four: independent review and pull requests",
-      "running",
-      "Each of the 22 findings is re-run and judged by a reviewer that did not write it (wave4/reviews), then gets a branch and a labelled fork pull request with a fix where the fix is clear cut and a failing test with the options where it is a design question"
+      "done",
+      "All 39 findings were re-run and judged by a reviewer that did not write them; every one links to a fork pull request (retronym/scala#747 to #785). 28 hold fixes, each read by a second independent reviewer, 9 of them reworked after that read; the rest hold a failing test and the options. #758 and #759 stay drafts on an owner decision; #747, #748 and #753 were folded or promoted by the owner's account"
     ],
     [
       "Wave four: integration build",
@@ -28,11 +28,18 @@
   ],
   "agents": [
     [
+      "w4 ci triage 3",
+      "Sonnet",
+      "Why the validate check of #784 failed",
+      "done",
+      "#784 failed because its new JUnit test did not compile under the build's fatal infer-any lint (a list mixing opcodes and names); not a JDK difference. Fixed with a one-word commit on top"
+    ],
+    [
       "w4 diff review #785 (2)",
       "Opus",
       "Second read of the WP7 fix, now in GlbLubs",
-      "running",
-      ""
+      "done",
+      "ok, low risk. The new lub case is reached only from erasure's typing of conditionals and costs an ordinary lub one type test. Every crash shape, including the two regressions of the first version, compiles and runs with output equal to Scala 3.7.4's; the standard library and 116 value-class tests are byte-identical with and without -opt:local"
     ],
     [
       "w4 rework #785",
@@ -428,6 +435,14 @@
     ]
   ],
   "log": [
+    [
+      "27 Nov 02:30",
+      "Overnight run complete. #784's CI failure was a lint error in its test, fixed on top; its new run and #785's were still in progress. Decisions waiting on the owner are listed in wave4/README.md."
+    ],
+    [
+      "27 Nov 02:29",
+      "#785 passed its second diff review and is out of draft. Fork CI: every open wave-four fix pull request passes except #784, whose failure is being looked at; #780 to #783 fail only as intended."
+    ],
     [
       "27 Nov 02:15",
       "Rework of #785 pushed: the fix moved from the constructions to the lub of erased value types. A second reviewer is reading it."
@@ -970,7 +985,7 @@
         785
       ],
       "state": "fixed",
-      "note": "Fix (reworked after independent diff review; draft until re-read): Fixes the merge instead of the producers: lub gets a case for ErasedValueTypes of one class, so every shape (constants, narrower or wider injections, null/throw arguments, different instantiations of a generic class, if/switch/try/block receivers) compiles and matches Scala 3. The PR's retyping of every injection is reverted, so bytecode for code that compiled before is identical to the base; only an argument of type Nothing gets the class's underlying type, which also fixes a base VerifyError and backend crash for new St(???).x.length / new In(throw e).x + 1."
+      "note": "Fix (reworked after independent diff review; re-read and judged ok): Fixes the merge instead of the producers: lub gets a case for ErasedValueTypes of one class, so every shape (constants, narrower or wider injections, null/throw arguments, different instantiations of a generic class, if/switch/try/block receivers) compiles and matches Scala 3. The PR's retyping of every injection is reverted, so bytecode for code that compiled before is identical to the base; only an argument of type Nothing gets the class's underlying type, which also fixes a base VerifyError and backend crash for new St(???).x.length / new In(throw e).x + 1."
     },
     "WP10": {
       "prs": [
