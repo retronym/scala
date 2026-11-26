@@ -681,7 +681,10 @@ abstract class Erasure extends InfoTransform
 
   /** The modifier typer which retypes with erased types. */
   class Eraser(_context: Context) extends Typer(_context) {
-    val typeAdapter = new TypeAdapter { def typedPos(pos: Position)(tree: Tree): Tree = Eraser.this.typedPos(pos)(tree) }
+    val typeAdapter = new TypeAdapter {
+      def typedPos(pos: Position)(tree: Tree): Tree = Eraser.this.typedPos(pos)(tree)
+      def localOwner: Symbol = Eraser.this.context.owner
+    }
     import typeAdapter._
 
     override protected def stabilize(tree: Tree, pre: Type, mode: Mode, pt: Type): Tree = tree

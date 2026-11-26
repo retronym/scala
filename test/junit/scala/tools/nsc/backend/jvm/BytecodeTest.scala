@@ -1143,4 +1143,30 @@ class BytecodeTest extends BytecodeTesting {
     check("mixed", jumps = 1, calls = 1)
     check("assign", jumps = 0, calls = 1)
   }
+
+  @Test def valueClassBoxAroundTry(): Unit = {
+    val code =
+      """class V(val d: Double) extends AnyVal
+        |class C {
+        |  def f(x: Double): V = new V(x)
+        |  def g(x: Double): V = new V(x)
+        |  def h(k: () => Double): V = new V(k())
+        |  def call(x: Double): Any = (f(x): V)
+        |  def cond(b: Boolean): Any = (if (b) f(1) else f(2)): V
+        |  def mtch(x: Any): Any = (x match { case d: Double => f(d); case _ => f(0) }): V
+        |  def fin(x: Double): Any = (try f(x) finally ()): V
+        |  def lifted(x: Double): Any = (g(try x catch { case _: Exception => 0 })): V
+        |  def lambda(x: Double): Any = (h(() => try x catch { case _: Exception => 0 })): V
+        |  def tryCatch(x: Double): Any = (try f(x) catch { case _: Exception => f(0) }): V
+        |}
+        |""".stripMargin
+    val c = compileClasses(code).find(_.name == "C").get
+    def newFirst(name: String) = getInstructions(c, name).dropNonOp.take(2) == List(TypeOp(NEW, "V"), Op(DUP))
+    // the box is evaluated directly unless a handler in the boxed expression would find the instance on the stack
+    for (m <- List("call", "cond", "mtch", "fin", "lifted", "lambda")) assertTrue(m, newFirst(m))
+    assertFalse(newFirst("tryCatch"))
+    val ops = getInstructions(c, "tryCatch").dropNonOp
+    val store = ops.indexWhere { case VarOp(DSTORE, _) => true case _ => false }
+    assertTrue(ops.mkString("\n"), store >= 0 && store < ops.indexOf(TypeOp(NEW, "V")))
+  }
 }
