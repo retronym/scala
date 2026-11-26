@@ -28,11 +28,18 @@
   ],
   "agents": [
     [
+      "w4 diff review #785 (2)",
+      "Opus",
+      "Second read of the WP7 fix, now in GlbLubs",
+      "running",
+      ""
+    ],
+    [
       "w4 rework #785",
       "Opus",
       "Rework of retronym/scala#785: make the lub of erased value types succeed",
-      "running",
-      ""
+      "done",
+      "The fix now lives in the lub: two erased value types of one class merge to that class with the widest underlying type, or Object for unrelated references. The change to constructions is reverted, so bytecode for code that compiled before is identical to the base. An argument of type Nothing is handled separately, which fixes two base failures. Output matches Scala 3.7.4"
     ],
     [
       "w4 ci triage 2",
@@ -421,6 +428,10 @@
     ]
   ],
   "log": [
+    [
+      "27 Nov 02:15",
+      "Rework of #785 pushed: the fix moved from the constructions to the lub of erased value types. A second reviewer is reading it."
+    ],
     [
       "27 Nov 01:59",
       "#785 failed its diff review with a regression and stays a draft; the rework moves the fix from the constructions to the lub of the branches."
@@ -959,7 +970,7 @@
         785
       ],
       "state": "fixed",
-      "note": "Fix under rework after independent diff review: aligning the type of every construction introduced a crash for code that compiled before (two constructions of a generic value class at different instantiations), and vals of different instantiations still crashed. The rework makes the lub of two erased value types of one class succeed instead. Type the InjectDerivedValue tree with ErasedValueType(cls, erasedValueClassArg(tref)) instead of the argument's type, so injections agree with each other and with other values of the class and the lub taken when erasure retypes a conditional receiver succeeds. Regression in 2.11.0 from scala/scala#3082."
+      "note": "Fix (reworked after independent diff review; draft until re-read): Fixes the merge instead of the producers: lub gets a case for ErasedValueTypes of one class, so every shape (constants, narrower or wider injections, null/throw arguments, different instantiations of a generic class, if/switch/try/block receivers) compiles and matches Scala 3. The PR's retyping of every injection is reverted, so bytecode for code that compiled before is identical to the base; only an argument of type Nothing gets the class's underlying type, which also fixes a base VerifyError and backend crash for new St(???).x.length / new In(throw e).x + 1."
     },
     "WP10": {
       "prs": [

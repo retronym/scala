@@ -1,1 +1,1 @@
-Type a value-class injection with the class's erased underlying type
+Lub erased values of one value class with different underlying types
