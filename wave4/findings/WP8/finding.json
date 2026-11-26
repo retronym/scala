@@ -1,0 +1,22 @@
+{
+ "id": "WP8",
+ "theme": "generated",
+ "track": "programs2",
+ "area": "transform/UnCurry (nonLocalReturnTry)",
+ "area_code": "L",
+ "title": "-Ycheck reports the NonLocalReturnControl handler's ex.value() as erroneous after uncurry when the method has a type parameter in its result type",
+ "kind": "spurious warning",
+ "oracle": "-Ycheck:all against the reference compile",
+ "generator": "wave4/harness/programs/Gen.scala, round 5 return family in a method with its own type parameter (also seen with the round 6 partial functions)",
+ "signature": "ycheck|log|Caught java.lang.AssertionError: assertion failed: Tree has erroneous type: ex.value()",
+ "seed": "3000070 (programs2 round 3); first seen at 500090 in the round 1 smoke run",
+ "measure": "n/a",
+ "detail": "def m[B](p: B, n: Int): Option[B] = { List(1, 2).foreach(x => if (x > n) return Some(p)); None } compiles and runs correctly, but -Ycheck:all reports 'Tree has erroneous type: ex.value()' at fields, the first phase after uncurry. UnCurry.nonLocalReturnTry builds the handler 'case ex: NonLocalReturnControl[Option[B] @unchecked] => if (ex.key eq key) ex.value else throw ex' from meth.tpe_*.finalResultType, and re-typing ex.value against the expected result type of the method body does not conform, apparently because the handler's B and the body's B are different symbols (type parameter and its skolem). The same method without a type parameter is clean. Erasure removes the difference, so the bytecode is right. On the base and 2.13.18 the checker also throws NullPointerExceptions from the damaged trees (the program still compiles there).",
+ "fix_sketch": "Take the handler's result type from the DefDef's own type (tree.symbol.info in the method's scope, or the rhs's expected type) so that it mentions the same type parameter symbols as the body. Checker-visible types only, no compatibility cost.",
+ "on_integration": "present",
+ "on_base": "same (plus NullPointerExceptions in the checker)",
+ "on_2_13_18": "same (plus NullPointerExceptions in the checker)",
+ "scala3": "n/a",
+ "prior": "none found (WP6 is the return inside a partial function, before uncurry)",
+ "confidence": "needs a second look: the skolem explanation is inferred from the dump, not traced"
+}

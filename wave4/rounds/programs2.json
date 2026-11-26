@@ -110,5 +110,112 @@
     13867
    ]
   }
+ },
+ {
+  "round": 3,
+  "change": "Local and nested classes and objects capturing variables and each other, member classes using the outer instance, an anonymous SAM class capturing a var, secondary constructors; new families nest at depth d-2; -opt:local skips sources over 45,000 characters.",
+  "cases": 314,
+  "seconds": 220,
+  "compile_rate": "99.7% (313 of 314; the one failure is a WP5 backend crash)",
+  "signatures_new": 1,
+  "signatures_known": 6,
+  "false_alarms": "0; one v18 difference where the base matched neither side was the integration build running a finalizer the base and 2.13.18 skip, i.e. fixed by an earlier wave",
+  "oracle_disagreements": {
+   "opt-local": "2/230 (84 sources over the size cap)",
+   "delambdafy-inline": "0/314",
+   "separate": "0/314",
+   "v18": "39/314 (38 fixed by earlier waves)",
+   "ycheck": "26/33"
+  },
+  "known_hits": {
+   "v18-wavefix": 38,
+   "WP6": 21,
+   "WP1": 2,
+   "WP2": 1,
+   "WP5": 2
+  },
+  "largest_unreached": [
+   "PlainSkelBuilder.appendToStaticCtor (30)",
+   "CleanUp.transformApplyDynamic (26 of 47)",
+   "PlainBodyBuilder.genStringConcat lambda (26)",
+   "BCJGenSigGen.getGenericSignature (25 of 36)",
+   "CleanUp.transformApply (23 of 66)"
+  ],
+  "next": "Stackable traits with abstract override over three or four traits, trait field initialisation order, super[T] calls, @volatile and @transient lazy vals in traits, objects and classes (mixin, fields); run one JVM per round and use the other for shrinking.",
+  "notes": "New: WP8 (-Ycheck, ex.value() of the non-local return handler in a method with a type parameter; 2 hits, first seen in round 1's smoke run). transform 3999 -> 4019. Two JVMs: 27.0 (JaCoCo) and 63.3 programs/min.",
+  "coverage": {
+   "backend/jvm": [
+    2733,
+    3905
+   ],
+   "backend/jvm/opt": [
+    1795,
+    2955
+   ],
+   "transform": [
+    4019,
+    5328
+   ],
+   "transform/patmat": [
+    1628,
+    2186
+   ],
+   "typechecker": [
+    7330,
+    13867
+   ]
+  }
+ },
+ {
+  "round": 4,
+  "change": "Stackable traits (abstract override, three to four traits in random order), trait val initialisation order with an overriding val, super[T] calls through a diamond, @volatile and @transient lazy vals in traits, objects and generated classes.",
+  "cases": 112,
+  "seconds": 240,
+  "compile_rate": "100.0%",
+  "signatures_new": 1,
+  "signatures_known": 2,
+  "false_alarms": "0",
+  "oracle_disagreements": {
+   "opt-local": "0/89",
+   "delambdafy-inline": "0/112",
+   "separate": "0/112",
+   "v18": "19/112 (all fixed by earlier waves)",
+   "ycheck": "9/12"
+  },
+  "known_hits": {
+   "v18-wavefix": 19,
+   "WP6": 8
+  },
+  "largest_unreached": [
+   "PlainSkelBuilder.appendToStaticCtor (30)",
+   "CleanUp.transformApplyDynamic (26 of 47)",
+   "PlainBodyBuilder.genStringConcat lambda (26)",
+   "BCJGenSigGen.getGenericSignature (25 of 36)",
+   "CleanUp.transformApply (23 of 66)"
+  ],
+  "next": "Value classes as scrutinee, closure capture, local lazy val, by-name argument, array and Seq element; default arguments that depend on earlier parameters and named arguments out of order; varargs passed as sequences.",
+  "notes": "One JVM under JaCoCo (27.7 programs/min); the other slot shrank round 3's signatures. patmat 1628 -> 1730 (the pattern constructs of round 2 now meet more of the program), transform 4019 -> 4024. The new signature is a -Ycheck report on a :: pattern, triaged in round 5.",
+  "coverage": {
+   "backend/jvm": [
+    2744,
+    3905
+   ],
+   "backend/jvm/opt": [
+    1794,
+    2955
+   ],
+   "transform": [
+    4024,
+    5328
+   ],
+   "transform/patmat": [
+    1730,
+    2186
+   ],
+   "typechecker": [
+    7243,
+    13867
+   ]
+  }
  }
 ]

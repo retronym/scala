@@ -28,6 +28,13 @@
   ],
   "agents": [
     [
+      "w4 diff review #777",
+      "Opus",
+      "Independent read of the WP3 fix in erasure",
+      "running",
+      ""
+    ],
+    [
       "w4 diff review campaign 2",
       "Opus",
       "Independent read of #774, #775, #776 and re-read of #773",
@@ -52,8 +59,8 @@
       "w4 fix WP3",
       "Opus",
       "Fix for WP3: value-class box around an unlifted try",
-      "running",
-      ""
+      "done",
+      "WP3 fixed (retronym/scala#777, draft until read): when the expression boxed into a value class contains a try with a catch, erasure evaluates it into a local first. The reviewer's account was confirmed with javap. The whole standard library and 51 value-class and try tests compile to byte-identical class files with the fix. Also found on the base: a lambda inside such a try crashes the back end; the fix covers it"
     ],
     [
       "w4 fix campaign 2",
@@ -330,6 +337,10 @@
     ]
   ],
   "log": [
+    [
+      "27 Nov 00:56",
+      "retronym/scala#777 opened as a draft for WP3, the critical finding; an independent reviewer is trying to break the erasure change."
+    ],
     [
       "27 Nov 00:48",
       "retronym/scala#774 to #776 opened as drafts for WX1, WP1 and WP2; a reviewer is reading them and re-reading #773."
@@ -742,6 +753,13 @@
       ],
       "state": "fixed",
       "note": "Fix: After substituting type parameters into the extension method body, Selects of refinement members are rebound to the matching member of the qualifier's rebuilt refinement."
+    },
+    "WP3": {
+      "prs": [
+        777
+      ],
+      "state": "fixed",
+      "note": "Fix: Erasure's box of a derived value class now stores an argument containing an un-lifted try/catch in a fresh local before `new C(local)` (for a Unit-underlying class, the expression is evaluated as a statement first); every other box is unchanged."
     }
   }
 }

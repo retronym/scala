@@ -12,7 +12,7 @@ def parseAll(xs: List[Any]): List[Meters] = xs.collect { case x => x match {
 def a(s: String): Any = (try Meters(s.toDouble) catch { case _: NumberFormatException => Meters(0) }): Meters
 ```
 
-Both should run. Scala 3 compiles them correctly, and binding the `try` to a `val` first works.
+With a lambda inside the `try`, the back end crashes instead (`Error while emitting`, an index out of bounds). Both should run. Scala 3 compiles them correctly, and binding the `try` to a `val` first works.
 
 A `try` with a `catch` can only be emitted where the operand stack is empty, because the JVM clears the stack on entry to a handler; uncurry moves a `try` in any other position into a local method. Here uncurry sees an empty stack: in the first example the `try` is the argument of the inner match's end label, in the second it is the whole result of the method. Erasure then adds a box around it. The partial function's `applyOrElse` returns the erased result type `Object`, and the outer match is typed at `Meters`, so the whole inner block becomes the argument of `new Meters(...)`; the ascription does the same in a method of result type `Any`. `NEW` and `DUP` are then on the stack when the handler is entered. A plain lambda, a method returning the value class, an argument position (uncurry lifts there) and a match that becomes a switch (boxed per case) are not affected.
 
