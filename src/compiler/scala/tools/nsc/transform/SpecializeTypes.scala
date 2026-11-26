@@ -926,6 +926,9 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
   private def normalizeMember(owner: Symbol, sym: Symbol, outerEnv: TypeEnv): List[Symbol] = {
     sym :: (
       if (!sym.isMethod || sym.isScala3Defined || enteringTyper(sym.typeParams.isEmpty)) Nil
+      // A super accessor copies the @specialized annotations of its alias's type parameters, but it has no body
+      // to duplicate. As in `specializeMember`, it is not specialized; a call from a variant goes through it generically.
+      else if (sym.isSuperAccessor) Nil
       else if (sym.hasDefault) {
         /* Specializing default getters is useless, also see scala/bug#7329 . */
         sym.resetFlag(SPECIALIZED)
