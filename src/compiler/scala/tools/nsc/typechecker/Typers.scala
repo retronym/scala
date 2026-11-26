@@ -4001,6 +4001,21 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       }
     }
 
+    /** The value of the constant that the (qualified) name `ref` in a constant expression in a Java source refers to,
+     *  or `null`. See `JavaConstantFolder`.
+     */
+    private[typechecker] def javaConstantRef(ref: Tree): Constant =
+      try silent(_.typed(ref.duplicate, EXPRmode, WildcardType)) match {
+        case SilentResultValue(typed) => typed.tpe match {
+          case ConstantType(c) => c
+          case _               => null
+        }
+        case _ => null
+      } catch {
+        // fields whose initializers refer to each other, which javac does not treat as constants either
+        case _: CyclicReference => null
+      }
+
     /**
      * Convert an annotation constructor call into an AnnotationInfo.
      */
@@ -4134,11 +4149,37 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
           Some(LiteralAnnotArg(const))
       }
 
+      /* An argument of an annotation in a Java source that is neither an array nor an annotation: a constant
+       * expression, evaluated with Java's semantics, or a class literal or enum constant (JLS 9.7.1).
+       */
+      def javaConstArg(tree: Tree, pt: Type): Option[ClassfileAnnotArg] =
+        javaConstantFolder(tree, javaConstantRef) match {
+          case null => tree match {
+            case Literal(_) | Ident(_) | Select(_, _) | TypeApply(_, _) => tryConst(tree, pt)
+            case _ => unmappable = true; None
+          }
+          case const => javaConstantFolder.assignmentConversion(const, pt) match {
+            case null => unmappable = true; None
+            case c    => Some(LiteralAnnotArg(c))
+          }
+        }
+
+      def isJavaArrayOrAnnotation(tree: Tree) = tree match {
+        case Apply(Select(New(_), nme.CONSTRUCTOR), _) => true
+        case Apply(Select(qual, nme.apply), _)         => qual.symbol == ArrayModule
+        case Apply(fun, _)                             => fun.symbol == ArrayModule_overloadedApply
+        case _                                         => false
+      }
+
       /* Converts an untyped tree to a ClassfileAnnotArg. If the conversion fails,
        * an error message is reported and None is returned.
        */
       @tailrec
       def tree2ConstArg(tree: Tree, pt: Type): Option[ClassfileAnnotArg] = tree match {
+        case _ if unit.isJava && !isJavaArrayOrAnnotation(tree) =>
+          if (pt.typeSymbol == ArrayClass) trees2ConstArg(tree :: Nil, pt.typeArgs.head) // a single element
+          else javaConstArg(tree, pt)
+
         case Apply(Select(New(_), nme.CONSTRUCTOR), _) if pt.typeSymbol == ArrayClass && unit.isJava =>
           // In Java, a single value may be passed for array annotation parameters
           tree2ConstArg(Apply(Select(gen.mkAttributedRef(ArrayModule), nme.apply), List(tree)), pt)
