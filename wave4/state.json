@@ -23,6 +23,13 @@
   ],
   "agents": [
     [
+      "w4 diff review rework 2",
+      "Opus",
+      "Re-read of the reworked #750 and #763",
+      "running",
+      ""
+    ],
+    [
       "w4c javaparser",
       "Opus",
       "Campaign: Java sources against javac, constructs not yet generated",
@@ -68,15 +75,15 @@
       "w4 ci triage",
       "Sonnet",
       "Fork CI results for retronym/scala#747 to #768",
-      "running",
-      ""
+      "done",
+      "Of 22, nine had finished: six pass (#748, #751, #752, #754, #755, #757), #749 and #761 fail only in the tests they add (no-fix, as intended), and #747 failed the fatal-warnings build on a deprecated Numeric.signum, fixed with a second commit. #757 passes because its test needs Java 9 and is skipped on JDK 8. Thirteen were still pending"
     ],
     [
       "w4 rework #750",
       "Opus",
       "Second rework of retronym/scala#750; bodies of #758 and #759",
-      "running",
-      ""
+      "done",
+      "#750 now sends a reduced branch through the transformer, so a match that is the surviving branch of another reduced if is handled; tests cover three levels of nesting, lambdas, by-name arguments, try and guards. The branch's own node now gets the checks the base skipped. Bodies of #758 and #759 name the cost of copying first"
     ],
     [
       "w4 rework specialization",
@@ -213,6 +220,10 @@
     ]
   ],
   "log": [
+    [
+      "26 Nov 23:15",
+      "Third version of #750 and updated bodies of #758 and #759 pushed. First fork CI results: #747 failed on a deprecation under fatal warnings and has a follow-up commit; no other failure outside deliberately failing tests."
+    ],
     [
       "26 Nov 23:12",
       "Owner approved the overnight plan: close out the 22 pull requests (reworks, fork CI, an integration build with the wave-four fixes), then a steered campaign of five tracks, mostly on Opus and Sonnet. Decisions that are the owner's are parked, not made."
@@ -388,7 +399,7 @@
         750
       ],
       "state": "fixed",
-      "note": "Fix (reworked after independent diff review; the reworked version has not been re-read): The Typed wrap now applies only to a Nothing branch and to a match scrutinee whose branch type differs from the if's by more than a literal type; all other reduced ifs are unchanged, so their bytecode is as on the base."
+      "note": "Fix (third version after two diff reviews; being re-read): In addition to the Typed wrap, the If case now calls transform on the reduced branch (not branch.transform(this)), so the branch's own node is handled, including a Match that records its scrutinee; the original If is still transformed child-wise."
     },
     "GJ2": {
       "prs": [

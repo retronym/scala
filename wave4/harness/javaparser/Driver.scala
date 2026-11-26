@@ -162,6 +162,17 @@ object Driver {
     out.toList
   }
 
+  /** Known differences, excluded narrowly so they do not mask what is behind them; each exclusion is counted. */
+  val known: List[(String, scala.util.matching.Regex)] = List(
+    "record-members-explicit-in-classfile" -> """SYM \S+#def (toString|hashCode|equals) :: src \[\] cls \[flags=<final <java>>.*""".r,
+    "bounded-T-array-prints-with-Object" -> """SYM \S+ :: src \[[^\]]*Array\[T with Object\][^\]]*\] cls \[.*""".r,
+    "GJ1-sealed-without-permits" -> """(SYM class \S+ :: src \[.*children=\] cls \[.*children=\S+.*)|(PROBE joint only: WARNING: unreachable code)|(PROBE separate only: WARNING: match may not be exhaustive.*)""".r,
+    "GJ2-varargs-record-accessor" -> """SYM \S+#def \w+ :: src \[[^\]]*: \(\): \w+\* erased.*""".r)
+  val knownCount = scala.collection.mutable.Map.empty[String, Int].withDefaultValue(0)
+  def dropKnown(ls: List[String]): List[String] = ls.filter { l =>
+    known.find(_._2.matches(l)) match { case Some((k, _)) => knownCount(k) += 1; false; case None => true }
+  }
+
   def main(args: Array[String]): Unit = {
     val root = Paths.get(args(0)); val work = Paths.get(args(1))
     val cases = Files.list(root).iterator.asScala.filter(Files.isDirectory(_)).toList.sortBy(_.getFileName.toString)
@@ -170,11 +181,12 @@ object Driver {
     import scala.concurrent.ExecutionContext.Implicits.global
     for (c <- cases) {
       val w = work.resolve(c.getFileName.toString)
-      val res = try Await.result(Future(oneCase(c, w)), 60.seconds) catch { case t: Throwable => hung += 1; List("TIMEOUT-OR-CRASH " + t) }
+      val res = dropKnown(try Await.result(Future(oneCase(c, w)), 60.seconds) catch { case t: Throwable => hung += 1; List("TIMEOUT-OR-CRASH " + t) })
       if (res.exists(_.startsWith("JAVAC-REJECT"))) rejects += 1
       else if (res.isEmpty) clean += 1 else failing += 1
       res.foreach(l => println(c.getFileName.toString + " " + l))
     }
+    println("==== known excluded: " + knownCount.toList.sorted.mkString(", "))
     println(f"==== cases=${cases.size} javacRejects=$rejects clean=$clean failing=$failing hung=$hung seconds=${(System.nanoTime - t0) / 1e9}%.1f")
   }
 }

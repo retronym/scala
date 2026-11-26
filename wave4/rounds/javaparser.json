@@ -1,0 +1,41 @@
+[
+ {
+  "round": 1,
+  "change": "none: the spike generator unchanged, with JaCoCo attached and the known differences excluded by counted filters",
+  "cases": 150,
+  "seconds": 56,
+  "signatures_new": 0,
+  "signatures_known": 4,
+  "false_alarms": "295 lines in 2 non-defect kinds: record equals/hashCode/toString explicit only in class files (261), bounded T[] printed as Array[T with Object] from source (34); GJ1 (73 lines) and GJ2 (43) known",
+  "coverage": {
+   "JavaParsers": {
+    "covered": 699,
+    "total": 764
+   },
+   "JavaScanners": {
+    "covered": 510,
+    "total": 651
+   },
+   "JavaConstantFolder": {
+    "covered": 73,
+    "total": 78
+   },
+   "ClassfileParser": {
+    "covered": 652,
+    "total": 808
+   },
+   "Namers": {
+    "covered": 583,
+    "total": 1069
+   }
+  },
+  "largest_unreached": [
+   "JavaParsers annotation element values: class literals, nested annotations, arrays (lines 278-281, 424, 463-469)",
+   "Namers.checkSelector Java import paths (545-575)",
+   "JavaParsers.compilationUnit leading annotations / package-info (1289-1296)",
+   "JavaScanners non-ASCII and supplementary identifiers (602-704)",
+   "JavaScanners compound assignment tokens (460-535)"
+  ],
+  "next": "generate Java-side uses of annotations with every element type on every kind of Java member, and read annotations back through Scala runtime reflection in the probe, because annotation argument parsing is the largest unreached parser code"
+ }
+]

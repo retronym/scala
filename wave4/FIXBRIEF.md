@@ -16,7 +16,7 @@ Read `/Users/jzaugg-virtus/code/.worktrees/scala/bug-hunting-second-wave-da4ba4/
 
 A diff reviewer read each fix pull request; its verdicts are in `/Users/jzaugg-virtus/.claude/scala-2-13-review-dashboard/diffreview-w4-*.json`, keyed by pull-request number. In rework mode your brief lists pull requests whose verdict is `defect` or `concern`. For each:
 
-- Do not check out or amend the pull request's branch: another worker created it. Create `sweep/<the branch name without review/>` at that branch's head (`git fetch -q origin <branch>` then `git checkout -b sweep/... FETCH_HEAD`), make the change, and amend so the sweep branch is one commit on the same base as before, holding test and fix. The coordinator pushes it over the pull request's head.
+- Do not check out or amend the pull request's branch: another worker created it. Create `sweep/<the branch name without review/>` at that branch's head (`git fetch -q origin <branch>` then `git checkout -b sweep/... FETCH_HEAD`), make the change, and commit it as a new commit on top (do not amend or rebase: the coordinator pushes it as a fast-forward of the pull request's head, and history on a pushed branch is not rewritten). The commit message says what the commit changes, with no account of the review.
 - Add a test for each input the reviewer gave, and reproduce each on the unreworked branch first.
 - Rewrite `result.json` (`branch` is the sweep branch, add `sweep` with value `"review-fix"`), `pr-title.txt` and `pr-body.md` in `wave4/fixes/<ID>/`. The body describes the change as it now stands, with no account of the rework.
 - If a reviewer's point is a decision for the owner and not a defect, do not decide it: state the options in the body.
