@@ -1,0 +1,11 @@
+{
+  "id": "WX1",
+  "verdict": "real",
+  "severity": "medium",
+  "reran": "cmd.sh on w4-int, on w3-base and against the 2.13.18 jars: all print null, null, () as the finding says. My variant with def run(r: { def close(): Any }) = r.close() on a class with close(): Unit prints null and run(...) == () is false on w4-int, 2.13.18, 2.12.20 and 2.11.12. Scala 3.7.4 with reflectiveSelectable prints the same nulls.",
+  "user_impact": "Code that calls a Unit method through a structural type written with a wider result (def close(): Any, def run(): AnyVal), typically a duck-typed resource or callback helper, gets null where () is expected; it shows only if the caller keeps the result, for example by printing it, comparing it with () or putting it in a collection. Most such helpers throw the result away, so it is rarely seen.",
+  "fixability": "clear cut: in CleanUp.fixResult, when the refinement's erased result is Object, return BoxedUnit.UNIT for a null result of a Method whose getReturnType is void (or test the resolved Method once in the cache). Behaviour change only for the null that should have been (); no binary cost. Scala 3 needs the same in reflectiveSelectable.",
+  "regression": "no (2.11.12, 2.12.20, 2.13.18 and the base all behave the same)",
+  "links": "XC1 (PR 633): another place where a Unit value shows up as null (elements of Array[Unit]); different code, same symptom. XC3 (PR 562), TC4, B10/Z13, H69, X9: other structural-call defects in CleanUp, none about the result. scala/bug#6199 is the runtime-reflection analogue, fixed in 2.10.",
+  "note": "Expected behaviour holds from the specification without the hunter's reasoning: Unit conforms to Any so K conforms to { def m(x: Int): Any } (3.5.2 Conformance, method types), and () is the unique value of Unit (6, Tuples); 3.2.7 Compound Types says a structural member reference may be slower, not that it means something else. The hunter is right that isMaybeUnit is computed and used only for the array path. Scala 3 shares the defect, so a fix in 2.13 alone would leave the two languages differing. No scala/bug ticket found (queries: structural null Unit, reflective call null, structural BoxedUnit, reflective call returns null)."
+}

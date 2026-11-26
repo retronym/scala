@@ -26,7 +26,7 @@ case class TPDef(name: String, spec: String, ctag: Boolean)
 case class Meth(idx: Int, name: String, kind: String, tps: List[TPDef], params: List[Param], ret: Ty,
                 render: Option[List[String] => String] = None, isAbstract: Boolean = false)
 case class Var(name: String, ty: Ty, mutable: Boolean = false)
-case class Env(vars: List[Var], meths: List[Meth], ctags: Set[String], tps: Set[String], inVC: Boolean = false)
+case class Env(vars: List[Var], meths: List[Meth], ctags: Set[String], tps: Set[String], inVC: Boolean = false, ret: Option[Ty] = None)
 case class VCDef(name: String, tparam: Option[String], under: Ty)
 class GenFail(msg: String) extends RuntimeException(msg)
 
@@ -40,6 +40,11 @@ class Gen(seed: Long, opts: GenOpts = GenOpts()) {
   def fresh(p: String): String = { counter += 1; p + counter }
   def pick[A](xs: collection.Seq[A]): A = xs(r.nextInt(xs.length))
   def chance(p: Double): Boolean = r.nextDouble() < p
+  /** Construct families by the round that added them; each program favours two of those switched on, so that
+   *  constructs of different rounds meet in one program. */
+  val families = List(2 -> "switch", 3 -> "struct", 4 -> "narrow", 5 -> "return", 6 -> "patmat", 7 -> "nested", 8 -> "linear", 9 -> "vcmix", 10 -> "dyn")
+  val focus: Set[String] = r.shuffle(families.filter(_._1 <= Gen.round).map(_._2)).take(2).toSet
+  def weight(f: String): Int = if (focus(f)) 4 else 1
 
   def show(t: Ty): String = t match {
     case TInt => "Int"; case TLong => "Long"; case TDouble => "Double"; case TStr => "String"; case TBool => "Boolean"; case TAdt => "Sh"
@@ -252,46 +257,63 @@ class Gen(seed: Long, opts: GenOpts = GenOpts()) {
       nodes += (() => { val (h, n) = (fresh("x"), fresh("x"))
         s"(${g(TInt)} match { case Ev(Ev($h)) => ${gen(t, w(Var(h, TInt)), d - 1)}; case Ev($h) => ${gen(t, w(Var(h, TInt)), d - 1)}; case $n => ${gen(t, w(Var(n, TInt)), d - 1)} })" })
       nodes += (() => s"""(try { if (${g(TBool)}) throw new IllegalStateException("x"); ${g(t)} } catch { case _: IllegalStateException => ${g(t)} } finally { Tr.t(${fresh("")}, 0) })""")
-      nodes += (() => { val f = fresh("loc"); s"({ def $f(): ${show(t)} = { try { if (${g(TBool)}) return ${g(t)}; ${g(t)} } finally { Tr.t(${fresh("")}, 0) } }; $f() })" })
+      nodes += (() => { val f = fresh("loc"); val e = env.copy(ret = Some(t)); s"({ def $f(): ${show(t)} = { try { if (${gen(TBool, e, d - 1)}) return ${gen(t, e, d - 1)}; ${gen(t, e, d - 1)} } finally { Tr.t(${fresh("")}, 0) } }; $f() })" })
       nodes += (() => { val (f, i, acc) = (fresh("loop"), fresh("i"), fresh("acc"))
-        s"({ @scala.annotation.tailrec def $f($i: Int, $acc: ${show(t)}): ${show(t)} = if ($i <= 0) $acc else $f($i - 1, ${gen(t, w(Var(acc, t), Var(i, TInt)), d - 1)}); $f(2, ${g(t)}) })" })
+        s"({ @scala.annotation.tailrec def $f($i: Int, $acc: ${show(t)}): ${show(t)} = if ($i <= 0) $acc else $f($i - 1, ${gen(t, w(Var(acc, t), Var(i, TInt)).copy(ret = Some(t)), d - 1)}); $f(2, ${g(t)}) })" })
       nodes += (() => { val x = fresh("x"); s"({ case $x if $x > 1 => ${gen(t, w(Var(x, TInt)), d - 1)} }: PartialFunction[Int, ${show(t)}]).applyOrElse(${g(TInt)}, (($x: Int) => ${g(t)}))" })
       env.vars.filter(_.mutable).foreach(v => nodes += (() => s"({ ${v.name} = ${g(v.ty)}; ${g(t)} })"))
+      def addF(f: String)(th: () => String): Unit = for (_ <- 0 until weight(f)) nodes += th
+      if (Gen.round >= 5 && env.ret.nonEmpty) { // return from the enclosing method: plain, from closures, by-name arguments, try/finally
+        val rt = env.ret.get
+        def rv() = g(rt)
+        def cond() = g(TBool)
+        addF("return")(() => s"({ if (${cond()}) return ${rv()}; ${g(t)} })")
+        addF("return")(() => { val x = fresh("x"); s"({ List[Int](1, 2, 3).foreach { ($x: Int) => if ($x > ${g(TInt)}) return ${gen(rt, w(Var(x, TInt)), d - 1)} }; ${g(t)} })" })
+        addF("return")(() => { val o = other(); val x = fresh("x"); s"Option[${show(o)}](${g(o)}).map((($x: ${show(o)}) => { if (${gen(TBool, w(Var(x, o)), d - 1)}) return ${rv()}; ${gen(t, w(Var(x, o)), d - 1)} })).getOrElse(${g(t)})" })
+        addF("return")(() => s"Bn(if (${cond()}) return ${rv()} else ${g(t)})")
+        addF("return")(() => s"Bn.twice(if (${cond()}) ${g(t)} else return ${rv()})._2")
+        addF("return")(() => { val x = fresh("x"); s"(try { List[Int](1, 2).map(($x: Int) => if ($x == ${g(TInt)}) return ${rv()} else $x); ${g(t)} } finally { Tr.t(${fresh("")}, 0) })" })
+        addF("return")(() => { val x = fresh("x"); s"(try { ${g(t)} } finally { List[Int](1).foreach(($x: Int) => Tr.t(${fresh("")}, $x)) })" })
+        addF("return")(() => { val (i, x) = (fresh("i"), fresh("x")); s"({ var $i = 0; while ($i < 3) { if ($i == ${g(TInt)}) return ${rv()}; $i += 1 }; ${g(t)} })" })
+        addF("return")(() => { val x = fresh("x"); s"({ case $x if $x > 1 => if ($x > ${g(TInt)}) return ${rv()} else ${gen(t, w(Var(x, TInt)), d - 1)} }: PartialFunction[Int, ${show(t)}]).applyOrElse(${g(TInt)}, (($x: Int) => ${g(t)}))" })
+        addF("return")(() => { val x = fresh("x"); s"({ lazy val $x: ${show(t)} = { if (${cond()}) return ${rv()}; ${g(t)} }; $x })" })
+        addF("return")(() => { val x = fresh("x"); s"(${g(TList(TInt))}.foldLeft(${g(t)})((($x: ${show(t)}, y: Int) => if (y > 5) return ${rv()} else $x)))" })
+      }
       if (Gen.round >= 4) { // Byte, Short, Char and Float operands, ## and getClass
         def narrow(): String = pick(List(s"${g(TInt)}.toByte", s"${g(TInt)}.toShort", s"(${g(TInt)} + 'a').toChar", s"${g(TInt)}.toFloat"))
         def narrowI(): String = pick(List(s"${g(TInt)}.toByte", s"${g(TInt)}.toShort", s"(${g(TInt)} + 'a').toChar"))
-        if (t == TInt) nodes += (() => s"(${narrow()} ${pick(List("+", "*", "-"))} ${narrow()}).toInt")
-        if (t == TInt) nodes += (() => s"(${narrowI()} ${pick(List("&", "<<", "|", "-"))} ${narrowI()})")
-        if (t == TInt) nodes += (() => s"(${g(TInt)}.toByte.##)")
-        if (t == TInt) nodes += (() => s"((${g(TInt)}.toShort: Any).##)")
-        if (t == TLong) nodes += (() => s"(${g(TLong)} ${pick(List("+", "&", "|", "^", "max"))} ${narrowI()})")
-        if (t == TDouble) nodes += (() => s"(${narrow()} / ${pick(List("3", "2.0f", "'b'", "7L"))})")
-        if (t == TBool) nodes += (() => s"(${narrow()} ${pick(List("<", "==", "!=", ">="))} ${narrow()})")
-        if (t == TBool) nodes += (() => s"(${narrow()}: Any).isInstanceOf[${pick(List("Byte", "Short", "Char", "Float", "Int"))}]")
-        if (t == TStr) nodes += (() => s"(${narrow()}: Any).getClass.getName")
-        if (t == TStr) nodes += (() => s"(${g(TStr)} + ${narrow()} + ${pick(List("'c'", "1.5f", "null", "2.toByte"))})")
+        if (t == TInt) addF("narrow")(() => s"(${narrow()} ${pick(List("+", "*", "-"))} ${narrow()}).toInt")
+        if (t == TInt) addF("narrow")(() => s"(${narrowI()} ${pick(List("&", "<<", "|", "-"))} ${narrowI()})")
+        if (t == TInt) addF("narrow")(() => s"(${g(TInt)}.toByte.##)")
+        if (t == TInt) addF("narrow")(() => s"((${g(TInt)}.toShort: Any).##)")
+        if (t == TLong) addF("narrow")(() => s"(${g(TLong)} ${pick(List("+", "&", "|", "^", "max"))} ${narrowI()})")
+        if (t == TDouble) addF("narrow")(() => s"(${narrow()} / ${pick(List("3", "2.0f", "'b'", "7L"))})")
+        if (t == TBool) addF("narrow")(() => s"(${narrow()} ${pick(List("<", "==", "!=", ">="))} ${narrow()})")
+        if (t == TBool) addF("narrow")(() => s"(${narrow()}: Any).isInstanceOf[${pick(List("Byte", "Short", "Char", "Float", "Int"))}]")
+        if (t == TStr) addF("narrow")(() => s"(${narrow()}: Any).getClass.getName")
+        if (t == TStr) addF("narrow")(() => s"(${g(TStr)} + ${narrow()} + ${pick(List("'c'", "1.5f", "null", "2.toByte"))})")
       }
       if (Gen.round >= 3) { // structural (reflective) calls and @varargs members
         // a structural result type may not be a value class (SIP-15); type parameters are left out as they may stand for one
         val structOk = !t.isInstanceOf[TVC] && !t.isInstanceOf[TP]
-        if (structOk) nodes += (() => s"({ val s: { def get(n: Int): ${show(t)} } = new Box[${show(t)}](${g(t)}); s.get(${g(TInt)}) })")
-        if (structOk && !env.inVC) nodes += (() => { val x = fresh("x"); s"(new { def k($x: Int): ${show(t)} = ${gen(t, w(Var(x, TInt)), d - 1)} }).k(${g(TInt)})" })
-        if (t == TLong) nodes += (() => s"({ val s: { def sum(a: Int, b: Long): Long } = new Box(0); s.sum(${g(TInt)}, ${g(TLong)}) })")
-        if (t == TStr) nodes += (() => s"({ val s: { def cat(s: String, d: Double): String } = new Box(1); s.cat(${g(TStr)}, ${g(TDouble)}) })")
-        if (t == TStr) nodes += (() => s"Va.cat(${List.fill(r.nextInt(3))(g(TStr)).mkString(", ")})")
-        if (t == TInt) nodes += (() => s"Va.sumi(${List.fill(r.nextInt(3))(g(TInt)).mkString(", ")})")
+        if (structOk) addF("struct")(() => s"({ val s: { def get(n: Int): ${show(t)} } = new Box[${show(t)}](${g(t)}); s.get(${g(TInt)}) })")
+        if (structOk && !env.inVC) addF("struct")(() => { val x = fresh("x"); s"(new { def k($x: Int): ${show(t)} = ${gen(t, w(Var(x, TInt)).copy(ret = Some(t)), d - 1)} }).k(${g(TInt)})" })
+        if (t == TLong) addF("struct")(() => s"({ val s: { def sum(a: Int, b: Long): Long } = new Box(0); s.sum(${g(TInt)}, ${g(TLong)}) })")
+        if (t == TStr) addF("struct")(() => s"({ val s: { def cat(s: String, d: Double): String } = new Box(1); s.cat(${g(TStr)}, ${g(TDouble)}) })")
+        if (t == TStr) addF("struct")(() => s"Va.cat(${List.fill(r.nextInt(3))(g(TStr)).mkString(", ")})")
+        if (t == TInt) addF("struct")(() => s"Va.sumi(${List.fill(r.nextInt(3))(g(TInt)).mkString(", ")})")
       }
       if (Gen.round >= 2) { // switches over Int, Char and String literals
         def arm(pat: String) = if (chance(0.2)) s"case $pat if ${g(TBool)} => ${g(t)}" else s"case $pat => ${g(t)}"
         def ann = if (chance(0.3)) ": @scala.annotation.switch" else ""
-        nodes += (() => { val x = fresh("x"); val ks = r.shuffle(List(0, 1, 2, 3, 5, 7, -1, 100)).take(3 + r.nextInt(4))
+        addF("switch")(() => { val x = fresh("x"); val ks = r.shuffle(List(0, 1, 2, 3, 5, 7, -1, 100)).take(3 + r.nextInt(4))
           val cs = ks.map(k => arm(if (chance(0.25)) s"$k | ${k + 1000}" else k.toString))
           s"((${g(TInt)}$ann) match { ${cs.mkString("; ")}; case $x => ${gen(t, w(Var(x, TInt)), d - 1)} })" })
-        nodes += (() => { val x = fresh("x"); val ks = r.shuffle(List("a", "bc", "", "xyz", "Aa", "BB", "abc")).take(3 + r.nextInt(4)).map("\"" + _ + "\"")
+        addF("switch")(() => { val x = fresh("x"); val ks = r.shuffle(List("a", "bc", "", "xyz", "Aa", "BB", "abc")).take(3 + r.nextInt(4)).map("\"" + _ + "\"")
           val scr = if (chance(0.3)) s"""(if (${g(TBool)}) "Aa" else "BB")""" else g(TStr)
           val cs = ks.grouped(1 + r.nextInt(2)).map(k => arm(k.mkString(" | "))).toList
           s"(($scr$ann) match { ${cs.mkString("; ")}; case $x => ${gen(t, w(Var(x, TStr)), d - 1)} })" })
-        nodes += (() => { val ks = r.shuffle(List('a', 'A', 'b', 'B', 'z')).take(3 + r.nextInt(2)).map("'" + _ + "'")
+        addF("switch")(() => { val ks = r.shuffle(List('a', 'A', 'b', 'B', 'z')).take(3 + r.nextInt(2)).map("'" + _ + "'")
           val cs = ks.grouped(1 + r.nextInt(2)).map(k => arm(k.mkString(" | "))).toList
           s"""(("aAbBz".charAt(Math.abs(${g(TInt)}) % 5)$ann) match { ${cs.mkString("; ")}; case _ => ${g(t)} })""" })
       }
@@ -314,13 +336,13 @@ class Gen(seed: Long, opts: GenOpts = GenOpts()) {
           val p1 = Param(fresh("p"), genTy(env, 1, false), byName = chance(0.4))
           val dty = genTy(env, 0, true)
           val ps = if (chance(0.5)) List(p1, Param(fresh("p"), dty, default = Some(gen(dty, env, 0)))) else List(p1)
-          val benv = env.copy(vars = ps.map(p => Var(p.name, p.ty)) ::: env.vars)
+          val benv = env.copy(vars = ps.map(p => Var(p.name, p.ty)) ::: env.vars, ret = Some(ret))
           sb ++= s"def $f(${ps.map(showParam).mkString(", ")}): ${show(ret)} = ${gen(ret, benv, d - 1)}; "
           env = env.copy(meths = Meth(0, f, "def", Nil, ps, ret, render = Some(as => s"$f(${as.mkString(", ")})")) :: env.meths)
         case 5 =>
           val c = fresh("L"); val ret = genTy(env, 1, false)
           val p = Param(fresh("p"), genTy(env, 1, false)); val q = Param(fresh("p"), genTy(env, 1, false))
-          val benv = env.copy(vars = Var(p.name, p.ty) :: Var(q.name, q.ty) :: env.vars)
+          val benv = env.copy(vars = Var(p.name, p.ty) :: Var(q.name, q.ty) :: env.vars, ret = Some(ret))
           sb ++= s"class $c(${showParam(p)}) { def g(${showParam(q)}): ${show(ret)} = ${gen(ret, benv, d - 1)} }; "
           env = env.copy(meths = Meth(0, c, "def", Nil, List(p, q), ret, render = Some(as => s"new $c(${as(0)}).g(${as(1)})")) :: env.meths)
       }
@@ -351,7 +373,7 @@ class Gen(seed: Long, opts: GenOpts = GenOpts()) {
   }
   def bodyEnv(m: Meth, env: Env): Env = env.copy(
     vars = m.params.map(p => Var(p.name, if (p.vararg) TSeq(p.ty) else p.ty)) ::: env.vars,
-    meths = env.meths.filter(_.idx < m.idx), tps = env.tps ++ m.tps.map(_.name), ctags = env.ctags ++ m.tps.filter(_.ctag).map(_.name))
+    meths = env.meths.filter(_.idx < m.idx), tps = env.tps ++ m.tps.map(_.name), ctags = env.ctags ++ m.tps.filter(_.ctag).map(_.name), ret = Some(m.ret))
 
   // ---- templates ----
   class Tpl(val kind: String, val name: String, val tps: List[TPDef], val parent: Option[(Tpl, List[Ty])]) {
@@ -494,6 +516,7 @@ class Gen(seed: Long, opts: GenOpts = GenOpts()) {
       "class Box[A](val v: A) { def get(n: Int): A = v; def sum(a: Int, b: Long): Long = a + b * 2; def cat(s: String, d: Double): String = s + d }",
       "object Va { @scala.annotation.varargs def cat(xs: String*): String = xs.mkString(\"/\"); @scala.annotation.varargs def sumi(xs: Int*): Int = xs.sum }",
       "object Ev { def unapply(i: Int): Option[Int] = if (i % 2 == 0) Some(i / 2) else None }",
+      "object Bn { def apply[T](x: => T): T = x; def twice[T](x: => T): (T, T) = (x, x) }",
       "object Imp { implicit class RichI(private val self: Int) extends AnyVal { def dbl: Int = self * 2 }; implicit class Pairer[T](private val self: T) { def pairUp: (T, T) = (self, self) }; implicit val defaultK: K0 = K0(7, \"imp\"); def withImp(x: Int)(implicit k: K0): Int = x + k.a }")
     for (i <- 0 until r.nextInt(3)) units += imp :: genVC(i)
     val tpls = ArrayBuffer[Tpl]()

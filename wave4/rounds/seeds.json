@@ -91,5 +91,36 @@
    "ProdConsAnalyzer.copyOperationProducedValueSlots"
   ],
   "next": "Coverage of the transform and backend phases barely moves with these rewrites (transform 6714 of 8729 lines in all three rounds); unreached code is async (-Xasync) and optimizer internals, so add -opt:inline:** and -Ycheck:all configurations."
+ },
+ {
+  "round": 4,
+  "change": "Added -opt:inline:** with -opt:local, -Ycheck:all and -opt:local with -Ydelambdafy:inline, aimed at the unreached optimizer and check code.",
+  "cases": 2832,
+  "seconds": 400,
+  "signatures_new": 1,
+  "signatures_known": 1,
+  "false_alarms": "optdelam: 10, the same as delam; optinline: 1 (t10277, reflection of specialized method names, inlined away); ycheck: 2 differences are noise (t6827, t8047)",
+  "coverage": {
+   "backend_jvm": {
+    "covered": 6701,
+    "total": 8225
+   },
+   "transform": {
+    "covered": 6715,
+    "total": 8729
+   },
+   "typechecker": {
+    "covered": 9908,
+    "total": 14385
+   }
+  },
+  "largest_unreached": [
+   "AnfTransform$AnfTransformer.$anonfun$transform$1",
+   "ExprBuilder$AsyncBlockBuilder.add",
+   "AliasingFrame.execute",
+   "AsyncPhase$AsyncTransformer$UseFields.transform",
+   "ProdConsAnalyzer.copyOperationProducedValueSlots"
+  ],
+  "next": "Only typechecker coverage rose (9591 to 9908 lines, from -Ycheck); transform did not move in four rounds, so the seed corpus is exhausted for these rewrites. Stop."
  }
 ]

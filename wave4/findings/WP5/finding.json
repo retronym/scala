@@ -1,0 +1,22 @@
+{
+ "id": "WP5",
+ "theme": "generated",
+ "track": "programs2",
+ "area": "backend/jvm (BCodeBodyBuilder.genReturn)",
+ "area_code": "B",
+ "title": "A return evaluated with operands on the stack (inside a method argument) in a try/finally with another return crashes the backend (ArrayIndexOutOfBoundsException in ASM frame computation); 2.13.18 emits code that fails verification",
+ "kind": "crash",
+ "oracle": "reference compile of a valid program (crash); integration build against 2.13.18 (VerifyError); Scala 3.7.4 by hand",
+ "generator": "wave4/harness/programs/Gen.scala, round 5 (non-local return family): a return in an argument of a call inside a try/finally of a local method that also returns early",
+ "signature": "ref compile-error 'Error while emitting N / Index 0 out of bounds for length 0'; v18|compile-error/run-throw|java.lang.VerifyError; opt-local|compile-error/crash|AnalyzerException",
+ "seed": "500081 (programs2 smoke run of round 1)",
+ "measure": "n/a",
+ "detail": "def loc(b: Boolean, c: Boolean): Int = try { if (b) return 2; f(if (c) return 4 else 1) } finally println(\"fin\") does not compile on the integration build or the base: 'Error while emitting G$: Index 0 out of bounds for length 0' from scala.tools.asm.Frame.merge while ASM computes frames. Inside a try with a finalizer, genReturn stores the value in earlyReturnVar and jumps to the cleanup label without emptying the operand stack; here the receiver of f is still on it. The first return jumps there with an empty stack, the second with one value, so the label has two incompatible frames. With only the return in argument position the frame is consistent and the code verifies (the finalizer then runs with a stale value on the stack). 2.13.18 compiles the program and the class fails verification (Inconsistent stackmap frames at branch target); Scala 3.7.4, whose backend descends from this one, does the same. Same family as CF2 (genReturn ignores the operand stack, retronym/scala#618), different trigger: the return is in the try body, not in a finalizer. Ordinary code reaches it with an early return in a by-name or ordinary argument (getOrElse(return x), a guard helper) inside a try/finally.",
+ "fix_sketch": "In genReturn, when jumping to a cleanup, drop whatever the enclosing expression left on the operand stack first (the backend knows the stack depth at the return; the same is done for jumps to labels), or have UnCurry lift such returns out of argument position. No binary compatibility cost.",
+ "on_integration": "present",
+ "on_base": "same",
+ "on_2_13_18": "different: compiles; VerifyError (Inconsistent stackmap frames at branch target) when the class is loaded",
+ "scala3": "same: VerifyError when the class is loaded",
+ "prior": "CF2 / retronym/scala#618 (same genReturn cause, return in a finalizer); scala/bug#7407 and #8925 (older return/finally VerifyErrors, fixed in GenBCode); none found for this trigger",
+ "confidence": "confirmed"
+}

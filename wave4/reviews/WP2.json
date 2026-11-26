@@ -1,0 +1,11 @@
+{
+  "id": "WP2",
+  "verdict": "real",
+  "severity": "low",
+  "reran": "On w4-int: exit 0, 6 'Tree has erroneous type: s.get(1)' at pickler (checking extmethods), class files written, prints List(x). On w3-base and 2.13.18: 3 reports plus NullPointerException, exit 1, no class files. 2.12.20 reports it too. With -uniqid -Ycheck:extmethods the checker also prints 'Out of scope symbol reference' for the refinement class, owned by class V0, inside m$extension.",
+  "user_impact": "Only -Ycheck users and plugins that run between extmethods and erasure and read symbol infos, on a generic value class whose method uses a structural type mentioning the class type parameter. Bytecode is correct: erasure gives both type parameters the same bound, so the stale one erases identically.",
+  "fixability": "clear cut in principle: after substituting the extension method's type parameters, rebind Selects whose symbol is a member of a refinement in the old type to the corresponding member of the new refinement (or clone the refinement class with the new owner and type parameters when building the extension method). Compiler-internal; no compatibility cost.",
+  "regression": "no (2.12.20 reports the same)",
+  "links": "H11 and H60 (wave one): other -Ycheck failures on value class methods, after erasure. WP1, WP4: sibling -Ycheck findings.",
+  "note": "Not a checker false positive: the tree is stale. After extmethods, s's type is a new refinement whose member get#15485 returns List[T] of m$extension, but the Select s.get still points at the old member get#8139 of a refinement class owned by class V0 and typed with the class's T, so the selected symbol is not a member of its qualifier's type. The hunter's description is right except the refinement in the val's type has been rebuilt; it is the Select's symbol and the refinement class owner that are stale. No observable miscompile found, hence low."
+}

@@ -1,0 +1,22 @@
+{
+ "id": "WP4",
+ "theme": "generated",
+ "track": "programs2",
+ "area": "transform/UnCurry (by-name thunks), fields",
+ "area_code": "L",
+ "title": "-Ycheck reports a by-name argument that reads a trait's lazy val of type-parameter type as erroneous after fields; the thunk's result type is the lazy val's singleton type",
+ "kind": "spurious warning",
+ "oracle": "-Ycheck:all against the reference compile (a valid program must produce no checker output)",
+ "generator": "wave4/harness/programs/Gen.scala: trait lazy vals of a type-parameter type read from a subclass inside a by-name argument (getOrElse); campaign programs round 1 triage of the earlier round-4 signature",
+ "signature": "ycheck|log|Caught java.lang.AssertionError: assertion failed: Tree has erroneous type: N.this.N()",
+ "seed": "100080 (programs campaign round 4)",
+ "measure": "n/a",
+ "detail": "In class C[A] extends T[A], where trait T[A] declares lazy val lz: A, passing lz to a by-name parameter of type => A (or to Option.getOrElse) compiles and runs correctly, but -Ycheck:all reports 'Tree has erroneous type: C.this.lz()' at tailcalls, the phase after fields. The typer gives the argument the singleton type C.this.lz.type because the expected type is an abstract type, and UnCurry types the thunk Function(Nil, body) from the body, so the lifted method becomes 'def $anonfun$m(): C.this.lz.type = C.this.lz()'. After fields the trait's lazy val is a method in C, its application has type A, and the declared singleton result no longer holds. The same code with a concrete type (T[String]) or with the lazy val declared in the class itself is clean. Erasure removes the singleton type, so the bytecode is right; the effect is that -Ycheck cannot be used on such code. On the base and 2.13.18 the checker also leaves untyped DefDefs ('no type: ... (tpe = null)') before the program still runs.",
+ "fix_sketch": "In UnCurry.transformArgs, type the thunk against the by-name parameter's underlying type or widen the body's type before Function(Nil, body), so the lifted method's result type is A rather than a singleton. Checker-visible types only, no binary compatibility cost.",
+ "on_integration": "present",
+ "on_base": "same (also 'no type' checker warnings)",
+ "on_2_13_18": "same (also 'no type' checker warnings)",
+ "scala3": "n/a",
+ "prior": "none found (retronym/scala#419, #460, #509 fix other -Ycheck false reports; WP1, WP2 are different triggers)",
+ "confidence": "confirmed"
+}

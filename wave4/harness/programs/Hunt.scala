@@ -25,7 +25,8 @@ object Hunt {
 
   /** Known defects (wave4/known-signatures.md), excluded and counted. */
   val known = List("GE6" -> "LimitExceededException: Too many allocated bytes|^opt-local\\|ok/timeout-compile".r, "GE4" -> "found: x\\d*\\.type".r,
-                   "WP1" -> "^ycheck\\|log\\|.*Tree has erroneous type: N\\(\\)$".r, "WP2" -> "^ycheck\\|log\\|.*Tree has erroneous type: s\\.get\\(".r)
+                   "WP1" -> "^ycheck\\|log\\|.*Tree has erroneous type: (N\\(\\)$|scala\\.[A-Za-z]+\\.box\\()".r,
+                   "WP4" -> "^ycheck\\|log\\|.*Tree has erroneous type: N\\.this\\.N\\(\\)$".r, "WP2" -> "^ycheck\\|log\\|.*Tree has erroneous type: s\\.get\\(".r)
   def knownId(sig: String): Option[String] = known.collectFirst { case (id, rx) if rx.findFirstIn(sig).nonEmpty => id }
 
   def normErr(e: String): String =
@@ -45,7 +46,10 @@ object Hunt {
 
   var driver: Driver = _
   var deadline = Long.MaxValue
-  def sigOf(units: List[String], c: Config): Option[String] = {
+  def sigOf(units: List[String], c: Config): Option[String] = if (c.name == "ref") {
+    val o = driver.eval(units, ref) // the reference alone: shrink a crash or a compile error of valid code
+    if (o.kind == "ok" || o.kind == "run-throw" && o.text.contains("NonLocalReturn")) None else Some(s"ref|${o.kind}|" + normErr(o.text))
+  } else {
     val Seq((_, b), (_, o)) = driver.evalAll(units, List(ref, c))
     if (b.kind == "compile-error" && !o.compiled) None else signature(b, c, o)
   }
@@ -73,10 +77,51 @@ object Hunt {
         u -= 1
       }
     }
+    // subexpressions: hoist a nested group, drop a block statement or a case arm (Shrink)
+    progress = true
+    while (progress && left > 0) {
+      progress = false
+      for (u <- units.indices.reverse; j <- units(u).indices if left > 0) {
+        var again = true
+        while (again && left > 0) {
+          again = false
+          val line = units(u)(j)
+          val it = Shrink.candidates(line)
+          var found = false
+          while (!found && it.hasNext && left > 0) {
+            val c = it.next(); val x = units.updated(u, units(u).updated(j, c))
+            if (ok(x)) { units = x; found = true; again = true; progress = true }
+          }
+        }
+      }
+    }
     units
+  }
+  def configByName(n: String): Config = n match {
+    case "ycheck" => Config("ycheck", int, List("-Ycheck:all"))
+    case "ref" => ref
+    case "inline" => Config("inline", int, List("-opt:inline:**", "-opt:local"))
+    case _ => configs(1, "").find(_.name == n).get
+  }
+  /** Shrinks a recorded program (units separated by //#unit) under one configuration while its signature holds. */
+  def shrinkFile(file: String, cname: String, budget: Int): Unit = {
+    driver = new Driver(new Pool(prop("threads", "6").toInt))
+    val txt = new String(Files.readAllBytes(new File(file).toPath))
+    val units = txt.split("\n//#unit\n").toList.map(_.linesIterator.filterNot(_.startsWith("// ")).toList)
+    val c = configByName(cname)
+    val sig = sigOf(units.map(_.mkString("\n")), c)
+    println("SIG " + sig)
+    sig.foreach { s =>
+      val small = shrink(units, c, s, budget)
+      val out = file.replaceAll("\\.scala$", "") + ".min.scala"
+      Files.write(new File(out).toPath, (s"// $s\n" + small.map(_.mkString("\n")).mkString("\n//#unit\n") + "\n").getBytes)
+      println("WROTE " + out + " " + small.map(_.map(_.length).sum).sum + " chars")
+    }
+    System.exit(0)
   }
 
   def main(args: Array[String]): Unit = {
+    if (args(0) == "shrinkfile") shrinkFile(args(1), args(2), args.lift(3).fold(800)(_.toInt))
     val from = args(0).toLong; val secs = args(1).toInt; val outDir = new File(args(2)); outDir.mkdirs()
     val opts = args.drop(3).toSet
     val threads = prop("threads", "6").toInt; val progPar = prop("progPar", "2").toInt
@@ -85,6 +130,7 @@ object Hunt {
     deadline = t0 + secs * 1000000000L
     val sigs = mutable.LinkedHashMap[String, (Int, Long)]()
     val knownHits = mutable.LinkedHashMap[String, Int]()
+    val oracleRuns = mutable.LinkedHashMap[String, Int](); val oracleDiffs = mutable.LinkedHashMap[String, Int]()
     val errs = mutable.LinkedHashMap[String, (Int, Long)]()
     val n = new AtomicInteger; val compiled = new AtomicInteger; val abandoned = new AtomicInteger; val baseThrow = new AtomicInteger
     val next = new AtomicLong(from)
@@ -101,6 +147,9 @@ object Hunt {
         Files.write(new File(outDir, s"basefail-$seed.scala").toPath, (units.mkString("\n//#unit\n") + "\n/* " + base.text + " */\n").getBytes)
       } else compiled.incrementAndGet()
       if (base.kind == "run-throw") baseThrow.incrementAndGet()
+      oracleRuns.synchronized { res.tail.foreach { case (c, o) =>
+        oracleRuns(c.name) = oracleRuns.getOrElse(c.name, 0) + 1
+        if (signature(base, c, o).nonEmpty) oracleDiffs(c.name) = oracleDiffs.getOrElse(c.name, 0) + 1 } }
       for ((c, o) <- res.tail; sig <- signature(base, c, o)) {
         knownId(sig) match {
           case Some(id) => knownHits.synchronized(knownHits(id) = knownHits.getOrElse(id, 0) + 1)
@@ -122,6 +171,7 @@ object Hunt {
     println(f"==== programs=$N compiled=${compiled.get} (${100.0 * compiled.get / N}%.1f%%) ref-run-throw=${baseThrow.get} generator-abandoned=${abandoned.get} compiles=${driver.compiles.get} stuck=${driver.pool.stuck.get} programs/min=${N / mins}%.1f seeds=$from..${next.get - 1}")
     println("TIMES " + driver.timesReport)
     println("KNOWN " + knownHits.mkString(" "))
+    println("ORACLES " + oracleRuns.map { case (k, v) => s"$k=${oracleDiffs.getOrElse(k, 0)}/$v" }.mkString(" "))
     errs.toList.sortBy(-_._2._1).foreach { case (k, (c, s)) => println(s"BASEFAIL $c first-seed=$s $k") }
     sigs.foreach { case (k, (c, s)) => println(s"SIG $c first-seed=$s $k") }
     Console.flush()

@@ -1,0 +1,5 @@
+      2         during phase: superaccessors
+      1 Caught java.lang.AssertionError: assertion failed: 
+      6 Caught java.lang.AssertionError: assertion failed: Tree has erroneous type: (({
+      5 Caught java.lang.AssertionError: assertion failed: Tree has erroneous type: scala.Option.apply[Double](0.5)
+List(Some(2.0), Some(1.0), Some(0.5))

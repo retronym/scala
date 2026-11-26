@@ -28,6 +28,34 @@
   ],
   "agents": [
     [
+      "w4 fix WP3",
+      "Opus",
+      "Fix for WP3: value-class box around an unlifted try",
+      "running",
+      ""
+    ],
+    [
+      "w4 fix campaign 2",
+      "Opus",
+      "Fixes for WX1, WP1, WP2",
+      "running",
+      ""
+    ],
+    [
+      "w4 diff review java annotations",
+      "Opus",
+      "Independent read of the annotation element-value fix",
+      "running",
+      ""
+    ],
+    [
+      "w4 review campaign 3",
+      "Opus",
+      "Independent review of WS1, WS2",
+      "running",
+      ""
+    ],
+    [
       "w4c programs2",
       "Opus",
       "Campaign 2: generated programs, constructs combining, up to six rounds",
@@ -38,15 +66,15 @@
       "w4 review campaign 2",
       "Opus",
       "Independent review of WX1, WP1, WP2, WP3",
-      "running",
-      ""
+      "done",
+      "4 real: WP3 critical, WX1 medium, WP1 and WP2 low. WP3 is a regression in 2.13.9 and 2.12.17 from scala/scala#10028 and needs no partial function: xs.collect { case x => x match { ...; case s: String => try Meters(s.toDouble) catch {...} } } fails to verify; an older route through a type ascription fails back to 2.11. The fix belongs in erasure, separate from #605. WX1: the specification says (). WP1 and WP2 are real ill-typed trees, not checker false positives"
     ],
     [
       "w4 diff review library 2",
       "Opus",
       "Independent read of #770 and #771",
-      "running",
-      ""
+      "done",
+      "#770 and #771 ok, low risk. #770: the snapshot of a read-only map is sound and a four-thread stress showed the read-only view never changes; two minor points (some no-op bulk calls return normally where single-key ones throw; getOrElseUpdate runs its default before throwing). #771: no library path indexes an accumulator through apply or update, so the check costs one comparison on random access only"
     ],
     [
       "w4 fix library 2",
@@ -59,8 +87,8 @@
       "w4 fix java annotations",
       "Opus",
       "One fix for WJ1, GJ3 and J5: Java annotation element values",
-      "running",
-      ""
+      "done",
+      "One fix for WJ1, GJ3 and J5: the Java parser reads every annotation element value with the constant-expression parser, including primitive, void and array class literals, and the typer folds them with Java semantics. A JUnit test compares annotations read from source with those read from javac's class files over every element-value form. It replaces the approach of #288 and includes the tests of #757 and #288"
     ],
     [
       "w4 review campaign 1",
@@ -122,8 +150,8 @@
       "w4c seeds",
       "Sonnet",
       "Campaign: existing run tests as seeds under rewrites",
-      "running",
-      ""
+      "done",
+      "944 single-file run and jvm tests under optimizer, delambdafy, @specialized removed, separate compilation, -Xsource:3, the inliner, -Ycheck and against 2.13.18: no program result changed. 2 findings: WS1 (-Ydelambdafy:inline rejects a valid lambda whose body type is an existential over local classes), WS2 (-Ycheck:typer does not finish on if (b) LazyList.empty else Nil; needs a second look). Coverage of transform did not move across four rounds, so this corpus is exhausted for these rewrites."
     ],
     [
       "w4 integration",
@@ -281,6 +309,18 @@
     ]
   ],
   "log": [
+    [
+      "27 Nov 00:27",
+      "Review of WX1 and WP1 to WP3: all real. WP3 is the most severe finding of the wave: an ordinary collect with a nested match and a try returning a value class compiles and then fails to verify, a regression in 2.13.9. Two fix workers started."
+    ],
+    [
+      "27 Nov 00:19",
+      "retronym/scala#773 opened as a draft: one fix for WJ1, GJ3 and wave-one J5."
+    ],
+    [
+      "27 Nov 00:15",
+      "#770 and #771 read as ok and out of draft."
+    ],
     [
       "27 Nov 00:11",
       "Programs track done with three findings including a miscompile (WP3); a second programs campaign started because every new construct paid. retronym/scala#770 to #772 opened for WL1 to WL3."
@@ -537,10 +577,11 @@
     },
     "GJ3": {
       "prs": [
-        757
+        757,
+        773
       ],
       "state": "fixed",
-      "note": "Test only, no fix yet: Not fixed: a sound fix reuses constantExprOpt in elementValue (new terminators, class literals) and folds with JavaConstantFolder in typedAnnotation, which lives privately in Namers; that is a parser and typer change of moderate size that would replace retronym/scala#288 and is better done as one change with J5."
+      "note": "Fix in retronym/scala#773 (with WJ1), which includes this finding's test; #757 held the test alone and would be closed in its favour."
     },
     "GC7": {
       "prs": [
@@ -636,6 +677,13 @@
       ],
       "state": "fixed",
       "note": "Test only, no fix yet: Test-only. The wrapper cannot tell a primitive element type from one that holds null; options in the body are a null-only iteration fallback (correct for all collections, O(n) for null probes) or type tests for the known Int/Long keyed collections."
+    },
+    "WJ1": {
+      "prs": [
+        773
+      ],
+      "state": "fixed",
+      "note": "Fix (draft until read; also covers GJ3 and wave-one J5): Element values other than arrays and annotations go through constantExprOpt (now parameterized by terminators and able to read class literals through basicType/void/qualified names plus [] brackets); the typer folds Java-unit annotation arguments with JavaConstantFolder and Java assignment conversion (shared with the namer), handling the single-element array shorthand, and falls back to the old typing for class literals and enum constants. The old copyFrom/skipAhead bail-out is gone; a rejected argument is skipped by balanced tokens and still drops only its annotation."
     }
   }
 }
