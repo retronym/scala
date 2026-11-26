@@ -6,11 +6,12 @@ import org.junit.Test
 import java.lang.reflect.InvocationTargetException
 import scala.annotation.nowarn
 import scala.runtime.PStatics.VM_MaxArraySize
+import scala.tools.testkit.AllocationTest
 import scala.tools.testkit.AssertUtil.{assertSameElements, assertThrows, fail}
 import scala.tools.testkit.ReflectUtil.{getMethodAccessible, _}
 import scala.util.chaining._
 
-class ArrayBufferTest {
+class ArrayBufferTest extends AllocationTest {
 
   /* Test for scala/bug#9043 */
   @Test
@@ -75,6 +76,40 @@ class ArrayBufferTest {
     val res = xs.flatMapInPlace(i => ys take i)
 
     assertEquals(ArrayBuffer(-1, -2, -3, -1, -2, -3, -4, -1, -2, -3, -4, -5), res)
+  }
+
+  // scala/bug#12121: each result is read as it was when the function returned it, as `ListBuffer` does
+  @nowarn("cat=deprecation") // Stream
+  @Test
+  def flatMapInPlace_viewOfSelf(): Unit = {
+    val a = ArrayBuffer(1, 2, 3)
+    a.flatMapInPlace(_ => a.view.take(2))
+    assertEquals(ArrayBuffer(1, 2, 1, 2, 1, 2), a)
+    val b = ArrayBuffer(1, 2, 3)
+    b.flatMapInPlace(x => b.iterator.map(_ * x))
+    assertEquals(ArrayBuffer(1, 2, 3, 2, 4, 6, 3, 6, 9), b)
+    val c = ArrayBuffer(1, 2)
+    c.flatMapInPlace(_ => c)
+    assertEquals(ArrayBuffer(1, 2, 1, 2), c)
+    val d = ArrayDeque(1, 2, 3)
+    d.flatMapInPlace(x => d.view.map(_ + x))
+    assertEquals(ArrayDeque(2, 3, 4, 3, 4, 5, 4, 5, 6), d)
+    val e = ArrayDeque(1, 2, 3)
+    e.flatMapInPlace(_ => e.view.take(2).to(Stream))
+    assertEquals(ArrayDeque(1, 2, 1, 2, 1, 2), e)
+    val f = ArrayBuffer(1, 2, 3)
+    f.flatMapInPlace(x => Iterator(x) ++ f.view.take(1))
+    assertEquals(ArrayBuffer(1, 1, 2, 1, 3, 1), f)
+  }
+
+  // scala/bug#12121: a result that cannot read the buffer is not copied; each bound is what the call allocated before the copy existed
+  @Test
+  def flatMapInPlace_strictResultAllocatesNoCopy(): Unit = {
+    val b = new ArrayBuffer[Int](64)
+    val init = ArrayBuffer(1, 2, 3)
+    val list = List(1, 2, 3)
+    onlyAllocates(sizeFor(136, 104), "flatMapInPlace(Some)")({ b.clear(); b ++= init; b.flatMapInPlace(x => Some(x)); b.length })
+    onlyAllocates(sizeFor(80, 72), "flatMapInPlace(List)")({ b.clear(); b ++= init; b.flatMapInPlace(_ => list); b.length })
   }
 
   @Test
