@@ -1143,4 +1143,31 @@ class BytecodeTest extends BytecodeTesting {
     check("mixed", jumps = 1, calls = 1)
     check("assign", jumps = 0, calls = 1)
   }
+
+  @Test def t10183ReturnUnderFinallyDropsOperands(): Unit = {
+    val code =
+      """class C {
+        |  def fin(): Unit = ()
+        |  def f(x: Int): Int = x
+        |  def empty(c: Boolean): Int = try { if (c) return 1; f(2) } finally fin()
+        |  def operand(c: Boolean): Int = try f(if (c) return 1 else 2) finally fin()
+        |  def wide(c: Boolean): Long = try 1L + (if (c) return 2L else 3L) finally fin()
+        |}
+        |""".stripMargin
+    val c = compileClass(code)
+    // a return with an empty stack jumps to the cleanup as before
+    def summary(name: String) = getMethod(c, name).instructions.summary.filterNot(_ == -1)
+    assertEquals(List(
+      ILOAD, IFEQ, ICONST_1, ISTORE, GOTO, ALOAD, ICONST_2, "f", GOTO,
+      ASTORE, ALOAD, "fin", ALOAD, ATHROW,
+      ALOAD, "fin", ILOAD, IRETURN,
+      ALOAD, "fin", IRETURN), summary("empty"))
+    // the receiver of `f`, or the long operand of `+`, is dropped before the jump to the cleanup
+    def assertDropBeforeJump(name: String, store: Int, drop: Int): Unit = {
+      val s = summary(name)
+      assertTrue(s.toString, s.containsSlice(List(store, drop, GOTO)))
+    }
+    assertDropBeforeJump("operand", ISTORE, POP)
+    assertDropBeforeJump("wide", LSTORE, POP2)
+  }
 }
