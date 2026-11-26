@@ -378,7 +378,12 @@ abstract class TreeGen extends scala.reflect.internal.TreeGen with TreeDSL {
         ps.flatMap(parents).tap(_ => scope.foreach(rScope.enter))
       case _ =>
         if (!isFunction) tp :: Nil
-        else addSerializable(abstractFunctionType(fun.vparams.map(_.symbol.tpe), fun.body.tpe.deconst))
+        else {
+          // Not the body's type: that can be an existential skolem, which does not conform to the
+          // packed result type of `fun.tpe`, or a constant type, which defeats specialization.
+          val targs = tp.dealiasWiden.typeArgs
+          addSerializable(abstractFunctionType(targs.init, targs.last))
+        }
     }
     anonClass.setInfo(ClassInfoType(parents(fun.tpe), rScope, anonClass))
 
