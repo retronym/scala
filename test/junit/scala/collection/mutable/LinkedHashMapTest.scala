@@ -183,4 +183,12 @@ class LinkedHashMapTest {
     assertEquals(fromlhm2, lhm)
     assertFalse(fromlhm2 eq lhm)
   }
+
+  // scala/bug#12121: a mapped view of the map is read as it was before the call
+  @Test
+  def subtractAllMappedViewOfSelf(): Unit = {
+    val s = mutable.LinkedHashMap((1 to 40).map(k => k -> k): _*)
+    s.subtractAll(s.keySet.view.map(_ + 1))
+    assertEquals(Map(1 -> 1), s)
+  }
 }
