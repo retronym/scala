@@ -28,6 +28,20 @@
   ],
   "agents": [
     [
+      "w4c programs3",
+      "Opus",
+      "Campaign 3: generated programs, wrong-result and crash oracles, up to five rounds",
+      "running",
+      ""
+    ],
+    [
+      "w4 review campaign 4",
+      "Opus",
+      "Independent review of WP4 to WP9",
+      "running",
+      ""
+    ],
+    [
       "w4 diff review campaign 3",
       "Opus",
       "Independent read of #778 and #779",
@@ -45,8 +59,8 @@
       "w4 diff review campaign 2",
       "Opus",
       "Independent read of #774, #775, #776 and re-read of #773",
-      "running",
-      ""
+      "done",
+      "All four ok, low risk. #774: every result type in question now yields (); a null from a non-void method, primitives and bytecode for AnyRef-bounded results are unchanged; Scala 3 still returns null, so upstreaming is an owner decision. #775: the standard library is byte-identical; one compiler method is laid out with one fewer goto. #776: a wrong member cannot be picked. #773 rework: the array case did fail before and is fixed"
     ],
     [
       "w4 fix campaign 3",
@@ -94,8 +108,8 @@
       "w4c programs2",
       "Opus",
       "Campaign 2: generated programs, constructs combining, up to six rounds",
-      "running",
-      ""
+      "done",
+      "6 rounds, 1,709 programs, about 23,000 compilations, compile rate 98.9% or more. 6 findings: two compiler crashes (WP5: a return in a method argument inside try/finally with another return crashes frame computation; WP7: (if (c) V0(b) else V0(7)) == V0(5) crashes erasure) and four -Ycheck reports (WP4, WP6, WP8, WP9). 2.13.18 differs on 292 programs, 285 of them already fixed by earlier waves. -Ydelambdafy:inline and separate compilation never differed. Rounds 5 and 6 found nothing new but still added coverage."
     ],
     [
       "w4 review campaign 2",
@@ -344,6 +358,10 @@
     ]
   ],
   "log": [
+    [
+      "27 Nov 01:11",
+      "#773 to #776 passed diff review and are out of draft. Second programs campaign done: WP4 to WP9, two of them compiler crashes on ordinary code; with an independent reviewer."
+    ],
     [
       "27 Nov 01:10",
       "retronym/scala#778 and #779 opened as drafts for WS1 and WS2. Every reviewed wave-four finding now has a pull request."
@@ -746,7 +764,7 @@
         773
       ],
       "state": "fixed",
-      "note": "Fix (reworked after independent diff review; draft until re-read; also covers GJ3 and wave-one J5): Element values other than arrays and annotations go through constantExprOpt (now parameterized by terminators and able to read class literals through basicType/void/qualified names plus [] brackets); the typer folds Java-unit annotation arguments with JavaConstantFolder and Java assignment conversion (shared with the namer), handling the single-element array shorthand, and falls back to the old typing for class literals and enum constants. The old copyFrom/skipAhead bail-out is gone; a rejected argument is skipped by balanced tokens and still drops only its annotation. Rework: Java semantics apply only to Java-defined annotation classes; Scala annotations in Java sources keep Scala typing and are dropped for operator or cast arguments; unconvertible constants are a type mismatch error as on the base."
+      "note": "Fix (reworked after independent diff review; re-read and judged ok; also covers GJ3 and wave-one J5): Element values other than arrays and annotations go through constantExprOpt (now parameterized by terminators and able to read class literals through basicType/void/qualified names plus [] brackets); the typer folds Java-unit annotation arguments with JavaConstantFolder and Java assignment conversion (shared with the namer), handling the single-element array shorthand, and falls back to the old typing for class literals and enum constants. The old copyFrom/skipAhead bail-out is gone; a rejected argument is skipped by balanced tokens and still drops only its annotation. Rework: Java semantics apply only to Java-defined annotation classes; Scala annotations in Java sources keep Scala typing and are dropped for operator or cast arguments; unconvertible constants are a type mismatch error as on the base."
     },
     "WX1": {
       "prs": [
