@@ -1019,7 +1019,12 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
       val accessors = header.iterator
         .collect {
           case ValDef(mods, name, tpt, _) if !existing(name) =>
-            DefDef(Modifiers(Flags.JAVA).withAnnotations(mods.annotations), name, tparams = Nil, vparamss = ListOfNil, tpt.duplicate, blankExpr)
+            // the accessor of a variable arity component returns an array (JLS 8.10.3)
+            val accessorTpt = tpt match {
+              case AppliedTypeTree(_, List(elemTpt)) if treeInfo.isRepeatedParamType(tpt) => atPos(tpt.pos)(arrayOf(elemTpt.duplicate))
+              case _                                                                       => tpt.duplicate
+            }
+            DefDef(Modifiers(Flags.JAVA).withAnnotations(mods.annotations), name, tparams = Nil, vparamss = ListOfNil, accessorTpt, blankExpr)
         }
         .toList
 
