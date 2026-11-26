@@ -39,13 +39,31 @@ for d in sorted(glob.glob(W4 + "/findings/*/"), key=lambda p: natkey(os.path.bas
         if val and val.lower() not in ("n/a", "none found", "none", "not recorded"): det += "<br><b>%s:</b> %s" % (lab, e(val))
     if f.get("confidence") and f["confidence"] != "confirmed": det += "<br><b>Hunter's confidence:</b> " + e(str(f["confidence"]))
     if v.get("note"): det += "<br><b>Coordinator re-run:</b> " + e(v["note"])
+    rv = {}
+    rp = os.path.join(W4, "reviews", fid + ".json")
+    if os.path.exists(rp):
+        try:
+            rv = json.load(open(rp))
+            det += "<br><b>Independent review:</b> %s; %s. %s" % (e(str(rv.get("verdict", ""))), e(str(rv.get("severity", ""))), e(str(rv.get("note", ""))))
+            for lab, key in (("Reviewer re-run", "reran"), ("Who hits it", "user_impact"), ("Fixability", "fixability"), ("Regression", "regression")):
+                val = str(rv.get(key, "")).strip()
+                if val and val.lower() not in ("no", "none", "n/a"): det += "<br><b>%s:</b> %s" % (lab, e(val))
+        except Exception as ex: print("bad review", rp, ex)
     det += "<br>Reproduction: <code>wave4/findings/%s/cmd.sh</code> (retronym/scala#745)" % e(fid)
-    state = fx.get("state") or v.get("state") or "reported"
+    vd = str(rv.get("verdict", "")).lower()
+    rstate = "verified" if vd.startswith(("real", "duplicate")) else "unverified" if vd else None
+    state = fx.get("state") or rstate or v.get("state") or "reported"
+    if str(fx.get("note", "")).startswith("Test only"): state = "test-only"
     rows.append([fid, str(f.get("area", "")), str(f.get("title", "")), str(f.get("kind", "")), state, det])
-    level[fid] = st.get("level_override", {}).get(fid) or level4(f)
+    rsev = str(rv.get("severity", "")).lower().split(" ")[0].strip(":,.")
+    level[fid] = st.get("level_override", {}).get(fid) or {"critical": "critical", "high": "high", "medium": "medium", "low": "low", "performance": "perf"}.get(rsev) or level4(f)
+    rg = str(rv.get("regression", "")).strip()
+    if rg.lower().startswith("in unreleased"): regress[fid] = rg
     scala3[fid] = str(f.get("scala3", "not run")); ids.append(fid)
     pr = str(f.get("prior", "none found"))
     related[fid] = {"verdict": "none found" if re.match(r"none", pr, re.I) else "see note", "refs": [], "note": "" if re.match(r"none", pr, re.I) else pr}
+    if vd.startswith("real, known"): related[fid]["verdict"] = "known"; related[fid]["note"] = str(rv.get("verdict", "")) + (" | " + related[fid]["note"] if related[fid]["note"] else "")
+    elif vd.startswith(("duplicate", "by design", "doubtful", "wrong")): related[fid]["verdict"] = str(rv.get("verdict", ""))[:90]
     o18 = str(f.get("on_2_13_18", "")).lower()
     if o18.startswith(("different", "absent")) or "regression" in str(f.get("kind", "")).lower(): regress[fid] = str(f.get("on_2_13_18", ""))
 regress.update(st.get("regress", {}))

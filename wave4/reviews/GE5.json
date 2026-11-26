@@ -1,0 +1,11 @@
+{
+  "id": "GE5",
+  "verdict": "real",
+  "severity": "medium",
+  "reran": "cmd.sh on the integration build, the base and 2.13.18: type mismatch, found Int, required x.type, as recorded; 2.12.20 the same. Scala 3.7.4 compiles it and prints Some(1).",
+  "user_impact": "A lambda that reads a local lazy val whose type is the specialized type parameter, in a duplicated body: def m[@specialized(Int) B](p: B): () => B = { lazy val x: B = p; () => x } is rejected, and so is the same method in class C[@specialized(Int) B]. Memoising a value in a local lazy val and returning a thunk over it is ordinary. A plain val, a local def that reads the lazy val, and a local class that reads it all compile.",
+  "fixability": "clear cut once located, which I did not do: the message suggests the lambda body keeps the singleton type x.type as its expected type while the retyped reference to the lazy val in the Int variant has type Int, so the fix is in how Duplicators retypes a reference to a local lazy val inside a Function. No compatibility cost.",
+  "regression": "no (2.12.20 rejects it the same way)",
+  "links": "GE4, H66 and NX4 are other Duplicators retyping defects; scala/bug#8473 and #8122 are open tickets in the same area with different triggers.",
+  "note": "The finding says a lambda reading the lazy val directly in the method body compiles; it does not when the lambda is the result of the method (the one-line program above). The enclosing local def is not needed. No scala/bug ticket found among the open specialization tickets."
+}

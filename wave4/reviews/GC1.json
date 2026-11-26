@@ -1,0 +1,11 @@
+{
+  "id": "GC1",
+  "verdict": "real",
+  "severity": "medium",
+  "reran": "cmd.sh on w3-int, w3-base and the 2.13.18 jar: identical, knownSize 1 for a 3-element and 0 for a 5-element iterator. Also 2.13.0 and 2.13.1: same knownSize (2.13.0's toVector throws ArrayIndexOutOfBoundsException instead). My variant on w3-int and 2.13.18: (Int.MinValue to Int.MaxValue by (1 << 30)).iterator.toVector, toList, toArray, toSet, size, and (for (x <- r.iterator) yield x).toList are all empty; (-2000000000 to 2000000000 by 1000000000).iterator.toVector has 1 of 5 elements; Vector(1) ++ r.iterator drops all four.",
+  "user_impact": "A program that splits the Int hash space into a few slices, (Int.MinValue to Int.MaxValue by step), and goes through .iterator (for-yield over the iterator, iterator.map(f).toList, Vector ++ r.iterator) silently gets no or one element. Methods on the Range itself (toList, map, grouped, zip) are right, and so are foreach and ArrayBuffer ++= on the iterator.",
+  "fixability": "clear cut: compute the remaining count in Long and return -1 when it exceeds Int.MaxValue. No compatibility cost.",
+  "regression": "in 2.13.0 (RangeIterator.knownSize arrived with 5d56f69ffc, 2.13.0-M5; 2.12 iterators had no knownSize)",
+  "links": "GC2: the same expression in NumericRangeIterator, one pull request can fix both. LI1 (#555) and LI7 (#558): other Int overflows in Range for the same wide ranges, labelled low on the fork.",
+  "note": "Understated: the hunter calls the trigger rare, but any range spanning more than 2^31 with a step that leaves few elements qualifies, and partitioning the full Int range is ordinary. The span alone decides it; the bounds need not be at the extremes. No report found in scala/bug (two queries), the earlier lists or the branch index."
+}

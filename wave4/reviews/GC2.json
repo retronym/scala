@@ -1,0 +1,11 @@
+{
+  "id": "GC2",
+  "verdict": "real",
+  "severity": "medium",
+  "reran": "cmd.sh on w3-int, w3-base and the 2.13.18 jar: identical; knownSize -13 for a 38-element Byte range, 1 for 3-element Byte and Long ranges. 2.13.0 and 2.13.1 also print -13. My variant: (Long.MinValue to Long.MaxValue by (1L << 62)).iterator has knownSize 0 and toVector, toArray, take(2).toList, drop(1).toList are empty.",
+  "user_impact": "Long ranges spanning more than 2^63, such as a token ring (Long.MinValue to Long.MaxValue by step), consumed through .iterator: silently empty or truncated. NumericRange[Byte] and [Short] exist only when built explicitly (a to b on Bytes gives an Int Range), and Char ranges are unaffected, so the narrow types matter less than the finding suggests.",
+  "fixability": "clear cut: derive knownSize from the range's length minus the elements consumed (a counter), or return -1 when the subtraction overflows. No compatibility cost.",
+  "regression": "in 2.13.0 (the iterator's knownSize is present and wrong in 2.13.0)",
+  "links": "GC1: same defect in RangeIterator, fix together. LI2, LI3 (#569, #556, #655): the same element-type arithmetic in contains and length; #655 is the natural place for a wider fix if it is still open.",
+  "note": "'A Byte range over more than 127 values is ordinary' overstates it: ordinary Byte syntax does not produce a NumericRange[Byte]. A negative knownSize violates the IterableOnce contract outright, which is the cleanest statement of the defect. A BigInt range with more than Int.MaxValue elements throws from length before the iterator exists, so that path is closed."
+}

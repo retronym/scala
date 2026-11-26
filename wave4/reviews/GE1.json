@@ -1,0 +1,11 @@
+{
+  "id": "GE1",
+  "verdict": "real",
+  "severity": "high",
+  "reran": "cmd.sh on the integration build, the base and 2.13.18: all three throw NoSuchElementException 'key not found: method super$m' from SpecializeTypes.addBody (SpecializeTypes.scala:2144), as recorded. 2.12.20 compiles the file and it prints 2; 2.13.0, 2.13.1, 2.13.3 and 2.13.6 crash. Scala 3.7.4 compiles it and prints 2 (no specialization there).",
+  "user_impact": "Any trait method with a @specialized method type parameter that makes a super call to another such method crashes the compiler; the override is not needed (trait T1 extends T0 { def n[@specialized(Int) B](p: B) = super.m(p) }) and the parent may be a class. A decorator trait over a specialized type-class style method (trait Quoted extends Show { override def show[@specialized(Int) A](a: A) = '\"' + super.show(a) + '\"' }) is the ordinary program; I ran that and it crashes. The same call from a class compiles, so users are likely to move the method into a class and move on.",
+  "fixability": "clear cut: superaccessors gives the trait a bodiless accessor super$m whose type parameter keeps the @specialized annotation, so specialization creates a variant of the accessor and looks for a body to duplicate. Do not specialize super accessors (or drop the annotation when the accessor is created); the call from the specialized variant then goes through the generic accessor and boxes. No compatibility cost, the program does not compile today.",
+  "regression": "in 2.13.0 (2.12.20 compiles it; every 2.13 release tried crashes; the responsible change was not identified)",
+  "links": "Z11 and SP4 are other super-call defects in specialized traits with different causes. GE2 is a super call that compiles and loops; unrelated mechanism.",
+  "note": "The finding says the duplicated body refers to a super accessor missing from the map; more exactly the accessor itself is treated as a specialized method because its type parameter carries the annotation (visible with -Xprint:superaccessors). The finding does not say it is a regression from 2.12. No scala/bug ticket found (searched open specialization tickets and super/key not found queries); scala/bug#4012 is the closed ancestor for super calls in specialized traits."
+}

@@ -1,0 +1,13 @@
+{
+ "id": "GC6",
+ "outcome": "DESIGN",
+ "branch": "review/w4-gc6-updatewith-reentrant",
+ "commit": "7e1fc9ab95",
+ "workspace": "/Users/jzaugg-virtus/code/.worktrees/scala/w4-fix-a",
+ "files": "test/junit/scala/collection/mutable/HashMapTest.scala, test/junit/scala/collection/mutable/LinkedHashMapTest.scala",
+ "failing_before": "HashMapTest.updateWithModifyingTheMap and LinkedHashMapTest.updateWithModifyingTheMap: remove the key, Some expected:<List((1,7))> but was:<List()>. Per-case probe (temporary debug prints, not committed): remove/Some and clear/Some lose the value; remove/None gives size -1; remove/None in a 1,17 bucket chain gives size 0 with get(17) == Some(17) (HashMap) or empty (LinkedHashMap); absent key 17 with the function growing the table: size 43, get(17) None, toList contains 17 (both maps). add-the-key/Some is fine.",
+ "ran_after": "sbt \"junit/testOnly scala.collection.mutable.HashMapTest scala.collection.mutable.LinkedHashMapTest\": the new test fails in both classes, the other 12 pass. Test-only branch, no library change.",
+ "prior_work": "Regression from scala/scala#8073 (2.13.1). scala/bug#12069 earlier defect in the same override. No ticket found. Fork: retronym/scala#537/scala/scala#11413 (HashMap update no-grow, merged) touches a different method.",
+ "unsure": "New beyond the finding and review: the grow-the-table case (absent key whose bucket index changes when the function resizes) loses the entry from get; the finding said resizing was handled, which holds only when the key's index is unchanged. The test is neutral between supporting and rejecting (accepts a ConcurrentModificationException). Helper lives in object HashMapTest and is shared with LinkedHashMapTest.",
+ "note": "Design question as the review says: support re-entrancy (re-check node and table after the call, second bucket walk) or reject with a modification count and CME as java.util.HashMap.compute does. Branch holds the failing test and the options."
+}

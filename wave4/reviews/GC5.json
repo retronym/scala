@@ -1,0 +1,11 @@
+{
+  "id": "GC5",
+  "verdict": "real",
+  "severity": "low",
+  "reran": "cmd.sh on w3-int, w3-base and the 2.13.18 jar: identical; length throws for 2147483646 and 2147483647 elements, a control with 2147483535 elements returns. 2.13.3 and 2.13.4 throw for the same two ranges. Not run on 2.12 (its runner does not start on JDK 21).",
+  "user_impact": "A BigDecimal range from a fractional start across zero with between Int.MaxValue - 67 and Int.MaxValue elements, or take(Int.MaxValue) of a longer one. No ordinary program builds a two-billion-element BigDecimal range.",
+  "fixability": "clear cut: apply the Int.MaxValue check to the final sum only, or count zero steps to the first waypoint when the start is already past it. No compatibility cost.",
+  "regression": "no (present in 2.13.3, before the 2.13.4 change b2c2f35842 for scala/bug#12073 touched startdiff; the three-piece branch dates from 2013)",
+  "links": "LB4 (#533), LI3 (#556, #655): other defects in NumericRange.count; scala/bug#12073 changed the same lines.",
+  "note": "The arithmetic in the detail checks out: (0.34 + 21474836.11) / 0.01 + 1 = 2147483646, which fits. The intermediate negative step count is the more interesting observation and could hide other errors in count, but the only observable effect found is this 68-element window next to the limit."
+}

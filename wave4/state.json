@@ -11,12 +11,66 @@
       "Four tracks of about 45 minutes each on the integration build: Java sources through scalac's parser against javac (GJ), a third collections round (GC), primitive expressions in many embeddings (GF), generated Scala programs compiled several ways that must agree (GE). 22 findings with the first spike, each re-run by the coordinating session except the two unshrunk crashes GE7 and GE8; none independently reviewed, none with a pull request. Findings came in each track's first cases; more volume of the same kind found nothing"
     ],
     [
+      "Wave four: independent review and pull requests",
+      "running",
+      "Each of the 22 findings is re-run and judged by a reviewer that did not write it (wave4/reviews), then gets a branch and a labelled fork pull request with a fix where the fix is clear cut and a failing test with the options where it is a design question"
+    ],
+    [
       "Wave four: steered campaign",
       "pending",
       "Longer sessions for the tracks whose spike produced a signature or whose coverage is still rising, with one generator change per round, a shared compile-and-run driver, and a table of known signatures so unfixed earlier findings stop masking new ones"
     ]
   ],
   "agents": [
+    [
+      "w4 fix java+expr",
+      "Opus",
+      "Fixes for GJ1 to GJ4, GF1, GF2",
+      "running",
+      ""
+    ],
+    [
+      "w4 fix programs",
+      "Opus",
+      "Fixes for GE1 to GE8: specialization and the inliner's frame limit",
+      "running",
+      ""
+    ],
+    [
+      "w4 fix ranges",
+      "Opus",
+      "Fixes for GC1 to GC6: range iterators, updateWith",
+      "running",
+      ""
+    ],
+    [
+      "w4 fix self-aliasing",
+      "Opus",
+      "Fixes for GC7 by collection class: ArrayDeque, UnrolledBuffer, ArrayBuffer.flatMapInPlace, sets and maps",
+      "running",
+      ""
+    ],
+    [
+      "w4 review library",
+      "Fable",
+      "Independent review of GA1 and GC1 to GC7",
+      "done",
+      "6 real (GC1 to GC6), GC7 real and known (scala/bug#12121), GA1 a duplicate of GC7. High: GC7. Medium: GC1, GC2, GC6. Low: GC3, GC4, GC5. GC6 is a regression in 2.13.1 and worse than reported (size becomes -1 when the function removes the key and returns None); GC1 and GC2 are understated (a three-element Int range iterator gives an empty list)"
+    ],
+    [
+      "w4 review java+expr",
+      "Fable",
+      "Independent review of GJ1 to GJ4, GF1, GF2",
+      "done",
+      "6 real. GJ1 (medium, regression in unreleased 2.13.19 from scala/scala#11329): the Java parser tests the SEALED token number where Flags.SEALED is meant. GF1 (high, since 2.13.0): RefChecks replaces a constant-condition if by its branch without keeping its type; an ordinary feature-flag program crashes the back end. GJ2 medium and understated. GJ3, GJ4, GF2 low"
+    ],
+    [
+      "w4 review programs",
+      "Fable",
+      "Independent review of GE1 to GE8",
+      "done",
+      "5 real (GE1, GE2, GE3, GE5, GE6), GE4 and GE7 real and known (scala/bug#8633, #7574, #10096), GE8 a duplicate of GE3. GE6 is a regression in unreleased 2.13.19 from the ASM 9.11.1 upgrade (scala/scala#11327): a hand-written method of 220 try/catch lines crashes the inliner. GE1, GE3 and GE8 are regressions from 2.12. GE7 and GE8 shrunk by the reviewer"
+    ],
     [
       "w4 collections",
       "Fable",
@@ -54,6 +108,18 @@
     ]
   ],
   "log": [
+    [
+      "26 Nov 22:13",
+      "All three independent reviews are in: 22 findings, none doubtful, wrong or by design; GA1 is a duplicate of GC7 and GE8 of GE3; GC7, GE4 and GE7 are known tickets. Three regressions in unreleased 2.13.19 or earlier 2.13 releases stand out: GJ1 (sealed Java types, scala/scala#11329), GE6 (ASM upgrade, scala/scala#11327), GC6 (updateWith, 2.13.1). Four fix workers are running."
+    ],
+    [
+      "26 Nov 22:00",
+      "Library review reported: all eight reproduce on the integration build, the base and 2.13.18. Owner asked for fix pull requests, not test-only ones: two fix workers started on the library findings in warm workspaces."
+    ],
+    [
+      "26 Nov 21:49",
+      "Owner asked for independent review and per-finding fork pull requests. Three reviewers started; test-only branches follow when they report."
+    ],
     [
       "26 Nov 21:47",
       "All wave-four spike tracks reported and their findings are in wave4/findings (retronym/scala#745): GA1, GC1 to GC7, GE1 to GE8, GF1, GF2, GJ1 to GJ4. The coordinating session re-ran 20 of the 22 from their recorded commands; all match. Next is an independent review of each and a decision on which tracks get a steered campaign."

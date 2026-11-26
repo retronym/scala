@@ -1,0 +1,11 @@
+{
+  "id": "GC3",
+  "verdict": "real",
+  "severity": "low",
+  "reran": "cmd.sh on w3-int, w3-base and the 2.13.18 jar: identical; drop(1) on the iterator of (Int.MinValue until Int.MinValue) gives hasNext true and elements, indexWhere(_ => true, 1) is 1, segmentLength does not return within 1 s. 2.13.0 and 2.13.1: same. Variants: (Int.MinValue to 10).take(0).indexWhere(_ => true, 1) is 1; (10 until Int.MaxValue by -1).iterator.drop(3).take(2) yields 7, 6; an exhausted iterator of (Int.MaxValue - 2 to Int.MaxValue) has hasNext true after drop(1). (0 until 0) and (5 until 5 by -1) are fine.",
+  "user_impact": "Needs an empty range whose computed last element wraps (start at Int.MinValue, or a step pointing away from an end at a bound), or an exhausted iterator of a range ending at Int.MaxValue, followed by drop, indexWhere(p, from) or segmentLength(p, from). Empty ranges away from the bounds are unaffected, so ordinary code does not reach it.",
+  "fixability": "clear cut: return immediately from drop when !_hasNext. No compatibility cost. Add it to #558, which edits the same method.",
+  "regression": "in 2.13.0 (the drop override is afe76c12d7, 2.13.0-RC1)",
+  "links": "LI7 (#558): same method, the non-empty case; this is a wider fix on that pull request, not a separate one.",
+  "note": "The hunter did not mention that a non-empty range ending at Int.MaxValue shows the same thing once its iterator is exhausted (next wraps _next to Int.MinValue); the proposed guard covers it. The 2^32-element walk in segmentLength is a 3 s stall, not a hang."
+}

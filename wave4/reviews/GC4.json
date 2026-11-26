@@ -1,0 +1,11 @@
+{
+  "id": "GC4",
+  "verdict": "real",
+  "severity": "low",
+  "reran": "cmd.sh on w3-int, w3-base and the 2.13.18 jar: identical; (Int.MinValue to 51).lastIndexOf(3, 1073741823) and indexOf(3, Int.MinValue) return -2147483645. 2.13.0 and 2.13.1: same.",
+  "user_impact": "Only a Range with more than Int.MaxValue elements (whose length already throws) searched with an explicit end, or with a negative from. lastIndexOf with the default end throws from length, and indexOf with the default from returns -1, so the common calls are safe.",
+  "fixability": "clear cut: keep the position in Long in posOf and return -1 when it does not fit in Int. No compatibility cost. Belongs on #555, which already rewrites this line.",
+  "regression": "in 2.13.0 (posOf is 9fab9723b9, 2.13.0-RC1; 2.12 used the generic search)",
+  "links": "LI1 (#555): same line; widen that pull request.",
+  "note": "Accurate as written. On the base the same number comes from Int wrap-around rather than from narrowing, so 'on_base: same' holds for the output though not for the mechanism. Whether to return -1 or throw as length does is a small choice; -1 matches indexOf with the default from today."
+}

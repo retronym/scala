@@ -1,0 +1,11 @@
+{
+  "id": "GJ3",
+  "verdict": "real",
+  "severity": "low",
+  "reran": "cmd.sh with -deprecation on w3-int: joint order gives three warnings, the one for J.a() missing; separate order gives four. w3-base and 2.13.18: the same missing warning, and d is reported as 'since false' (joint) and 'since 0' (separate), which is B9 as the finding says. Scala 3.7.4 joint: no deprecation warning for any of the four methods.",
+  "user_impact": "Only Java sources compiled jointly whose annotation has an argument that is an operator expression (\"1\" + \"2\", -1, a cast, a conditional). scalac reads few Java annotations from source: @Deprecated, and on annotation definitions @Retention, @Target, @Repeatable and @Inherited. @Deprecated(since = \"1\" + \"2\") is not something people write, and a name such as Versions.V2 is kept. The realistic loss is small: a deprecation warning in the joint build that the separate build gives.",
+  "fixability": "clear cut in principle, moderate in size: parse an element value with the constant-expression parser added by scala/scala PR 11290 and fold it in the namer, keeping the annotation. Cost: joint builds gain the deprecation warnings separate builds already have.",
+  "regression": "no (the parser has dropped annotations with unsupported arguments since it began reading them; 2.13.18 is the same)",
+  "links": "J5 (retronym/scala PR 288) is the same code path with a worse symptom, a wrong rejection when the argument contains parentheses; PR 288 only makes the skip land on the right parenthesis and still drops the annotation. B9 concerns the text of `since`. Parsing constant expressions in annotation arguments would settle GJ3 and J5 together and belongs in a separate pull request from 288, or replaces it.",
+  "note": "Confirmed by reading JavaParsers.annotation (JavaParsers.scala:415-471): elementValue accepts a literal, a name or class literal, an array and a nested annotation; after the literal \"1\" the next token is `+`, not `)` or `,`, so the argument list is abandoned and the annotation becomes EmptyTree. The code comment calls this intended ('prep to bail if non-literals/identifiers'), so this is a known limitation with one visible consequence more than a defect. A negative number literal as an argument is dropped the same way and is the more ordinary instance."
+}

@@ -1,0 +1,11 @@
+{
+  "id": "GE8",
+  "verdict": "duplicate of GE3",
+  "severity": "high",
+  "reran": "The 32 KB generated program failed the assertion in specialize on the integration build. I shrank it to trait AC[@specialized(Int) A, @specialized(Int) B] { def m(q: => B): A }, replaced repro/Test.scala and re-recorded actual.txt: assertion 'sym: AC$mcII$sp.m$mcII$sp target: AC.m$mcI$sp' on the integration build, the base and 2.13.18 (and 2.13.0 to 2.13.6); 2.12.20 compiles it. Scala 3.7.4 compiles it.",
+  "user_impact": "A class or trait with two specialized type parameters and a method that mentions one of them only under a by-name parameter and the other elsewhere crashes the compiler: trait M[@specialized(Int) K, @specialized(Int) V] { def getOrElseUpdate(k: K, default: => V): Unit }. A specialized map or cache interface with a by-name default is ordinary; getOrElse(k: K, default: => V): V compiles only because V is also the result type.",
+  "fixability": "clear cut, same change as GE3: the variant in the generic class is named from the type variables seen entering typer (by-name B not counted, m$mcI$sp) and the member of the specialized class from the type after uncurry (Function0[B] counted, m$mcII$sp), so the assertion that the target has a body fails. Counting the type argument of a by-name parameter in specializedTypeVarsBuffer makes the two agree. Cost as for GE3.",
+  "regression": "in 2.13.0 (2.12.20 compiles the shrunk program; the responsible change was not identified, and GE3 itself is not a regression)",
+  "links": "GE3 is the primary: same inconsistency between the pre-uncurry and post-uncurry view of a by-name parameter, seen there as a double definition. scala/bug#10018 and #4436 (open) fail the same assertion from a bounded specialized method type parameter, a different cause.",
+  "note": "The finding's description is wrong about the trigger: m42 has no type parameter of its own; it is abstract with a by-name parameter of function type, and the function type is not needed either. That GE3 and GE8 are one cause rests on the names in the two messages and on reading specializedName and specializedTypeVarsBuffer; the two differ in history (GE8 compiles on 2.12.20, GE3 does not), so a fix should carry both programs as tests. The crash is the more serious symptom and the more ordinary program."
+}

@@ -1,0 +1,11 @@
+{
+  "id": "GJ4",
+  "verdict": "real",
+  "severity": "low",
+  "reran": "cmd.sh on w3-int, w3-base and 2.13.18: joint order fails with 'identifier expected but `,` found' for both files; separate order prints 1. 2.12.20 rejects them too. Scala 3.7.4 joint also reports an error at the comma in both files.",
+  "user_impact": "Nobody writing Java by hand. `enum E { , }` and `enum E { ,; ... }` are legal (JLS 8.9.1: EnumBody is { [EnumConstantList] [,] [EnumBodyDeclarations] }) and javac accepts them, but only a code generator that always emits a separator would produce one.",
+  "fixability": "clear cut: in JavaParsers.enumDecl accept a comma before the first constant when `;` or `}` follows. No compatibility cost.",
+  "regression": "no (2.12.20 the same)",
+  "links": "J4 to J9 are other wrong rejections by the same parser with different causes. No scala/bug ticket found (query: java enum trailing comma parser).",
+  "note": "Cause confirmed by reading parseEnumConsts (JavaParsers.scala:1136-1147): a constant is parsed whenever the body does not start with `}`, `;` or end of file, and the comma is only looked for after a constant. Scala 3 has the same gap, so the two compilers agree with each other and disagree with javac."
+}
