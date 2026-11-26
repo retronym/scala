@@ -14,6 +14,8 @@ package scala
 package collection
 package mutable
 
+import scala.annotation.nowarn
+
 /** This trait forms part of collections that can be augmented
   * using a `+=` operator and that can be cleared of all elements using
   * a `clear` method.
@@ -56,6 +58,20 @@ trait Growable[-A] extends Clearable {
    */
   def addAll(@deprecatedName("xs") elems: IterableOnce[A]): this.type = {
     if (elems.asInstanceOf[AnyRef] eq this) addAll(Buffer.from(elems)) // avoid mutating under our own iterator
+    // An `UnrolledBuffer`'s iterator follows the elements appended after it was created, so a source that may read
+    // the buffer is read from a copy. Overriding `addAll` in `UnrolledBuffer` would change its binary interface.
+    else if (this.isInstanceOf[UnrolledBuffer[_]] && {
+      @nowarn("cat=deprecation") // Stream
+      val mayReadThis = elems match {
+        case _: Option[_] => false
+        case _: immutable.LazyList[_] | _: immutable.Stream[_] => true
+        case _: immutable.Iterable[_] | _: ArraySeq[_] => false
+        case _: ArrayBuffer[_] | _: ArrayDeque[_] | _: ListBuffer[_] | _: UnrolledBuffer[_] | _: HashSet[_] | _: LinkedHashSet[_] =>
+          elems.asInstanceOf[AnyRef] eq this
+        case _ => true
+      }
+      mayReadThis
+    }) addAll(ArrayBuffer.from(elems))
     else {
       val it = elems.iterator
       while (it.hasNext) {
