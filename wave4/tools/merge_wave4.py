@@ -122,7 +122,64 @@ function addAnchors() {
 function goToHash() { let id = ""; try { id = decodeURIComponent((location.hash || "").slice(1)); } catch (e) {}
   const el = id && document.getElementById(id); if (!el) return;
   el.scrollIntoView({ block: "start" }); el.classList.add("anchor-hit"); setTimeout(() => el.classList.remove("anchor-hit"), 2500); }
-const anchorsReady = () => { addAnchors(); goToHash(); };
+// Index: a menu button opens a sidebar listing the page's sections and the panels inside each, linked by the anchors above.
+function buildIndex() {
+  if (document.getElementById("ix-btn")) return;
+  const st = document.createElement("style");
+  st.textContent = `
+#ix-btn{position:fixed;top:calc(env(safe-area-inset-top,0px) + 10px);left:max(10px,env(safe-area-inset-left,0px));z-index:30;width:36px;height:36px;display:grid;place-items:center;
+  font:inherit;color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:8px;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+#ix-btn:focus-visible,#ix a:focus-visible,#ix-close:focus-visible{outline:2px solid var(--info);outline-offset:2px}
+#ix-btn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
+/* wide: the button has its own gutter beside the column; narrow: it floats at the bottom so it never covers a heading */
+@media (min-width: 900px){html body{padding-left:max(62px, env(safe-area-inset-left, 0px))}}
+@media (max-width: 899.98px){#ix-btn{top:auto;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);width:42px;height:42px;border-radius:50%}}
+#ix-shade{position:fixed;inset:0;z-index:31;background:rgba(0,0,0,.35);opacity:0;pointer-events:none;transition:opacity .15s}
+#ix{position:fixed;top:0;bottom:0;left:0;z-index:32;width:min(340px,88vw);background:var(--panel);border-right:1px solid var(--line);overflow-y:auto;overscroll-behavior:contain;
+  padding:calc(env(safe-area-inset-top,0px) + 12px) 14px 24px max(14px,env(safe-area-inset-left,0px));transform:translateX(-102%);transition:transform .18s ease;visibility:hidden}
+body.ix-open #ix{transform:none;visibility:visible} body.ix-open #ix-shade{opacity:1;pointer-events:auto}
+@media (prefers-reduced-motion: reduce){#ix,#ix-shade{transition:none}}
+#ix .ix-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+#ix .ix-top b{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
+#ix-close{font:inherit;background:none;border:0;color:var(--muted);cursor:pointer;font-size:20px;line-height:1;padding:4px 8px;border-radius:6px}
+#ix ul{list-style:none;margin:0;padding:0} #ix li{margin:0}
+#ix a{display:flex;gap:8px;justify-content:space-between;align-items:baseline;padding:5px 8px;border-radius:6px;color:var(--fg);text-decoration:none;line-height:1.3}
+#ix a:hover{background:var(--bg)} #ix a.ix-cur{background:var(--bg);box-shadow:inset 3px 0 0 var(--info)}
+#ix .ix-sec>a{font-weight:600;margin-top:6px} #ix .ix-sub a{padding-left:20px;font-size:13px;color:var(--fg)}
+#ix .ix-n{flex:none;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+#ix details>summary{list-style:none;cursor:pointer} #ix details>summary::-webkit-details-marker{display:none}
+#ix .ix-tog{flex:none;width:14px;color:var(--muted);font-size:11px;text-align:center}`;
+  document.head.appendChild(st);
+  const textOf = h => [...h.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join(" ").trim() || h.textContent.replace(/#$/, "").trim();
+  const btn = document.createElement("button"); btn.id = "ix-btn"; btn.type = "button"; btn.setAttribute("aria-label", "Open the index"); btn.setAttribute("aria-expanded", "false"); btn.setAttribute("aria-controls", "ix");
+  btn.innerHTML = '<svg viewBox="0 0 18 18" aria-hidden="true"><path d="M2 4.5h14M2 9h14M2 13.5h14"/></svg>';
+  const shade = document.createElement("div"); shade.id = "ix-shade";
+  const nav = document.createElement("nav"); nav.id = "ix"; nav.setAttribute("aria-label", "Index of this page");
+  let html = '<div class="ix-top"><b>Index</b><button id="ix-close" type="button" aria-label="Close the index">&times;</button></div><ul>';
+  for (const sec of document.querySelectorAll("main > section, main section")) {
+    const h2 = sec.querySelector(":scope > h2"); if (!h2 || !sec.id) continue;
+    const subs = [...sec.querySelectorAll(".meta-g, .phase")].filter(x => x.id).map(x => { const h = x.querySelector(":scope > h3, :scope > b"); const tag = x.querySelector(":scope > h3 > .tag, :scope > .pill");
+      return `<li><a href="#${x.id}"><span>${esc(textOf(h))}</span>${tag ? `<span class="ix-n">${esc(tag.textContent.trim())}</span>` : ""}</a></li>`; });
+    const head = `<a href="#${sec.id}"><span>${esc(textOf(h2))}</span>${subs.length ? `<span class="ix-n">${subs.length}</span>` : ""}</a>`;
+    html += subs.length ? `<li class="ix-sec"><details${subs.length <= 12 ? " open" : ""}><summary>${head.replace("<a ", '<a data-sec="1" ').replace("<span>", '<span><span class="ix-tog" aria-hidden="true">▸</span> ')}</summary><ul class="ix-sub">${subs.join("")}</ul></details></li>`
+                        : `<li class="ix-sec">${head}</li>`;
+  }
+  nav.innerHTML = html + "</ul>";
+  document.body.append(btn, shade, nav);
+  const open = on => { document.body.classList.toggle("ix-open", on); btn.setAttribute("aria-expanded", String(on)); if (on) { mark(); (nav.querySelector("a.ix-cur") || nav.querySelector("a")).focus({ preventScroll: true }); } else btn.focus({ preventScroll: true }); };
+  const mark = () => { let id = ""; try { id = decodeURIComponent(location.hash.slice(1)); } catch (e) {} nav.querySelectorAll("a.ix-cur").forEach(a => a.classList.remove("ix-cur"));
+    const a = id && nav.querySelector(`a[href="#${CSS.escape(id)}"]`); if (a) { a.classList.add("ix-cur"); const d = a.closest("details"); if (d) d.open = true; a.scrollIntoView({ block: "nearest" }); } };
+  btn.addEventListener("click", () => open(!document.body.classList.contains("ix-open")));
+  shade.addEventListener("click", () => open(false)); nav.querySelector("#ix-close").addEventListener("click", () => open(false));
+  document.addEventListener("keydown", ev => { if (ev.key === "Escape" && document.body.classList.contains("ix-open")) open(false); });
+  nav.addEventListener("click", ev => { const a = ev.target.closest("a"); if (!a) return;
+    if (a.dataset.sec && ev.target.closest(".ix-tog")) { ev.preventDefault(); const d = a.closest("details"); d.open = !d.open; return; }
+    ev.preventDefault(); const id = a.getAttribute("href").slice(1); if (location.hash.slice(1) !== id) location.hash = id; else goToHash(); open(false); });
+  nav.querySelectorAll("details").forEach(d => { const t = d.querySelector(".ix-tog"); const set = () => { if (t) t.textContent = d.open ? "▾" : "▸"; }; set(); d.addEventListener("toggle", set); });
+  nav.querySelectorAll("summary").forEach(sm => sm.addEventListener("click", ev => { if (!ev.target.closest(".ix-tog")) ev.preventDefault(); }));
+  window.addEventListener("hashchange", mark);
+}
+const anchorsReady = () => { addAnchors(); buildIndex(); goToHash(); };
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", anchorsReady); else setTimeout(anchorsReady, 0);
 window.addEventListener("load", anchorsReady); window.addEventListener("hashchange", goToHash);
 '''
