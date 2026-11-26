@@ -20,3 +20,4 @@ Exclude these narrowly in a harness so they do not mask what is behind them.
 | WL1 | `TrieMap.readOnlySnapshot()` result | `snapshot()` or `readOnlySnapshot()` on it throws NullPointerException from `CAS_ROOT` |
 | WL2 | `IntAccumulator`, `LongAccumulator`, `DoubleAccumulator`, `AnyAccumulator` | `apply(i)` / `update(i, x)` with `i == size` (or anywhere in the current chunk's spare capacity) return 0/null or write nothing instead of throwing |
 | WL3 | `asJava` views of `BitSet`, `TreeSet[Int]`, `mutable.LongMap`, `IntMap`, `TreeMap[Int, V]` | `contains(null)`, `get(null)`, `remove(null)` act on key 0 |
+| WP2 | `-Ycheck:all` on a structural call in a method of a generic value class | `Tree has erroneous type: s.get(...)` at pickler; the program is correct |

@@ -83,7 +83,7 @@ class Gen(seed: Long, opts: GenOpts = GenOpts()) {
   }
   def erasureKey(t: Ty): String = t match {
     case TInt => "I"; case TLong => "J"; case TDouble => "D"; case TStr => "S"; case TBool => "Z"
-    case v: TVC => val d = vcs.find(_.name == v.name).get; if (d.tparam.nonEmpty) "O" else erasureKey(d.under)
+    case v: TVC => erasureKey(under(v)) // a generic value class erases to its underlying type as instantiated
     case TP(_) => "O"
     case other => other.getClass.getSimpleName
   }
@@ -257,6 +257,20 @@ class Gen(seed: Long, opts: GenOpts = GenOpts()) {
         s"({ @scala.annotation.tailrec def $f($i: Int, $acc: ${show(t)}): ${show(t)} = if ($i <= 0) $acc else $f($i - 1, ${gen(t, w(Var(acc, t), Var(i, TInt)), d - 1)}); $f(2, ${g(t)}) })" })
       nodes += (() => { val x = fresh("x"); s"({ case $x if $x > 1 => ${gen(t, w(Var(x, TInt)), d - 1)} }: PartialFunction[Int, ${show(t)}]).applyOrElse(${g(TInt)}, (($x: Int) => ${g(t)}))" })
       env.vars.filter(_.mutable).foreach(v => nodes += (() => s"({ ${v.name} = ${g(v.ty)}; ${g(t)} })"))
+      if (Gen.round >= 4) { // Byte, Short, Char and Float operands, ## and getClass
+        def narrow(): String = pick(List(s"${g(TInt)}.toByte", s"${g(TInt)}.toShort", s"(${g(TInt)} + 'a').toChar", s"${g(TInt)}.toFloat"))
+        def narrowI(): String = pick(List(s"${g(TInt)}.toByte", s"${g(TInt)}.toShort", s"(${g(TInt)} + 'a').toChar"))
+        if (t == TInt) nodes += (() => s"(${narrow()} ${pick(List("+", "*", "-"))} ${narrow()}).toInt")
+        if (t == TInt) nodes += (() => s"(${narrowI()} ${pick(List("&", "<<", "|", "-"))} ${narrowI()})")
+        if (t == TInt) nodes += (() => s"(${g(TInt)}.toByte.##)")
+        if (t == TInt) nodes += (() => s"((${g(TInt)}.toShort: Any).##)")
+        if (t == TLong) nodes += (() => s"(${g(TLong)} ${pick(List("+", "&", "|", "^", "max"))} ${narrowI()})")
+        if (t == TDouble) nodes += (() => s"(${narrow()} / ${pick(List("3", "2.0f", "'b'", "7L"))})")
+        if (t == TBool) nodes += (() => s"(${narrow()} ${pick(List("<", "==", "!=", ">="))} ${narrow()})")
+        if (t == TBool) nodes += (() => s"(${narrow()}: Any).isInstanceOf[${pick(List("Byte", "Short", "Char", "Float", "Int"))}]")
+        if (t == TStr) nodes += (() => s"(${narrow()}: Any).getClass.getName")
+        if (t == TStr) nodes += (() => s"(${g(TStr)} + ${narrow()} + ${pick(List("'c'", "1.5f", "null", "2.toByte"))})")
+      }
       if (Gen.round >= 3) { // structural (reflective) calls and @varargs members
         // a structural result type may not be a value class (SIP-15); type parameters are left out as they may stand for one
         val structOk = !t.isInstanceOf[TVC] && !t.isInstanceOf[TP]

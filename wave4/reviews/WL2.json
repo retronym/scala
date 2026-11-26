@@ -1,0 +1,11 @@
+{
+  "id": "WL2",
+  "verdict": "real",
+  "severity": "low",
+  "reran": "cmd.sh on w4-int, w3-base and 2.13.18: identical to actual.txt (acc(length) reads 0 or null, acc(length) = x returns normally and is overwritten by the next +=, -1 gives ArrayIndexOutOfBoundsException).",
+  "user_impact": "Only a caller with its own off-by-one: it gets 0/null instead of an exception, and an out-of-range update vanishes. No library method writes through update on an accumulator: the in-library callers of update (sortInPlace, mapInPlace) are on mutable.IndexedSeqOps, which Accumulator does not extend, and generic Seq algorithms iterate rather than index.",
+  "fixability": "clear cut: check 0 <= ix < totalSize at the start of apply(Long) and update(Long, _) in the four classes. One comparison on a path that already does arithmetic and a branch; no binary cost; behaviour changes only for out-of-range indices.",
+  "regression": "in 2.13.0 (accumulators came into scala.jdk from scala-java8-compat, ae96a38e0c, 2019-04)",
+  "links": "none (no earlier finding on accumulators; nothing in scala/bug or the branch index)",
+  "note": "Not by design as far as the documentation goes: the Accumulator class Scaladoc speaks of efficient appending and unboxed storage and warns only about length-based Seq operations past Int.MaxValue elements; apply(ix: Long) says 'Retrieves the ixth element'; and the inherited Seq.apply and mutable.Seq.update declare @throws IndexOutOfBoundsException. The speed argument is weak because the elements are normally read through stepper or foreach, not apply. The hunter is right that the cost is a missing error, not a wrong answer for correct code."
+}

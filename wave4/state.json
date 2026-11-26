@@ -28,18 +28,32 @@
   ],
   "agents": [
     [
+      "w4 fix library 2",
+      "Opus",
+      "Fixes for WL1, WL2, WL3",
+      "running",
+      ""
+    ],
+    [
+      "w4 fix java annotations",
+      "Opus",
+      "One fix for WJ1, GJ3 and J5: Java annotation element values",
+      "running",
+      ""
+    ],
+    [
       "w4 review campaign 1",
       "Opus",
       "Independent review of WJ1, WL1, WL2, WL3",
-      "running",
-      ""
+      "done",
+      "4 real, none reported before: WL1 and WL3 medium, WJ1 and WL2 low. WL1 is worse than reported: every mutator on a read-only TrieMap snapshot other than clear spins forever. WL3 unboxes a null key in the collection's erasure bridge, and the hunter's fix sketch is wrong. One fix in JavaParsers.annotation covers WJ1, GJ3 and wave-one J5"
     ],
     [
       "w4 diff review #750 (4)",
       "Opus",
       "Fourth diff review of retronym/scala#750",
-      "running",
-      ""
+      "done",
+      "ok. Every earlier review input passes; the whole standard library, 366 run and pos tests containing a match, and a 55-method corpus of ordinary matches compile to byte-identical class files, and the selector wrap never fires on them. One addition asked for in the description, now made: a match on a narrowed if now gets exhaustivity warnings against the declared type"
     ],
     [
       "w4 rework #750 (4)",
@@ -73,8 +87,8 @@
       "w4c fold",
       "Opus",
       "Campaign: expressions and statements in new embedding contexts",
-      "running",
-      ""
+      "done",
+      "3 rounds, about 8,100 cases over 170 embedding contexts, each filled four ways with the optimizer on and off and checked against a hand-written expected trace: no wrong value and no wrong evaluation order. 1 finding from a hand probe where coverage pointed (WX1: a structural call to a Unit method through a refinement member typed Any returns null instead of ()). CleanUp went from 131 to 278 of 346 lines, Fields from 113 to 260 of 276."
     ],
     [
       "w4c library",
@@ -246,6 +260,14 @@
     ]
   ],
   "log": [
+    [
+      "27 Nov 00:01",
+      "Review of the first campaign findings: WJ1 and WL1 to WL3 all real. Two fix workers started."
+    ],
+    [
+      "26 Nov 23:57",
+      "#750 passed its fourth diff review and is out of draft. Of the 17 wave-four fix pull requests, 15 are ready after review; #758 and #759 stay drafts on the copy-first or fail-fast decision."
+    ],
     [
       "26 Nov 23:49",
       "Campaign: the Java-sources and library tracks are done (WJ1, WL1 to WL3) and their findings are with an independent reviewer. Fourth version of #750 pushed and under review."
@@ -437,7 +459,7 @@
         750
       ],
       "state": "fixed",
-      "note": "Fix under rework for the fourth time: three versions each fixed the previous review's inputs and broke a neighbouring shape, so the tracking of match scrutinees through transformer state is being replaced by a check at the match itself. In addition to the Typed wrap, the If case now calls transform on the reduced branch (not branch.transform(this)), so the branch's own node is handled, including a Match that records its scrutinee; the original If is still transformed child-wise."
+      "note": "Fix (fourth version, judged ok by an independent diff review): The scrutinee-tracking field is gone. The Match case ascribes the selector's original type when the transformed selector's widened type differs from it, which covers a reduced if at any depth; the If case keeps the wrap for a Nothing branch and adds it for a null branch of an array-typed if."
     },
     "GJ2": {
       "prs": [

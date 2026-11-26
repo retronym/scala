@@ -80,5 +80,46 @@
   ],
   "next": "Add structural (reflective) calls and @varargs members, aimed at CleanUp.transformApplyDynamic and UnCurry's varargs forwarders; split Main's methods to at most 12 calls each so -opt:local stays off the GE6 cost curve.",
   "notes": "New: WP1, -Ycheck reports the default label of a guarded switch with a boxed result as erroneous after erasure (10 of 17 -Ycheck samples). Known: GE6 reached by -opt:local alone (CopyProp's ProdConsAnalyzer), 15 s for one 83 KB program. Two JVMs: 32 and 13.5 (JaCoCo) programs/min."
+ },
+ {
+  "round": 3,
+  "change": "Added structural (reflective) calls on a generic class and on anonymous classes, and @varargs members; split Main's methods to at most 12 calls; excluded GE6 (-opt:local timeouts) and WP1.",
+  "cases": 390,
+  "seconds": 220,
+  "compile_rate": "99.2% (387 of 390; 3 double definitions from the generator treating a generic value class as erasing to Object, fixed after the round)",
+  "signatures_new": 1,
+  "signatures_known": 4,
+  "false_alarms": "0; 3 signatures where 2.13.18 throws VerifyError or ClassCastException and the integration build is correct also fail on the base, so are fixed by earlier waves (counted as known); WP1 10 hits",
+  "coverage": {
+   "transform": [
+    3897,
+    5328
+   ],
+   "transform/patmat": [
+    1566,
+    2186
+   ],
+   "backend/jvm": [
+    2690,
+    3905
+   ],
+   "backend/jvm/opt": [
+    1774,
+    2955
+   ],
+   "typechecker": [
+    7239,
+    13867
+   ]
+  },
+  "largest_unreached": [
+   "PlainSkelBuilder.appendToStaticCtor (30)",
+   "Erasure.preEraseApply (26 of 51)",
+   "CleanUp.transformApplyDynamic (26 of 47)",
+   "PlainBodyBuilder.genStringConcat lambda (26)",
+   "BTypes.PrimitiveBType.maxValueType (31 of 38, round 2)"
+  ],
+  "next": "Add Byte, Short, Char and Float operands, ##, getClass and isInstanceOf on boxed primitives, aimed at maxValueType, preEraseApply and string concatenation of mixed primitives.",
+  "notes": "New: WP2, a structural type in a generic value class method keeps the class's type parameter after extmethods (-Ycheck). Two JVMs: 77.7 and 27.9 (JaCoCo) programs/min."
  }
 ]
