@@ -1,0 +1,11 @@
+r = Int.MinValue to Int.MaxValue by Int.MaxValue; r.length                  = 3
+r.toList                                                                   = List(-2147483648, -1, 2147483646)
+r.iterator.knownSize                                                       = 3
+r.iterator.toVector                                                        = Vector(-2147483648, -1, 2147483646)
+r.iterator.to(ArrayBuffer)                                                 = ArrayBuffer(-2147483648, -1, 2147483646)
+s = -1073741826 until Int.MaxValue by 715827883; s.length                  = 5
+s.iterator.knownSize                                                       = 5
+s.iterator.hasNext                                                         = true
+s.iterator.toList                                                          = List(-1073741826, -357913943, 357913940, 1073741823, 1789569706)
+s.iterator.map(_ / 2).mkString(",")                                        = -536870913,-178956971,178956970,536870911,894784853
+(Int.MaxValue to Int.MinValue by -Int.MaxValue).iterator.knownSize         = 3

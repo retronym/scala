@@ -1,0 +1,21 @@
+{
+  "id": "GE4",
+  "theme": "generated",
+  "track": "erasure",
+  "area": "scala.tools.nsc.transform.SpecializeTypes / typechecker.Duplicators",
+  "title": "Partial function literal with a guard inside a method with a @specialized type parameter is rejected with a type mismatch on x1.type",
+  "kind": "wrong rejection",
+  "oracle": "the program with every @specialized removed compiles and prints Some(1)",
+  "generator": "wave4/harness/erasure (Gen.scala, Driver.scala): partial function literal ascribed to PartialFunction[Int, T] in a method body with a @specialized method type parameter",
+  "signature": "nospec|compile-error/ok|type mismatch;",
+  "seed": "4 (round 3 pilot); 12 of 40 programs in round 3; also reported as novc|ok/compile-error because methods of a value class are not specialized",
+  "measure": "n/a",
+  "detail": "def m[@specialized(Int) B](p: B) contains ({ case x if x > 1 => p }: PartialFunction[Int, B]). The compiler reports \"type mismatch; found: x1.type (with underlying type Int); required: A1\" at the literal. The synthesized applyOrElse[A1 <: Int, B1 >: B] of the anonymous partial function class is retyped by Duplicators when the method body is copied into the specialized variant, and the cast of the scrutinee x1 to A1 that the typer inserted is lost. The generic method compiles, so the error appears only with the annotation. A guard or any case that is not a plain variable pattern is enough.",
+  "fix_sketch": "Have Duplicators keep the typed applyOrElse of a synthesized partial function instead of retyping it from the untyped shape. No compatibility cost: the program does not compile today.",
+  "on_integration": "present",
+  "on_base": "same",
+  "on_2_13_18": "same",
+  "scala3": "not run",
+  "prior": "none found; nearest is H66 (retronym/scala#431), a type test rejected in a specialized body",
+  "confidence": "confirmed"
+}

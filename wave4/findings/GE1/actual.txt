@@ -1,0 +1,4 @@
+scalac failed:
+error: java.util.NoSuchElementException: key not found: method super$m
+	at scala.collection.MapOps.default(Map.scala:289)
+	at scala.collection.MapOps.default$(Map.scala:288)

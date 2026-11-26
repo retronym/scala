@@ -1,0 +1,2 @@
+assertion failed:
+Bad superClass for class Int: <none>

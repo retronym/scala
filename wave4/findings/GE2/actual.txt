@@ -1,0 +1,3 @@
+compiled
+Exception in thread "main" java.lang.StackOverflowError
+	at scala.runtime.BoxesRunTime.boxToInteger(BoxesRunTime.java:63)

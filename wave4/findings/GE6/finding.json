@@ -1,0 +1,21 @@
+{
+  "id": "GE6",
+  "theme": "generated",
+  "track": "erasure",
+  "area": "scala.tools.nsc.backend.jvm.opt.ClosureOptimizer / analysis.ProdConsAnalyzer",
+  "title": "-opt:inline:** crashes with scala.tools.asm.LimitExceededException: Too many allocated bytes on a program that 2.13.18 compiles",
+  "kind": "regression",
+  "oracle": "the same program compiles without -opt, and compiles with these flags on 2.13.18",
+  "generator": "wave4/harness/erasure (Gen.scala, Driver.scala): large single-expression method bodies with many lambdas (first grammar); the repro is the generated program, not shrunk",
+  "signature": "inline|ok/crash|CRASH scala.tools.asm.LimitExceededException: Too many allocated bytes",
+  "seed": "20020 (round 2)",
+  "measure": "n/a",
+  "detail": "Compiling the 39 KB generated program with -opt:inline:** -opt:local throws scala.tools.asm.LimitExceededException from Analyzer.newFrameWithComputeLimits, reached from ProdConsAnalyzer in ClosureOptimizer.rewriteClosureApplyInvocations, on the integration build and the base. 2.13.18 compiles the same file with the same flags in 2 min 19 s. The limit is new since 2.13.18 and the closure optimizer does not catch the exception or check the method size first. The program has methods far larger than hand-written code, so ordinary code is unlikely to reach the limit, but generated code can. The repro was not minimised because each compilation takes one to two minutes.",
+  "fix_sketch": "Skip the closure rewrite for a method when the analyzer exceeds its limit (catch LimitExceededException in the optimizer passes, as for the existing size checks), with an optimizer warning. Cost: such methods are left unoptimized.",
+  "on_integration": "present",
+  "on_base": "same",
+  "on_2_13_18": "different: compiles in 2 min 19 s",
+  "scala3": "not run",
+  "prior": "none found (O1 is a ProdConsAnalyzer miscompile, unrelated)",
+  "confidence": "needs a second look: not minimised, and the origin of the limit (a scala-asm change after 2.13.18) was not traced"
+}

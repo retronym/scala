@@ -1,0 +1,13 @@
+HashSet(1, 2, 3).addAll(s.view.map(_ + 1)).size                            = 4
+HashSet(1, 2, 3).subtractAll(s.view.map(_ + 1))                            = HashSet(1)
+TreeSet(1 to 40).subtractAll(s.view.map(_ + 1))                            = TreeSet(1)
+LinkedHashSet(1 to 40).subtractAll(s.view.map(_ + 1)).size                 = 1
+HashMap(1->2, 2->3, 3->4).addAll(m.view.map { case (k, v) => (k + 1, v + 10) }).size = 4
+TreeMap(1->2, 2->3, 3->4).addAll(same)                                     = TreeMap(1 -> 2, 2 -> 12, 3 -> 13, 4 -> 14)
+LinkedHashMap(1->2, 2->3, 3->4).addAll(same)                               = LinkedHashMap(1 -> 2, 2 -> 12, 3 -> 13, 4 -> 14)
+LongMap(1->2, 2->3, 3->4).addAll(same).size                                = 4
+HashMap(1->2, 2->3, 3->4).subtractAll(m.keySet.view.map(_ + 1))            = HashMap(1 -> 2)
+ArrayBuffer(1, 2, 3).flatMapInPlace(_ => b.view.take(2))                   = ArrayBuffer(1, 2, 1, 2, 1, 2)
+ListBuffer(1, 2, 3).flatMapInPlace(_ => b.view.take(2))   (control)        = ListBuffer(1, 2, 1, 2, 1, 2)
+
+(Or a ConcurrentModificationException from each call, if fail-fast is chosen over snapshot.)

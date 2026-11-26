@@ -1,0 +1,21 @@
+{
+  "id": "GE1",
+  "theme": "generated",
+  "track": "erasure",
+  "area": "scala.tools.nsc.transform.SpecializeTypes",
+  "title": "super call in a trait to a method with a @specialized method type parameter crashes specialize with \"key not found: method super$m\"",
+  "kind": "crash",
+  "oracle": "the program with every @specialized removed compiles and prints 2",
+  "generator": "wave4/harness/erasure (Gen.scala, Driver.scala): override with a super call, on a method that has its own @specialized type parameter (-Dw4e.superpoly=true)",
+  "signature": "nospec|crash/ok|CRASH java.util.NoSuchElementException: key not found: method super$N",
+  "seed": "5009 (round 1)",
+  "measure": "n/a",
+  "detail": "trait T1 overrides m[@specialized(Int) B] of trait T0 and calls super.m[B](p). The compiler throws NoSuchElementException from SpecializeTypes.SpecializationTransformer.addBody (SpecializeTypes.scala:2144) while duplicating the body of the specialized variant of T1.m: the body refers to the super accessor symbol super$m, which is not in the map that addBody consults. Without @specialized the program compiles and prints 2. The shape needs a trait override that calls super on a method specialized in its own type parameter, which is uncommon in application code but ordinary in specialized numeric libraries.",
+  "fix_sketch": "Give the duplicated body the super accessor of the specialized variant, or keep the super call in the generic body and have the variant forward to it. No compatibility cost: the program does not compile today.",
+  "on_integration": "present",
+  "on_base": "same",
+  "on_2_13_18": "same",
+  "scala3": "not run",
+  "prior": "none found (Z11 is a rejection of super[TB].m in a duplicated body; SP4 is duplicate super accessors at load time)",
+  "confidence": "confirmed"
+}

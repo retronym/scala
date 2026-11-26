@@ -1,0 +1,5 @@
+Both orders compile and print:
+
+2
+
+The accessor `rest()` of `record R(int x, int... rest)` returns int[]; from source it should have type Array[Int], as it has from the class file.

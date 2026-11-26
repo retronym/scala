@@ -1,0 +1,21 @@
+{
+  "id": "GJ2",
+  "theme": "generated",
+  "track": "javaparser",
+  "area": "scala.tools.nsc.javac.JavaParsers (records)",
+  "title": "The accessor of a varargs record component parsed from Java source has the repeated-parameter type T* instead of Array[T]",
+  "kind": "wrong rejection",
+  "oracle": "differential against javac: the same Scala source compiled jointly with the Java sources and separately against javac's class files must get the same diagnostics and print the same output; and each Java member typed from source must match the member read from the class file",
+  "generator": "wave4/harness/javaparser (gen.py, Driver.scala), feature R (records with a varargs component)",
+  "signature": "SYM R#def rest :: src [(): Int* erased (): Array[Int]] cls [(): Array[Int] erased (): Array[Int]]",
+  "seed": "seed 2, case p02030 (first recorded); 78 of 300 cases at seed 4",
+  "measure": "n/a",
+  "detail": "For `record R(int x, int... rest)` compiled jointly, scalac's Java parser gives the generated accessor `rest()` the result type `Int*`, the type of the canonical constructor's last parameter, where javac's class file has `int[]`. Selecting on the result works (`r.rest.length`), and so does ascribing it to Array[Int], which is why a probe that only reads the value did not differ. Anywhere the type is inferred it leaks: `List(r.rest)` fails with 'no type parameters for method apply ... applied to arguments (Int*)', and the same source compiles against the class file. The accessors are synthesised in JavaParsers.recordDecl from the header's parameter trees, so the varargs marker of the last component is carried over to the accessor's result type. Varargs record components are uncommon, and the failure needs the accessor's type to be inferred, so ordinary code will meet it rarely.",
+  "fix_sketch": "When synthesising the accessor for a varargs component, use the array type of the element type as the result type. No compatibility cost beyond programs that only compile jointly today because of the wrong type, of which none are plausible.",
+  "on_integration": "present",
+  "on_base": "same",
+  "on_2_13_18": "same",
+  "scala3": "absent (3.7.4 accepts both orders and prints 2)",
+  "prior": "none found",
+  "confidence": "confirmed"
+}

@@ -1,0 +1,27 @@
+--- (A) joint: scalac Test.scala *.java, then javac
+repro/Test.scala:2: warning: method b in class J is deprecated (since 12)
+  def main(args: Array[String]): Unit = println(J.a() + J.b() + J.c() + J.d())
+                                                          ^
+repro/Test.scala:2: warning: method c in class J is deprecated
+  def main(args: Array[String]): Unit = println(J.a() + J.b() + J.c() + J.d())
+                                                                  ^
+repro/Test.scala:2: warning: method d in class J is deprecated
+  def main(args: Array[String]): Unit = println(J.a() + J.b() + J.c() + J.d())
+                                                                          ^
+3 warnings
+10
+--- (B) separate: javac *.java, then scalac Test.scala
+repro/Test.scala:2: warning: method a in class J is deprecated (since 12)
+  def main(args: Array[String]): Unit = println(J.a() + J.b() + J.c() + J.d())
+                                                  ^
+repro/Test.scala:2: warning: method b in class J is deprecated (since 12)
+  def main(args: Array[String]): Unit = println(J.a() + J.b() + J.c() + J.d())
+                                                          ^
+repro/Test.scala:2: warning: method c in class J is deprecated
+  def main(args: Array[String]): Unit = println(J.a() + J.b() + J.c() + J.d())
+                                                                  ^
+repro/Test.scala:2: warning: method d in class J is deprecated
+  def main(args: Array[String]): Unit = println(J.a() + J.b() + J.c() + J.d())
+                                                                          ^
+4 warnings
+10

@@ -1,0 +1,21 @@
+{
+  "id": "GA1",
+  "theme": "generated",
+  "track": "collections",
+  "area": "scala.collection.mutable (ArrayDeque, UnrolledBuffer)",
+  "title": "ArrayDeque and UnrolledBuffer give wrong results, throw or never terminate when addAll, prependAll, patchInPlace or subtractAll is given a view or iterator of the same buffer",
+  "kind": "wrong result",
+  "oracle": "a reference buffer that reads its argument completely before changing itself (ModelBuf over an immutable Vector), compared after every call of a generated program",
+  "generator": "wave4/harness/collections/CollDiff.scala, family buf: the argument of a bulk method is drawn from the receiver itself, its view, a reversed, mapped, filtered or sliced view, or its iterator",
+  "signature": "addAll | ArrayDeque | value; patchInPlace | ArrayDeque | value; subtractAll | ArrayDeque | exc-for-value; prependAll | UnrolledBuffer | value; ++=: | UnrolledBuffer | value; addAll | UnrolledBuffer | value; addAll | UnrolledBuffer | exc-for-value; patchInPlace | UnrolledBuffer | exc-for-value; subtractAll | UnrolledBuffer | value",
+  "seed": "buf seed 1, within the first 2156 programs",
+  "measure": "n/a",
+  "detail": "ArrayDeque(6, -2).addAll(self.view.reverse) gives ArrayDeque(6, -2, -2, -2); patchInPlace(3, self.view.map(_ + 1), 65) writes a wrong last element; subtractAll of a slice of itself throws IndexOutOfBoundsException. UnrolledBuffer(1).prependAll(self.view.map(_ + 1)) and ++=: leave the buffer unchanged; addAll(self.iterator) and patchInPlace(2, self.view, 0) never terminate (the reproduction stops them with OutOfMemoryError under a small heap); addAll of a filtered view appends an element twice; subtractAll of a slice leaves an element behind. In each case the method reads its argument lazily while it is already changing the receiver. The draft fixes for the same family test for the receiver itself or a plain view of it in insertAll, prependAll and patchInPlace; these calls go through other methods (addAll, subtractAll) or through a transformed view or an iterator, which those tests do not recognise. ArrayBuffer and ListBuffer throw ConcurrentModificationException for the same shapes, which is a third behaviour for one call shape but not a silent one. Passing a collection a view of itself is unusual but legal, and the silent cases corrupt data.",
+  "fix_sketch": "Fix by class rather than by cell: in every bulk method of a mutable buffer, materialise an argument that is not a strict collection known to be disjoint from the receiver before the first write. That costs one copy for views and iterators, which today are read lazily.",
+  "on_integration": "present",
+  "on_base": "same",
+  "on_2_13_18": "same",
+  "scala3": "same (the library is shared; not run)",
+  "prior": "New cells of the family of LB5 (retronym/scala#534), LM2 (retronym/scala#548) and LM3 (retronym/scala#538), which each fixed one method and one kind of source; this reproduces with those fixes applied.",
+  "confidence": "confirmed"
+}

@@ -1,0 +1,21 @@
+{
+  "id": "GE3",
+  "theme": "generated",
+  "track": "erasure",
+  "area": "scala.tools.nsc.transform.SpecializeTypes",
+  "title": "Override with a by-name parameter of a type fixed by a @specialized parent is rejected as a double definition",
+  "kind": "wrong rejection",
+  "oracle": "the program with every @specialized removed compiles and prints 2",
+  "generator": "wave4/harness/erasure (Gen.scala, Driver.scala): by-name parameter of a template type parameter, overridden in a leaf class that instantiates a specialized parent at a primitive",
+  "signature": "nospec|compile-error/ok|double definition:",
+  "seed": "2 (round 3 pilot, widened grammar)",
+  "measure": "n/a",
+  "detail": "class C extends AC[Long], AC specialized in A, and overrides m(p: Int, q: => A) as m(p: Int, q: => Long). The compiler reports a double definition between \"override def m(p: Int, q: => Long)\" and \"override def m(p: Int, q: () => Long)\", both at the line of the override. Specialization adds a forwarder in C for the specialized variant of AC.m; after uncurry the by-name parameter of the forwarder and of the user method both become Function0 and the two have the same erasure. Without @specialized the program compiles. Any override of a method with a by-name parameter of the specialized type in a class that fixes the parameter hits it.",
+  "fix_sketch": "Name or erase the specialized variant so that the by-name parameter keeps a distinct signature, or do not create the variant when it would coincide with the user method after uncurry. No compatibility cost: the program does not compile today.",
+  "on_integration": "present",
+  "on_base": "same",
+  "on_2_13_18": "same",
+  "scala3": "not run",
+  "prior": "none found",
+  "confidence": "confirmed"
+}

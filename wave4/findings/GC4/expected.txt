@@ -1,0 +1,7 @@
+r = Int.MinValue to 51; r.contains(3)                                      = true
+r.lastIndexOf(3, 1073741823)                                               = -1
+r.indexOf(3, Int.MinValue)                                                 = -1
+r.indexOf(3)                                                               = -1
+(544 until Int.MinValue by -1).lastIndexOf(-2147483646, Int.MaxValue)      = -1
+
+(-1, or IllegalArgumentException as for length: the position is not representable.)

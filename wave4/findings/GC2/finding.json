@@ -1,0 +1,21 @@
+{
+  "id": "GC2",
+  "theme": "generated",
+  "track": "collections3",
+  "area": "scala.collection.immutable.NumericRange",
+  "title": "A NumericRange iterator computes knownSize in the element type, giving negative or too-small sizes for Byte, Short, Int and Long ranges wider than half the type",
+  "kind": "wrong result",
+  "oracle": "knownSize is -1 or the number of remaining elements; BigInt model of the range",
+  "generator": "wave4/harness/collections3/RangeDiff.scala: NumericRange over Byte, Short, Int and Long with bounds at the type extremes; iterator knownSize compared with the model's count",
+  "signature": "NR[Byte] | | it.knownSize | val -> val (also NR[Short], NR[Int], NR[Long])",
+  "seed": "seed 2, 100 s run; case number not recorded",
+  "measure": "n/a",
+  "detail": "NumericRangeIterator.knownSize (src/library/scala/collection/immutable/NumericRange.scala, class NumericRangeIterator) is num.toInt((lastElement - _next) / step) + 1, with the subtraction done by the Integral of the element type. For NumericRange.inclusive[Byte](-128, 57, 5), 38 elements, 57 - (-128) wraps to -71 and knownSize is -13, a value the knownSize contract does not allow. For Short, Int and Long ranges wider than half the type it is 0 or 1 for a longer iterator: NumericRange.inclusive(Long.MinValue, Long.MaxValue, Long.MaxValue) has 3 elements and reports 1. Consumers that size themselves from knownSize then truncate (toVector) or, with 0, return nothing (toList, mkString). A Byte range over more than 127 values is ordinary; the wider types need extreme bounds.",
+  "fix_sketch": "Use the range's own length (already computed without overflow) minus the number of elements consumed, or return -1 when the difference cannot be represented. No compatibility cost.",
+  "on_integration": "present",
+  "on_base": "same",
+  "on_2_13_18": "same",
+  "scala3": "not run (the 2.13 library is shared)",
+  "prior": "none found for the iterator; LI2 and LI3 (retronym/scala#569, #556, #655) are the same arithmetic-in-the-element-type mistake in contains and length",
+  "confidence": "confirmed"
+}

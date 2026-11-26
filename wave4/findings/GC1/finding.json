@@ -1,0 +1,21 @@
+{
+  "id": "GC1",
+  "theme": "generated",
+  "track": "collections3",
+  "area": "scala.collection.immutable.Range",
+  "title": "A Range iterator's knownSize overflows when last - start does not fit in Int, so iterator.toVector, to(ArrayBuffer), toList and mkString silently drop elements",
+  "kind": "wrong result",
+  "oracle": "knownSize is -1 or the number of remaining elements; BigInt model of the range",
+  "generator": "wave4/harness/collections3/RangeDiff.scala: start, end and step drawn from the Int extremes with a step that divides the span into a few elements; iterator knownSize compared with the model's count",
+  "signature": "Range | | it.knownSize | val -> val",
+  "seed": "seed 1, 60 s run; case number not recorded",
+  "measure": "n/a",
+  "detail": "RangeIterator.knownSize (src/library/scala/collection/immutable/Range.scala, class RangeIterator) is (lastElement - _next) / step + 1 in Int arithmetic. When the range spans more than Int.MaxValue the subtraction wraps: (Int.MinValue to Int.MaxValue by Int.MaxValue) has 3 elements and its iterator reports 1; (-1073741826 until Int.MaxValue by 715827883) has 5 and reports 0. Builders and conversions size themselves from knownSize: iterator.toVector and iterator.to(ArrayBuffer) return 1 element of 3 without an error, and with a reported 0 iterator.toList is Nil and iterator.map(f).mkString is empty while hasNext is true. Range.length itself is right, so only code that goes through the iterator is affected. It needs a range wider than 2^31 with a large step, which is rare in ordinary code.",
+  "fix_sketch": "Compute the remaining count in Long, ((lastElement.toLong - _next) / step + 1), and return it when it fits in Int, else -1. No compatibility cost.",
+  "on_integration": "present",
+  "on_base": "same",
+  "on_2_13_18": "same",
+  "scala3": "not run (the 2.13 library is shared)",
+  "prior": "none found for knownSize; LI7 (retronym/scala#558) is the same class's drop",
+  "confidence": "confirmed"
+}

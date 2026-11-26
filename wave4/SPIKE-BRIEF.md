@@ -27,9 +27,20 @@ Do not report a known root cause as new. Search before recording: `rg -i '<keywo
 
 The earlier waves found defects along a few seams (a collection given itself or its view, overflow at the Int extremes, value classes, specialization). Do not build the generator around them: produce ordinary usage at ordinary weights with those as features among many, pick oracles that need no knowledge of a seam, and choose what to add next from what coverage shows the last round did not reach.
 
+## Recording a finding
+
+Same shape as waves two and three, so the dashboard and the fix process can take wave-four findings unchanged. A directory `wave4/findings/<ID>/`, where ID is your track's prefix plus a number (GA: first collections spike; GC: collections3; GJ: javaparser; GF: fold; GE: erasure; these prefixes are unused by earlier waves), with:
+
+- `repro/`: the sources, with no dependency beyond the JDK and scala-library unless a tool is the oracle. One root cause per finding; several symptoms of one cause go in one finding.
+- `cmd.sh`: bash, run from the finding directory, using `$SCALAC` and `$SCALA` defaulted to `/Users/jzaugg-virtus/code/.worktrees/scala/w3-int/build/pack/bin/scalac` and `scala` (the integration build, where wave four hunts), `JAVA_HOME` defaulted to the JDK 21 above, compiling into a fresh `mktemp -d` removed by a trap, printing the evidence to stdout, and terminating (`timeout`).
+- `actual.txt` (what `cmd.sh` prints on the integration build) and `expected.txt` (what a correct implementation prints).
+- `finding.json` with string fields: `id`, `theme` ("generated"), `track`, `area` (package or phase), `title` (one line stating the defect), `kind` (as in earlier waves: "wrong result", "non-termination", "wrong exception", "miscompile", "wrong rejection", "missing warning", "spurious warning", "crash", "regression", ...), `oracle`, `generator` (harness path and the feature of the generator that produced the case), `signature` (the bucket the harness reported), `seed` (seed and case number that first produced it, or "not recorded"), `measure` ("n/a" for a pure correctness finding), `detail` (3 to 8 plain sentences: what happens, why, where in the code, how likely ordinary code is to hit it), `fix_sketch` (one to three sentences, with the compatibility cost), `on_integration` ("present"), `on_base`, `on_2_13_18` ("same" / "different: ..." / "not run"), `scala3` ("same" / "absent" / "n/a" / "not run"), `prior` (earlier ids, tickets, pull requests, or "none found"), `confidence` ("confirmed" or "needs a second look" with the reason).
+
+A difference that is under-specified behaviour (exception type, fail-fast against snapshot) is not a finding: list it in your report.
+
 ## Deliverables
 
 - The harness sources in `wave4/harness/<track>/` with a short `README.md`: what it generates, the oracle, how to run it, cases per minute.
-- Reproductions in `wave4/repro/<track>/`.
-- `wave4/spike-results/<track>.md`: what you built, numbers actually run (cases, signatures, false alarms and their cause), each finding in three to six plain sentences with its verdict on the three builds and the earlier finding ids it relates to or "none found", what the generator does not yet produce, and whether this target deserves a longer campaign. No emphasis, no superlatives, numbers only if measured.
+- One `wave4/findings/<ID>/` per finding as above. Nothing under `wave4/repro/`.
+- `wave4/reports/<track>.md`: what you built, numbers actually run (cases, signatures, false alarms and their cause), coverage per round where measured, the finding ids with one line each, what the generator does not yet produce, and whether this target deserves a longer campaign. No emphasis, no superlatives, numbers only if measured.
 - Your final message: the same content in under 300 words.

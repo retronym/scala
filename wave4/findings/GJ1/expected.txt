@@ -1,0 +1,8 @@
+Both orders print the same warning, as (B) does and as 2.13.18 does in both:
+
+repro/Test.scala:2: warning: match may not be exhaustive.
+It would fail on the following input: D()
+1 warning
+1 false
+
+and no "unreachable code" warning: the second case is reachable (the program prints 1 for it).

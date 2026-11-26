@@ -62,18 +62,18 @@ After the spike's two rounds the largest unreached sources in `scala.collection`
 
 ### Coverage and the treemap
 
-JaCoCo's agent is already used for this review's coverage runs; attaching it to a harness JVM with `includes=scala.*` and writing one execution file per round is all a track needs. `tools/coverage_treemap.py` turns the XML reports into the picture from the announcement: one panel per round, each rectangle a method sized by instruction count and shaded by the share reached, grouped by source file, with the layout fixed across panels so the eye sees what a round opened up. `--prefix scala/tools/nsc/transform` (or `typechecker`, `backend/jvm`) gives the per-phase view for compiler tracks; `spike-results/compiler-transform-baseline-treemap.html` is that view for what the existing test suites reach, which is the starting panel for the compiler tracks.
+JaCoCo's agent is already used for this review's coverage runs; attaching it to a harness JVM with `includes=scala.*` and writing one execution file per round is all a track needs. `tools/coverage_treemap.py` turns the XML reports into the picture from the announcement: one panel per round, each rectangle a method sized by instruction count and shaded by the share reached, grouped by source file, with the layout fixed across panels so the eye sees what a round opened up. `--prefix scala/tools/nsc/transform` (or `typechecker`, `backend/jvm`) gives the per-phase view for compiler tracks; `reports/compiler-transform-baseline-treemap.html` is that view for what the existing test suites reach, which is the starting panel for the compiler tracks.
 
 Two cautions. Coverage of the compiler from in-process compilation needs the compiler classes on the harness class path to be the ones the report is built from, so build the report from the same `build/pack` jars. And coverage is a gap list: a track is scored by distinct confirmed signatures, with a frozen set of seeds rerun each round as a regression check on the generator itself.
 
 ## Targets, ranked
 
-Ranked by expected new findings per unit of effort, given what the spike showed and what the earlier waves already covered. The ranking will move when the parallel spikes below report.
+Ranked by expected new findings per unit of effort after the spikes. Java sources and embeddings of expressions rank high because their oracles are independent of any earlier finding and each new construct paid at once; more volume on library files already covered ranks low.
 
-1. **Programs of calls on the library against reference models.** Cheapest and already paying: thousands of programs a second and trivially valid. Extend by coverage, as listed above: Vector at sizes across its tree levels and its builders, the hash tries' bulk and structure-sharing paths, the specialised maps, `ArrayOps` and `StringOps` against `java.util.Arrays` and `java.lang.String`, the string parsers against the JDK's, steppers and stream conversions against the iterator. The existing `test/scalacheck` collection suites generate small arbitrary lists and maps and a few builder command sequences; across them there are ten mentions of `Int.MaxValue` or `Int.MinValue`, no self-aliasing and no comparison across implementations.
+1. **Java sources: scalac's parser against javac.** Generated Java sources, with a Scala probe compiled jointly with the sources and then against javac's class files. javac is a complete reference, cases are cheap, and four findings including a regression came from 70 files. Not yet generated: type annotations, several types per file, cross-package access, `package-info`, probes that should be rejected.
 2. **Generated Scala programs, run several ways that must agree.** A general generator of small terminating programs in everyday Scala: pattern matching, for-comprehensions, lazy vals and by-name parameters, try/finally, closures and local classes, traits and linearization, generics, default arguments, with value classes and `@specialized` as features at ordinary weight. The same program is compiled with the optimizer on and off, in both delambdafy modes, jointly and separately, by 2.13.18, and where valid by Scala 3; rewrites that should not change meaning (drop `@specialized`, drop `extends AnyVal`) are further oracles. All must print the same lines. This is Ephyra's OCaml and rustc recipe. Cost is the generator: it has to compile nearly always to be worth running, and coverage of the transform phases and the back end says which construct to add next.
-3. **Primitive semantics: folded against evaluated.** The same expression with literals inline, so the typer folds it, and with operands hidden from the folder; boxed against unboxed equality and hashing; optimizer on against off. No second compiler needed, hundreds of expressions per compilation.
-4. **Java sources: scalac's parser against javac.** Generated Java sources, with a Scala probe compiled jointly with the sources and then against javac's class files. Two prior families of findings say this boundary is soft; javac is a perfect reference.
+3. **Programs of calls on the library against reference models.** Aim only at files not yet reached (the specialised maps, `TrieMap`, `TreeSeqMap`, `PriorityQueue`, the Java wrappers, steppers); the files already covered are done. Thousands of programs a second and trivially valid, so cheap to keep running against each new integration build. The existing `test/scalacheck` collection suites generate small arbitrary lists and maps and a few builder command sequences; across them there are ten mentions of `Int.MaxValue` or `Int.MinValue`, no self-aliasing and no comparison across implementations.
+4. **Expressions in many embeddings.** The values are sound; what paid was placing an expression where few tests put one (a match scrutinee, an annotation argument). Continue by adding embedding contexts and statement forms, aimed at the unreached parts of `CleanUp`, erasure and the back end, not by adding arithmetic.
 5. **Existing tests as seeds for the same rewrites.** The run tests under `test/files` are several thousand valid programs with known output. Applying the rewrites of target 2 mechanically to them is a generator with no validity problem. Wave three already diffed typer output of 4627 partest files against 2.13.18; this reuses that corpus with metamorphic oracles instead.
 6. **Scala 3 as a second opinion on generated programs.** Only where the two languages agree, so the grammar is narrow. Better as an extra oracle on targets 2 and 3 than as a track.
 7. **Type checker laws in process.** Reflexivity, transitivity and congruence of `<:<` and `=:=`, `lub`/`glb` laws, `asSeenFrom` round trips over generated types. Wave three ran three hand-built matrices of up to 199 types through such a harness and found six unsound cases, so the oracle works; what is new is generating the types and letting coverage of `TypeComparers` and `GlbLubs` say what the matrices missed. Ranked lower because every hit needs careful reading before it is a finding.
@@ -98,7 +98,11 @@ Ranked by expected new findings per unit of effort, given what the spike showed 
 
 ## Spike
 
-Built and run in this session; sources in `harness/collections`, reproduction in `repro/SelfAlias.scala`, raw summaries in `spike-results/collections`.
+Five tracks ran on 26 November: a first collections spike, then four in parallel under `SPIKE-BRIEF.md`. Findings are in `findings/<ID>/` in the format of waves two and three (22 so far), per-track reports in `reports/`, harnesses in `harness/`. `tools/merge_wave4.py` folds `findings/` and `state.json` into the review dashboard, where wave four has its own filter.
+
+### First collections spike
+
+Sources in `harness/collections`, finding GA1, raw summaries in `reports/collections-spike-summaries`.
 
 **What was built.** `SeqDiff`: one random call out of 164 read-only operations, with indices and lengths drawn from the boundaries (−1, 0, length ± 1, the Int extremes), on 31 Seq implementations including differently shaped instances of the same class (a Vector built by prepending, sliced out of a larger one, concatenated; a wrapped-around ArrayDeque; a Queue with both halves in use), with List as the reference. `CollDiff`: programs of one to four calls from the mutating and non-mutating API of buffers, Int sets (sorted, hashed, bit sets, Java wrappers) and maps whose keys collide in hash, against reference models that hold an immutable collection in a var; arguments include the collection itself, its views and its iterators. Both shrink and bucket by signature.
 
@@ -117,7 +121,7 @@ Built and run in this session; sources in `harness/collections`, reproduction in
 | Maps, immutable API | 31,220 in 40 s | 23 | Only the known range-view defect |
 | Maps, mutating API | 63,261 in 40 s | 11 | Only the known range-view defect |
 
-**Defects that survive the draft fixes.** All reproduce on the integration build, the unfixed base and 2.13.18 (`repro/SelfAlias.scala` prints the table):
+**Defects that survive the draft fixes.** All reproduce on the integration build, the unfixed base and 2.13.18 (finding GA1; its `cmd.sh` prints the table):
 
 - `ArrayDeque(6, -2).addAll(self.view.reverse)` gives `ArrayDeque(6, -2, -2, -2)`.
 - `ArrayDeque(0, 1, -1, -1).patchInPlace(3, self.view.map(_ + 1), 65)` ends in `2` where `0` is right.
@@ -129,9 +133,33 @@ Built and run in this session; sources in `harness/collections`, reproduction in
 
 These are new cells of the wave-two family "mutable collections given themselves or a view of themselves" (LB5, LM2, LM3). Those findings named a method and a source each, and the draft fixes handle those pairs. The generator varies both and shows the family is open. The fix should be by class: any source that is not known to be disjoint from the receiver is read before the receiver is changed.
 
-**Coverage.** Under JaCoCo, round one (read-only Seq calls, 40 s) reached 24.2% of the lines of `scala.collection`; adding round two (mutation programs, sets and maps, 150 s) reached 55.3%. The whole existing scalacheck suite reached 47.0% in the review's coverage run of 19 November (a different commit of 2.13.x and its own build, so the comparison is indicative). `spike-results/collections-treemap.html` shows the two rounds.
+**Coverage.** Under JaCoCo, round one (read-only Seq calls, 40 s) reached 24.2% of the lines of `scala.collection`; adding round two (mutation programs, sets and maps, 150 s) reached 55.3%. The whole existing scalacheck suite reached 47.0% in the review's coverage run of 19 November (a different commit of 2.13.x and its own build, so the comparison is indicative). `reports/collections-treemap.html` shows the two rounds.
 
-**Does it justify going on.** Yes for the library: a few hours bought more coverage than the standing property suite, a calibration hit, and a class of silent corruption the earlier fixes missed. The compiler tracks are the open question; four parallel spikes (targets 1 to 4 above) are running under `SPIKE-BRIEF.md` and report into `spike-results/`.
+### The four parallel spikes
+
+| Track | Generator and oracle | Volume | Findings |
+|---|---|---|---|
+| `javaparser` | Java 21 sources with a Scala probe; joint compilation against javac's class files, and members typed from source against members read from the class file | 300 cases in 92 s; every finding within the first 70 | GJ1 to GJ4 |
+| `collections3` | Ordinary usage of the files coverage showed unreached, against JDK and List models; before the change of direction, Range against exact arithmetic and a re-entrancy matrix | about 22 million checks of ordinary usage | none from ordinary usage; GC1 to GC7 from the earlier part |
+| `fold` | Expression trees printed in up to 22 forms (inline literals, hidden operands, boxes, value classes, default arguments, annotation arguments), optimizer on and off | about 3,100 trees, 150 to 370 a minute | GF1, GF2 |
+| `erasure` | Small programs in everyday Scala compiled several ways: without `@specialized`, without `AnyVal`, separately, with the other delambdafy mode, with the inliner | under 100 programs at 6 to 14 a minute | GE1 to GE8 |
+
+What the findings are:
+
+- **Java sources (GJ).** A sealed Java interface without `permits` whose implementors are records in the same file has no known subclasses in joint compilation, so a match on it gets "unreachable code" and no exhaustivity warning; 2.13.18 warns correctly, so this is new in unreleased 2.13.19. A varargs record component's accessor is typed `Int*` from source. `@Deprecated` with a constant-expression argument is dropped from source. `enum E { , }` is rejected.
+- **Library (GC).** Range and NumericRange iterators compute `knownSize` in a type that overflows, so `(Int.MinValue to Int.MaxValue by Int.MaxValue).iterator.toVector` has one element. `drop` on the iterator of an empty Range makes it non-empty. Mutable `HashMap.updateWith` and `LinkedHashMap.updateWith` store nothing when the function removes the key. GC7 records self-aliasing in sets, maps and `ArrayBuffer.flatMapInPlace` as one open class, with GA1.
+- **Expressions (GF).** No wrong value in primitive arithmetic, shifts, conversions, equality, hashing or concatenation. A match whose scrutinee is an `if` with a constant condition and a `Nothing` branch crashes the back end. A block as an annotation argument is accepted and its statements dropped.
+- **Programs (GE).** Five crashes or wrong rejections where `@specialized` meets a super call, a by-name override, a partial function literal or a captured local lazy val; the inliner exceeds an allocation budget on a program 2.13.18 compiles; two further crashes are unshrunk.
+
+GA1, GE1 to GE6, GF1, GF2 and three of the four GJ findings were re-run by the coordinating session from their recorded commands and reproduce. None has been read by an independent reviewer and none has a pull request.
+
+### What the spikes say about the method
+
+- **It finds things the earlier waves did not, quickly, when the generator reaches a construct for the first time.** Every track's findings came in its first few dozen to few thousand cases. More cases of the same kind then found nothing: 450 more Java files, 22 million library checks, 3,000 expression trees. Yield comes from new constructs and new oracles, not from running longer, which is Ephyra's own observation.
+- **Clean results are results.** Ordinary usage of `Vector`, `ArrayOps`, `StringOps`, the string parsers and the hash tries at volume, and primitive semantics across 22 embeddings, are now measured as sound on the integration build, with coverage figures to say how much was exercised.
+- **The findings still cluster on the old seams when the generator is told about them.** The Range, re-entrancy and specialization findings came from parts of the generators written with earlier findings in mind. The Java-source findings and GF1 did not, and those two tracks used the most seam-neutral oracles (a reference compiler; the same expression in many embeddings).
+- **Throughput differs by three orders of magnitude.** Library calls run at tens of thousands a second; whole programs with five recompilations at ten a minute. The program track needs the shared in-process driver and a cheaper oracle mix before a campaign, and its general grammar is close to untested.
+- **Coverage steering worked where it was tried.** Given the list of unreached library files, one agent took `ArrayOps` from 96 to 484 of 618 lines and `StringParsers` from none to all in two rounds. No compiler track got as far as aiming a round at its own coverage gaps; the gaps are recorded (`CleanUp`, `UnCurry`, the switch emitter, `JavaConstantFolder`, structural calls).
 
 ## Plan for the wave
 
@@ -166,3 +194,6 @@ These are new cells of the wave-two family "mutable collections given themselves
 - The last quarter of the paper's appendix and the second half of the Datadog post reached this session only as summaries.
 - Maintenance state of Thalia, Hephaestus, CrossLangFuzzer, JQF; the Java JIT fuzzers are from memory.
 - The scalacheck coverage figure comes from an older commit than the spike's build.
+- GE7 and GE8 are unshrunk and their causes unknown; GJ4 and GC1 to GC7 were re-run only by the agents that found them, as were all runs on the unfixed base and 2.13.18 other than GA1 and GJ1.
+- No wave-four finding has had an independent review, and root causes in the finding files are the hunters' reading, not debugged.
+- The compiler tracks did not run a coverage-aimed round, and the program track's general grammar ran 17 programs.

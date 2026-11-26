@@ -1,0 +1,21 @@
+{
+  "id": "GJ4",
+  "theme": "generated",
+  "track": "javaparser",
+  "area": "scala.tools.nsc.javac.JavaParsers (enumDecl)",
+  "title": "An enum body that starts with a lone comma (enum E { , } or { ,; ... }) is rejected by scalac's Java parser",
+  "kind": "wrong rejection",
+  "oracle": "javac accepts the Java source; scalac's Java parser must accept it too",
+  "generator": "wave4/harness/javaparser (gen.py, Driver.scala), feature E (empty enum body forms; the comma forms were taken out of the generator after this finding to quiet later runs)",
+  "signature": "SRC-ERROR ERROR: identifier expected but `,` found.",
+  "seed": "seed 2, case p02005",
+  "measure": "n/a",
+  "detail": "JLS 8.9.1 allows a trailing comma after an empty list of enum constants, so `enum E0 { , }` and `enum E1 { ,; static int z() { return 1; } }` are valid and javac compiles them. scalac's Java parser reports 'identifier expected but `,` found' for both, because JavaParsers.enumDecl parses a constant whenever the body does not start with `;` or `}` and only then looks for a comma. A trailing comma after at least one constant (`A, B,;`) is accepted. Hand-written code does not do this; a code generator that always emits a separator could.",
+  "fix_sketch": "In parseEnumConsts accept a comma before the first constant when the next token is `;` or `}`. No compatibility cost.",
+  "on_integration": "present",
+  "on_base": "same",
+  "on_2_13_18": "same",
+  "scala3": "not run",
+  "prior": "none found (J4 to J9 are other wrong rejections by the same parser)",
+  "confidence": "confirmed"
+}

@@ -1,0 +1,21 @@
+{
+  "id": "GC6",
+  "theme": "generated",
+  "track": "collections3",
+  "area": "scala.collection.mutable.HashMap, LinkedHashMap",
+  "title": "mutable.HashMap.updateWith and LinkedHashMap.updateWith return Some(v) but store nothing when the remapping function removes the key or clears the map",
+  "kind": "wrong result",
+  "oracle": "after m.updateWith(k)(f) returns Some(v), m(k) == v; the same call on TreeMap and nine other map classes",
+  "generator": "wave4/harness/collections3/AliasMatrix.scala: re-entrant cells, updateWith on a present key whose function removes that key or clears the map",
+  "signature": "Map | HashMap | updateWith(present) | f removes the key | WRONG (also f clears; LinkedHashMap)",
+  "seed": "not random: cell of the matrix",
+  "measure": "n/a",
+  "detail": "HashMap.updateWith (src/library/scala/collection/mutable/HashMap.scala:130) and LinkedHashMap.updateWith (LinkedHashMap.scala:254) look up the node for the key, call the remapping function, and then for (Some(previous), Some(next)) write next into the node found before the call. If the function removed the key or cleared the map, that node is no longer in the table: the write goes to a detached node, the method returns Some(next), and the map does not contain the key. The generic implementation in mutable.Map (used by TreeMap, LongMap, AnyRefMap, ListMap, OpenHashMap, CollisionProofHashMap) and TrieMap store the value. A function that adds other keys, even enough to resize, is handled. A remapping function that removes its own key is unusual; one that evicts entries from the same map (a cache trimming itself) can do it by accident.",
+  "fix_sketch": "After calling the function, re-find the node when the table or the size changed (or compare a modification count) and fall back to put/remove. A small cost on the fast path; no behaviour change for functions that do not touch the map.",
+  "on_integration": "present",
+  "on_base": "same",
+  "on_2_13_18": "same",
+  "scala3": "not run (the 2.13 library is shared)",
+  "prior": "none found; KT1 concerns getOrElseUpdate on the Java wrappers",
+  "confidence": "confirmed"
+}

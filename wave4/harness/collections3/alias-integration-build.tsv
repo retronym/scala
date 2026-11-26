@@ -1,0 +1,1312 @@
+Set	HashSet	addAll	self	ok	
+Set	HashSet	addAll	view	ok	
+Set	HashSet	addAll	view.map	WRONG	init=3 elements; expected (List(1, 2, 3, 4),4); got (List(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16),16)
+Set	HashSet	addAll	view.filter	ok	
+Set	HashSet	addAll	view.take(2)	ok	
+Set	HashSet	addAll	iterator	ok	
+Set	HashSet	addAll	iterator.map	WRONG	init=3 elements; expected (List(1, 2, 3, 4),4); got (List(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16),16)
+Set	HashSet	addAll	to(LazyList)	ok	
+Set	HashSet	addAll	toList (control)	ok	
+Set	HashSet	subtractAll	self	ok	
+Set	HashSet	subtractAll	view	ok	
+Set	HashSet	subtractAll	view.map	WRONG	init=3 elements; expected (List(1),1); got (List(1, 3),2)
+Set	HashSet	subtractAll	view.filter	ok	
+Set	HashSet	subtractAll	view.take(2)	ok	
+Set	HashSet	subtractAll	iterator	ok	
+Set	HashSet	subtractAll	iterator.map	WRONG	init=3 elements; expected (List(1),1); got (List(1, 3),2)
+Set	HashSet	subtractAll	to(LazyList)	ok	
+Set	HashSet	subtractAll	toList (control)	ok	
+Set	HashSet	filterInPlace	p = !self.contains(x+1)	ok	
+Set	HashSet	filterInPlace	p = self.size is even	WRONG	init=3 elements; expected (List(),0); got (List(2, 3),2)
+Set	LinkedHashSet	addAll	self	ok	
+Set	LinkedHashSet	addAll	view	ok	
+Set	LinkedHashSet	addAll	view.map	ok	
+Set	LinkedHashSet	addAll	view.filter	ok	
+Set	LinkedHashSet	addAll	view.take(2)	ok	
+Set	LinkedHashSet	addAll	iterator	ok	
+Set	LinkedHashSet	addAll	iterator.map	ok	
+Set	LinkedHashSet	addAll	to(LazyList)	ok	
+Set	LinkedHashSet	addAll	toList (control)	ok	
+Set	LinkedHashSet	subtractAll	self	ok	
+Set	LinkedHashSet	subtractAll	view	ok	
+Set	LinkedHashSet	subtractAll	view.map	WRONG	init=40 elements; expected (List(1),1); got (List(1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40),38)
+Set	LinkedHashSet	subtractAll	view.filter	ok	
+Set	LinkedHashSet	subtractAll	view.take(2)	ok	
+Set	LinkedHashSet	subtractAll	iterator	ok	
+Set	LinkedHashSet	subtractAll	iterator.map	WRONG	init=40 elements; expected (List(1),1); got (List(1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40),38)
+Set	LinkedHashSet	subtractAll	to(LazyList)	ok	
+Set	LinkedHashSet	subtractAll	toList (control)	ok	
+Set	LinkedHashSet	filterInPlace	p = !self.contains(x+1)	ok	
+Set	LinkedHashSet	filterInPlace	p = self.size is even	WRONG	init=3 elements; expected (List(),0); got (List(2, 3),2)
+Set	TreeSet	addAll	self	ok	
+Set	TreeSet	addAll	view	ok	
+Set	TreeSet	addAll	view.map	ok	
+Set	TreeSet	addAll	view.filter	ok	
+Set	TreeSet	addAll	view.take(2)	ok	
+Set	TreeSet	addAll	iterator	ok	
+Set	TreeSet	addAll	iterator.map	ok	
+Set	TreeSet	addAll	to(LazyList)	ok	
+Set	TreeSet	addAll	toList (control)	ok	
+Set	TreeSet	subtractAll	self	ok	
+Set	TreeSet	subtractAll	view	ok	
+Set	TreeSet	subtractAll	view.map	WRONG	init=40 elements; expected (List(1),1); got (List(1, 4, 9, 13, 17, 25, 29),7)
+Set	TreeSet	subtractAll	view.filter	ok	
+Set	TreeSet	subtractAll	view.take(2)	ok	
+Set	TreeSet	subtractAll	iterator	ok	
+Set	TreeSet	subtractAll	iterator.map	WRONG	init=40 elements; expected (List(1),1); got (List(1, 4, 9, 13, 17, 25, 29),7)
+Set	TreeSet	subtractAll	to(LazyList)	ok	
+Set	TreeSet	subtractAll	toList (control)	ok	
+Set	TreeSet	filterInPlace	p = !self.contains(x+1)	ok	
+Set	TreeSet	filterInPlace	p = self.size is even	WRONG	init=3 elements; expected (List(),0); got (List(2, 3),2)
+Set	BitSet	addAll	self	ok	
+Set	BitSet	addAll	view	ok	
+Set	BitSet	addAll	view.map	ok	
+Set	BitSet	addAll	view.filter	ok	
+Set	BitSet	addAll	view.take(2)	ok	
+Set	BitSet	addAll	iterator	ok	
+Set	BitSet	addAll	iterator.map	ok	
+Set	BitSet	addAll	to(LazyList)	ok	
+Set	BitSet	addAll	toList (control)	ok	
+Set	BitSet	subtractAll	self	ok	
+Set	BitSet	subtractAll	view	ok	
+Set	BitSet	subtractAll	view.map	ok	
+Set	BitSet	subtractAll	view.filter	ok	
+Set	BitSet	subtractAll	view.take(2)	ok	
+Set	BitSet	subtractAll	iterator	ok	
+Set	BitSet	subtractAll	iterator.map	ok	
+Set	BitSet	subtractAll	to(LazyList)	ok	
+Set	BitSet	subtractAll	toList (control)	ok	
+Set	BitSet	filterInPlace	p = !self.contains(x+1)	ok	
+Set	BitSet	filterInPlace	p = self.size is even	ok	
+Set	ju.HashSet.asScala	addAll	self	ok	
+Set	ju.HashSet.asScala	addAll	view	ok	
+Set	ju.HashSet.asScala	addAll	view.map	ok	
+Set	ju.HashSet.asScala	addAll	view.filter	ok	
+Set	ju.HashSet.asScala	addAll	view.take(2)	ok	
+Set	ju.HashSet.asScala	addAll	iterator	ok	
+Set	ju.HashSet.asScala	addAll	iterator.map	ok	
+Set	ju.HashSet.asScala	addAll	to(LazyList)	ok	
+Set	ju.HashSet.asScala	addAll	toList (control)	ok	
+Set	ju.HashSet.asScala	subtractAll	self	ok	
+Set	ju.HashSet.asScala	subtractAll	view	CME	init=3 elements; expected (List(),0); got EXC:ConcurrentModificationException
+Set	ju.HashSet.asScala	subtractAll	view.map	CME	init=3 elements; expected (List(1),1); got EXC:ConcurrentModificationException
+Set	ju.HashSet.asScala	subtractAll	view.filter	CME	init=3 elements; expected (List(2),1); got EXC:ConcurrentModificationException
+Set	ju.HashSet.asScala	subtractAll	view.take(2)	CME	init=3 elements; expected (List(3),1); got EXC:ConcurrentModificationException
+Set	ju.HashSet.asScala	subtractAll	iterator	CME	init=3 elements; expected (List(),0); got EXC:ConcurrentModificationException
+Set	ju.HashSet.asScala	subtractAll	iterator.map	CME	init=3 elements; expected (List(1),1); got EXC:ConcurrentModificationException
+Set	ju.HashSet.asScala	subtractAll	to(LazyList)	CME	init=3 elements; expected (List(),0); got EXC:ConcurrentModificationException
+Set	ju.HashSet.asScala	subtractAll	toList (control)	ok	
+Set	ju.HashSet.asScala	filterInPlace	p = !self.contains(x+1)	ok	
+Set	ju.HashSet.asScala	filterInPlace	p = self.size is even	WRONG	init=3 elements; expected (List(),0); got (List(2, 3),2)
+Set	ju.TreeSet.asScala	addAll	self	ok	
+Set	ju.TreeSet.asScala	addAll	view	ok	
+Set	ju.TreeSet.asScala	addAll	view.map	ok	
+Set	ju.TreeSet.asScala	addAll	view.filter	ok	
+Set	ju.TreeSet.asScala	addAll	view.take(2)	ok	
+Set	ju.TreeSet.asScala	addAll	iterator	ok	
+Set	ju.TreeSet.asScala	addAll	iterator.map	ok	
+Set	ju.TreeSet.asScala	addAll	to(LazyList)	ok	
+Set	ju.TreeSet.asScala	addAll	toList (control)	ok	
+Set	ju.TreeSet.asScala	subtractAll	self	ok	
+Set	ju.TreeSet.asScala	subtractAll	view	CME	init=3 elements; expected (List(),0); got EXC:ConcurrentModificationException
+Set	ju.TreeSet.asScala	subtractAll	view.map	CME	init=3 elements; expected (List(1),1); got EXC:ConcurrentModificationException
+Set	ju.TreeSet.asScala	subtractAll	view.filter	CME	init=3 elements; expected (List(2),1); got EXC:ConcurrentModificationException
+Set	ju.TreeSet.asScala	subtractAll	view.take(2)	CME	init=3 elements; expected (List(3),1); got EXC:ConcurrentModificationException
+Set	ju.TreeSet.asScala	subtractAll	iterator	CME	init=3 elements; expected (List(),0); got EXC:ConcurrentModificationException
+Set	ju.TreeSet.asScala	subtractAll	iterator.map	CME	init=3 elements; expected (List(1),1); got EXC:ConcurrentModificationException
+Set	ju.TreeSet.asScala	subtractAll	to(LazyList)	CME	init=3 elements; expected (List(),0); got EXC:ConcurrentModificationException
+Set	ju.TreeSet.asScala	subtractAll	toList (control)	ok	
+Set	ju.TreeSet.asScala	filterInPlace	p = !self.contains(x+1)	ok	
+Set	ju.TreeSet.asScala	filterInPlace	p = self.size is even	WRONG	init=3 elements; expected (List(),0); got (List(2, 3),2)
+Set	ju.LinkedHashSet.asScala	addAll	self	ok	
+Set	ju.LinkedHashSet.asScala	addAll	view	ok	
+Set	ju.LinkedHashSet.asScala	addAll	view.map	ok	
+Set	ju.LinkedHashSet.asScala	addAll	view.filter	ok	
+Set	ju.LinkedHashSet.asScala	addAll	view.take(2)	ok	
+Set	ju.LinkedHashSet.asScala	addAll	iterator	ok	
+Set	ju.LinkedHashSet.asScala	addAll	iterator.map	ok	
+Set	ju.LinkedHashSet.asScala	addAll	to(LazyList)	ok	
+Set	ju.LinkedHashSet.asScala	addAll	toList (control)	ok	
+Set	ju.LinkedHashSet.asScala	subtractAll	self	ok	
+Set	ju.LinkedHashSet.asScala	subtractAll	view	CME	init=3 elements; expected (List(),0); got EXC:ConcurrentModificationException
+Set	ju.LinkedHashSet.asScala	subtractAll	view.map	CME	init=3 elements; expected (List(1),1); got EXC:ConcurrentModificationException
+Set	ju.LinkedHashSet.asScala	subtractAll	view.filter	CME	init=3 elements; expected (List(2),1); got EXC:ConcurrentModificationException
+Set	ju.LinkedHashSet.asScala	subtractAll	view.take(2)	CME	init=3 elements; expected (List(3),1); got EXC:ConcurrentModificationException
+Set	ju.LinkedHashSet.asScala	subtractAll	iterator	CME	init=3 elements; expected (List(),0); got EXC:ConcurrentModificationException
+Set	ju.LinkedHashSet.asScala	subtractAll	iterator.map	CME	init=3 elements; expected (List(1),1); got EXC:ConcurrentModificationException
+Set	ju.LinkedHashSet.asScala	subtractAll	to(LazyList)	CME	init=3 elements; expected (List(),0); got EXC:ConcurrentModificationException
+Set	ju.LinkedHashSet.asScala	subtractAll	toList (control)	ok	
+Set	ju.LinkedHashSet.asScala	filterInPlace	p = !self.contains(x+1)	ok	
+Set	ju.LinkedHashSet.asScala	filterInPlace	p = self.size is even	WRONG	init=3 elements; expected (List(),0); got (List(2, 3),2)
+Buffer	ArrayBuffer	addAll	self	ok	
+Buffer	ArrayBuffer	prependAll	self	ok	
+Buffer	ArrayBuffer	insertAll(1, _)	self	ok	
+Buffer	ArrayBuffer	patchInPlace(1, _, 1)	self	CME	init=3 elements; expected (List(1, 1, 2, 3, 3),5); got EXC:ConcurrentModificationException
+Buffer	ArrayBuffer	subtractAll	self	ok	
+Buffer	ArrayBuffer	pushAll (Stack)	self	n/a	
+Buffer	ArrayBuffer	addAll	view	CME	init=3 elements; expected (List(1, 2, 3, 1, 2, 3),6); got EXC:ConcurrentModificationException
+Buffer	ArrayBuffer	prependAll	view	ok	
+Buffer	ArrayBuffer	insertAll(1, _)	view	ok	
+Buffer	ArrayBuffer	patchInPlace(1, _, 1)	view	CME	init=3 elements; expected (List(1, 1, 2, 3, 3),5); got EXC:ConcurrentModificationException
+Buffer	ArrayBuffer	subtractAll	view	CME	init=3 elements; expected (List(),0); got EXC:ConcurrentModificationException
+Buffer	ArrayBuffer	pushAll (Stack)	view	n/a	
+Buffer	ArrayBuffer	addAll	view.map	CME	init=3 elements; expected (List(1, 2, 3, 2, 3, 4),6); got EXC:ConcurrentModificationException
+Buffer	ArrayBuffer	prependAll	view.map	ok	
+Buffer	ArrayBuffer	insertAll(1, _)	view.map	ok	
+Buffer	ArrayBuffer	patchInPlace(1, _, 1)	view.map	CME	init=3 elements; expected (List(1, 2, 3, 4, 3),5); got EXC:ConcurrentModificationException
+Buffer	ArrayBuffer	subtractAll	view.map	CME	init=3 elements; expected (List(1),1); got EXC:ConcurrentModificationException
+Buffer	ArrayBuffer	pushAll (Stack)	view.map	n/a	
+Buffer	ArrayBuffer	addAll	view.filter	CME	init=3 elements; expected (List(1, 2, 3, 1, 3),5); got EXC:ConcurrentModificationException
+Buffer	ArrayBuffer	prependAll	view.filter	ok	
+Buffer	ArrayBuffer	insertAll(1, _)	view.filter	ok	
+Buffer	ArrayBuffer	patchInPlace(1, _, 1)	view.filter	CME	init=3 elements; expected (List(1, 1, 3, 3),4); got EXC:ConcurrentModificationException
+Buffer	ArrayBuffer	subtractAll	view.filter	CME	init=3 elements; expected (List(2),1); got EXC:ConcurrentModificationException
+Buffer	ArrayBuffer	pushAll (Stack)	view.filter	n/a	
+Buffer	ArrayBuffer	addAll	view.take(2)	CME	init=3 elements; expected (List(1, 2, 3, 1, 2),5); got EXC:ConcurrentModificationException
+Buffer	ArrayBuffer	prependAll	view.take(2)	ok	
+Buffer	ArrayBuffer	insertAll(1, _)	view.take(2)	ok	
+Buffer	ArrayBuffer	patchInPlace(1, _, 1)	view.take(2)	CME	init=3 elements; expected (List(1, 1, 2, 3),4); got EXC:ConcurrentModificationException
+Buffer	ArrayBuffer	subtractAll	view.take(2)	CME	init=3 elements; expected (List(3),1); got EXC:ConcurrentModificationException
+Buffer	ArrayBuffer	pushAll (Stack)	view.take(2)	n/a	
+Buffer	ArrayBuffer	addAll	iterator	CME	init=3 elements; expected (List(1, 2, 3, 1, 2, 3),6); got EXC:ConcurrentModificationException
+Buffer	ArrayBuffer	prependAll	iterator	ok	
+Buffer	ArrayBuffer	insertAll(1, _)	iterator	ok	
+Buffer	ArrayBuffer	patchInPlace(1, _, 1)	iterator	CME	init=3 elements; expected (List(1, 1, 2, 3, 3),5); got EXC:ConcurrentModificationException
+Buffer	ArrayBuffer	subtractAll	iterator	CME	init=3 elements; expected (List(),0); got EXC:ConcurrentModificationException
+Buffer	ArrayBuffer	pushAll (Stack)	iterator	n/a	
+Buffer	ArrayBuffer	addAll	iterator.map	CME	init=3 elements; expected (List(1, 2, 3, 2, 3, 4),6); got EXC:ConcurrentModificationException
+Buffer	ArrayBuffer	prependAll	iterator.map	ok	
+Buffer	ArrayBuffer	insertAll(1, _)	iterator.map	ok	
+Buffer	ArrayBuffer	patchInPlace(1, _, 1)	iterator.map	CME	init=3 elements; expected (List(1, 2, 3, 4, 3),5); got EXC:ConcurrentModificationException
+Buffer	ArrayBuffer	subtractAll	iterator.map	CME	init=3 elements; expected (List(1),1); got EXC:ConcurrentModificationException
+Buffer	ArrayBuffer	pushAll (Stack)	iterator.map	n/a	
+Buffer	ArrayBuffer	addAll	to(LazyList)	CME	init=3 elements; expected (List(1, 2, 3, 1, 2, 3),6); got EXC:ConcurrentModificationException
+Buffer	ArrayBuffer	prependAll	to(LazyList)	ok	
+Buffer	ArrayBuffer	insertAll(1, _)	to(LazyList)	ok	
+Buffer	ArrayBuffer	patchInPlace(1, _, 1)	to(LazyList)	CME	init=3 elements; expected (List(1, 1, 2, 3, 3),5); got EXC:ConcurrentModificationException
+Buffer	ArrayBuffer	subtractAll	to(LazyList)	CME	init=3 elements; expected (List(),0); got EXC:ConcurrentModificationException
+Buffer	ArrayBuffer	pushAll (Stack)	to(LazyList)	n/a	
+Buffer	ArrayBuffer	addAll	toList (control)	ok	
+Buffer	ArrayBuffer	prependAll	toList (control)	ok	
+Buffer	ArrayBuffer	insertAll(1, _)	toList (control)	ok	
+Buffer	ArrayBuffer	patchInPlace(1, _, 1)	toList (control)	ok	
+Buffer	ArrayBuffer	subtractAll	toList (control)	ok	
+Buffer	ArrayBuffer	pushAll (Stack)	toList (control)	n/a	
+Buffer	ArrayBuffer	addAll	view.reverse	CME	init=3 elements; expected (List(1, 2, 3, 3, 2, 1),6); got EXC:ConcurrentModificationException
+Buffer	ArrayBuffer	prependAll	view.reverse	ok	
+Buffer	ArrayBuffer	insertAll(1, _)	view.reverse	ok	
+Buffer	ArrayBuffer	patchInPlace(1, _, 1)	view.reverse	CME	init=3 elements; expected (List(1, 3, 2, 1, 3),5); got EXC:ConcurrentModificationException
+Buffer	ArrayBuffer	subtractAll	view.reverse	CME	init=3 elements; expected (List(),0); got EXC:ConcurrentModificationException
+Buffer	ArrayBuffer	pushAll (Stack)	view.reverse	n/a	
+Buffer	ArrayBuffer	addAll	reverseIterator	CME	init=3 elements; expected (List(1, 2, 3, 3, 2, 1),6); got EXC:ConcurrentModificationException
+Buffer	ArrayBuffer	prependAll	reverseIterator	ok	
+Buffer	ArrayBuffer	insertAll(1, _)	reverseIterator	ok	
+Buffer	ArrayBuffer	patchInPlace(1, _, 1)	reverseIterator	CME	init=3 elements; expected (List(1, 3, 2, 1, 3),5); got EXC:ConcurrentModificationException
+Buffer	ArrayBuffer	subtractAll	reverseIterator	CME	init=3 elements; expected (List(),0); got EXC:ConcurrentModificationException
+Buffer	ArrayBuffer	pushAll (Stack)	reverseIterator	n/a	
+Buffer	ArrayBuffer	addAll	view.slice(1,3)	CME	init=3 elements; expected (List(1, 2, 3, 2, 3),5); got EXC:ConcurrentModificationException
+Buffer	ArrayBuffer	prependAll	view.slice(1,3)	ok	
+Buffer	ArrayBuffer	insertAll(1, _)	view.slice(1,3)	ok	
+Buffer	ArrayBuffer	patchInPlace(1, _, 1)	view.slice(1,3)	CME	init=3 elements; expected (List(1, 2, 3, 3),4); got EXC:ConcurrentModificationException
+Buffer	ArrayBuffer	subtractAll	view.slice(1,3)	CME	init=3 elements; expected (List(1),1); got EXC:ConcurrentModificationException
+Buffer	ArrayBuffer	pushAll (Stack)	view.slice(1,3)	n/a	
+Buffer	ArrayBuffer	mapInPlace	f = x + self.head	WRONG	init=3 elements; expected (List(2, 3, 4),3); got (List(2, 4, 5),3)
+Buffer	ArrayBuffer	mapInPlace	f = x + self.last	ok	
+Buffer	ArrayBuffer	filterInPlace	p = !self.contains(x+1)	ok	
+Buffer	ArrayBuffer	filterInPlace	p = self.length is even	ok	
+Buffer	ArrayBuffer	flatMapInPlace	f = self.view.take(2)	WRONG	init=3 elements; expected (List(1, 2, 1, 2, 1, 2),6); got (List(),0)
+Buffer	ArrayBuffer	flatMapInPlace	f = self.iterator.take(2)	CME	init=3 elements; expected (List(1, 2, 1, 2, 1, 2),6); got EXC:ConcurrentModificationException
+Buffer	ArrayBuffer	dropWhileInPlace	p = x < self.last	ok	
+Buffer	ArrayBuffer	takeWhileInPlace	p = x < self.length	ok	
+Buffer	ListBuffer	addAll	self	ok	
+Buffer	ListBuffer	prependAll	self	ok	
+Buffer	ListBuffer	insertAll(1, _)	self	ok	
+Buffer	ListBuffer	patchInPlace(1, _, 1)	self	ok	
+Buffer	ListBuffer	subtractAll	self	ok	
+Buffer	ListBuffer	pushAll (Stack)	self	n/a	
+Buffer	ListBuffer	addAll	view	ok	
+Buffer	ListBuffer	prependAll	view	ok	
+Buffer	ListBuffer	insertAll(1, _)	view	ok	
+Buffer	ListBuffer	patchInPlace(1, _, 1)	view	ok	
+Buffer	ListBuffer	subtractAll	view	CME	init=3 elements; expected (List(),0); got EXC:ConcurrentModificationException
+Buffer	ListBuffer	pushAll (Stack)	view	n/a	
+Buffer	ListBuffer	addAll	view.map	ok	
+Buffer	ListBuffer	prependAll	view.map	ok	
+Buffer	ListBuffer	insertAll(1, _)	view.map	ok	
+Buffer	ListBuffer	patchInPlace(1, _, 1)	view.map	ok	
+Buffer	ListBuffer	subtractAll	view.map	CME	init=3 elements; expected (List(1),1); got EXC:ConcurrentModificationException
+Buffer	ListBuffer	pushAll (Stack)	view.map	n/a	
+Buffer	ListBuffer	addAll	view.filter	ok	
+Buffer	ListBuffer	prependAll	view.filter	ok	
+Buffer	ListBuffer	insertAll(1, _)	view.filter	ok	
+Buffer	ListBuffer	patchInPlace(1, _, 1)	view.filter	ok	
+Buffer	ListBuffer	subtractAll	view.filter	CME	init=3 elements; expected (List(2),1); got EXC:ConcurrentModificationException
+Buffer	ListBuffer	pushAll (Stack)	view.filter	n/a	
+Buffer	ListBuffer	addAll	view.take(2)	ok	
+Buffer	ListBuffer	prependAll	view.take(2)	ok	
+Buffer	ListBuffer	insertAll(1, _)	view.take(2)	ok	
+Buffer	ListBuffer	patchInPlace(1, _, 1)	view.take(2)	ok	
+Buffer	ListBuffer	subtractAll	view.take(2)	CME	init=3 elements; expected (List(3),1); got EXC:ConcurrentModificationException
+Buffer	ListBuffer	pushAll (Stack)	view.take(2)	n/a	
+Buffer	ListBuffer	addAll	iterator	ok	
+Buffer	ListBuffer	prependAll	iterator	ok	
+Buffer	ListBuffer	insertAll(1, _)	iterator	ok	
+Buffer	ListBuffer	patchInPlace(1, _, 1)	iterator	ok	
+Buffer	ListBuffer	subtractAll	iterator	CME	init=3 elements; expected (List(),0); got EXC:ConcurrentModificationException
+Buffer	ListBuffer	pushAll (Stack)	iterator	n/a	
+Buffer	ListBuffer	addAll	iterator.map	ok	
+Buffer	ListBuffer	prependAll	iterator.map	ok	
+Buffer	ListBuffer	insertAll(1, _)	iterator.map	ok	
+Buffer	ListBuffer	patchInPlace(1, _, 1)	iterator.map	ok	
+Buffer	ListBuffer	subtractAll	iterator.map	CME	init=3 elements; expected (List(1),1); got EXC:ConcurrentModificationException
+Buffer	ListBuffer	pushAll (Stack)	iterator.map	n/a	
+Buffer	ListBuffer	addAll	to(LazyList)	ok	
+Buffer	ListBuffer	prependAll	to(LazyList)	ok	
+Buffer	ListBuffer	insertAll(1, _)	to(LazyList)	ok	
+Buffer	ListBuffer	patchInPlace(1, _, 1)	to(LazyList)	ok	
+Buffer	ListBuffer	subtractAll	to(LazyList)	CME	init=3 elements; expected (List(),0); got EXC:ConcurrentModificationException
+Buffer	ListBuffer	pushAll (Stack)	to(LazyList)	n/a	
+Buffer	ListBuffer	addAll	toList (control)	ok	
+Buffer	ListBuffer	prependAll	toList (control)	ok	
+Buffer	ListBuffer	insertAll(1, _)	toList (control)	ok	
+Buffer	ListBuffer	patchInPlace(1, _, 1)	toList (control)	ok	
+Buffer	ListBuffer	subtractAll	toList (control)	ok	
+Buffer	ListBuffer	pushAll (Stack)	toList (control)	n/a	
+Buffer	ListBuffer	addAll	view.reverse	ok	
+Buffer	ListBuffer	prependAll	view.reverse	ok	
+Buffer	ListBuffer	insertAll(1, _)	view.reverse	ok	
+Buffer	ListBuffer	patchInPlace(1, _, 1)	view.reverse	ok	
+Buffer	ListBuffer	subtractAll	view.reverse	ok	
+Buffer	ListBuffer	pushAll (Stack)	view.reverse	n/a	
+Buffer	ListBuffer	addAll	reverseIterator	ok	
+Buffer	ListBuffer	prependAll	reverseIterator	ok	
+Buffer	ListBuffer	insertAll(1, _)	reverseIterator	ok	
+Buffer	ListBuffer	patchInPlace(1, _, 1)	reverseIterator	ok	
+Buffer	ListBuffer	subtractAll	reverseIterator	ok	
+Buffer	ListBuffer	pushAll (Stack)	reverseIterator	n/a	
+Buffer	ListBuffer	addAll	view.slice(1,3)	ok	
+Buffer	ListBuffer	prependAll	view.slice(1,3)	ok	
+Buffer	ListBuffer	insertAll(1, _)	view.slice(1,3)	ok	
+Buffer	ListBuffer	patchInPlace(1, _, 1)	view.slice(1,3)	ok	
+Buffer	ListBuffer	subtractAll	view.slice(1,3)	CME	init=3 elements; expected (List(1),1); got EXC:ConcurrentModificationException
+Buffer	ListBuffer	pushAll (Stack)	view.slice(1,3)	n/a	
+Buffer	ListBuffer	mapInPlace	f = x + self.head	ok	
+Buffer	ListBuffer	mapInPlace	f = x + self.last	ok	
+Buffer	ListBuffer	filterInPlace	p = !self.contains(x+1)	ok	
+Buffer	ListBuffer	filterInPlace	p = self.length is even	WRONG	init=3 elements; expected (List(),0); got (List(2, 3),2)
+Buffer	ListBuffer	flatMapInPlace	f = self.view.take(2)	ok	
+Buffer	ListBuffer	flatMapInPlace	f = self.iterator.take(2)	ok	
+Buffer	ListBuffer	dropWhileInPlace	p = x < self.last	ok	
+Buffer	ListBuffer	takeWhileInPlace	p = x < self.length	ok	
+Buffer	ArrayDeque	addAll	self	ok	
+Buffer	ArrayDeque	prependAll	self	ok	
+Buffer	ArrayDeque	insertAll(1, _)	self	ok	
+Buffer	ArrayDeque	patchInPlace(1, _, 1)	self	WRONG	init=3 elements; expected (List(1, 1, 2, 3, 3),5); got (List(1, 1, 1, 3, 3),5)
+Buffer	ArrayDeque	subtractAll	self	ok	
+Buffer	ArrayDeque	pushAll (Stack)	self	n/a	
+Buffer	ArrayDeque	addAll	view	ok	
+Buffer	ArrayDeque	prependAll	view	ok	
+Buffer	ArrayDeque	insertAll(1, _)	view	ok	
+Buffer	ArrayDeque	patchInPlace(1, _, 1)	view	WRONG	init=3 elements; expected (List(1, 1, 2, 3, 3),5); got (List(1, 1, 1, 3, 3),5)
+Buffer	ArrayDeque	subtractAll	view	EXC:IndexOutOfBoundsException	init=3 elements; expected (List(),0); got EXC:IndexOutOfBoundsException
+Buffer	ArrayDeque	pushAll (Stack)	view	n/a	
+Buffer	ArrayDeque	addAll	view.map	ok	
+Buffer	ArrayDeque	prependAll	view.map	ok	
+Buffer	ArrayDeque	insertAll(1, _)	view.map	ok	
+Buffer	ArrayDeque	patchInPlace(1, _, 1)	view.map	ok	
+Buffer	ArrayDeque	subtractAll	view.map	EXC:IndexOutOfBoundsException	init=3 elements; expected (List(1),1); got EXC:IndexOutOfBoundsException
+Buffer	ArrayDeque	pushAll (Stack)	view.map	n/a	
+Buffer	ArrayDeque	addAll	view.filter	ok	
+Buffer	ArrayDeque	prependAll	view.filter	ok	
+Buffer	ArrayDeque	insertAll(1, _)	view.filter	ok	
+Buffer	ArrayDeque	patchInPlace(1, _, 1)	view.filter	WRONG	init=3 elements; expected (List(1, 1, 3, 3),4); got (List(1, 1, 1, 3, 3),5)
+Buffer	ArrayDeque	subtractAll	view.filter	EXC:IndexOutOfBoundsException	init=3 elements; expected (List(2),1); got EXC:IndexOutOfBoundsException
+Buffer	ArrayDeque	pushAll (Stack)	view.filter	n/a	
+Buffer	ArrayDeque	addAll	view.take(2)	ok	
+Buffer	ArrayDeque	prependAll	view.take(2)	ok	
+Buffer	ArrayDeque	insertAll(1, _)	view.take(2)	ok	
+Buffer	ArrayDeque	patchInPlace(1, _, 1)	view.take(2)	WRONG	init=3 elements; expected (List(1, 1, 2, 3),4); got (List(1, 1, 1, 3),4)
+Buffer	ArrayDeque	subtractAll	view.take(2)	WRONG	init=3 elements; expected (List(3),1); got (List(2),1)
+Buffer	ArrayDeque	pushAll (Stack)	view.take(2)	n/a	
+Buffer	ArrayDeque	addAll	iterator	ok	
+Buffer	ArrayDeque	prependAll	iterator	ok	
+Buffer	ArrayDeque	insertAll(1, _)	iterator	ok	
+Buffer	ArrayDeque	patchInPlace(1, _, 1)	iterator	WRONG	init=3 elements; expected (List(1, 1, 2, 3, 3),5); got (List(1, 1, 1, 3, 3),5)
+Buffer	ArrayDeque	subtractAll	iterator	EXC:IndexOutOfBoundsException	init=3 elements; expected (List(),0); got EXC:IndexOutOfBoundsException
+Buffer	ArrayDeque	pushAll (Stack)	iterator	n/a	
+Buffer	ArrayDeque	addAll	iterator.map	ok	
+Buffer	ArrayDeque	prependAll	iterator.map	ok	
+Buffer	ArrayDeque	insertAll(1, _)	iterator.map	ok	
+Buffer	ArrayDeque	patchInPlace(1, _, 1)	iterator.map	ok	
+Buffer	ArrayDeque	subtractAll	iterator.map	EXC:IndexOutOfBoundsException	init=3 elements; expected (List(1),1); got EXC:IndexOutOfBoundsException
+Buffer	ArrayDeque	pushAll (Stack)	iterator.map	n/a	
+Buffer	ArrayDeque	addAll	to(LazyList)	ok	
+Buffer	ArrayDeque	prependAll	to(LazyList)	ok	
+Buffer	ArrayDeque	insertAll(1, _)	to(LazyList)	ok	
+Buffer	ArrayDeque	patchInPlace(1, _, 1)	to(LazyList)	WRONG	init=3 elements; expected (List(1, 1, 2, 3, 3),5); got (List(1, 1, 1, 3, 3),5)
+Buffer	ArrayDeque	subtractAll	to(LazyList)	EXC:IndexOutOfBoundsException	init=3 elements; expected (List(),0); got EXC:IndexOutOfBoundsException
+Buffer	ArrayDeque	pushAll (Stack)	to(LazyList)	n/a	
+Buffer	ArrayDeque	addAll	toList (control)	ok	
+Buffer	ArrayDeque	prependAll	toList (control)	ok	
+Buffer	ArrayDeque	insertAll(1, _)	toList (control)	ok	
+Buffer	ArrayDeque	patchInPlace(1, _, 1)	toList (control)	ok	
+Buffer	ArrayDeque	subtractAll	toList (control)	ok	
+Buffer	ArrayDeque	pushAll (Stack)	toList (control)	n/a	
+Buffer	ArrayDeque	addAll	view.reverse	WRONG	init=3 elements; expected (List(1, 2, 3, 3, 2, 1),6); got (List(1, 2, 3, 3, 3, 3),6)
+Buffer	ArrayDeque	prependAll	view.reverse	ok	
+Buffer	ArrayDeque	insertAll(1, _)	view.reverse	ok	
+Buffer	ArrayDeque	patchInPlace(1, _, 1)	view.reverse	WRONG	init=3 elements; expected (List(1, 3, 2, 1, 3),5); got (List(1, 3, 3, 1, 3),5)
+Buffer	ArrayDeque	subtractAll	view.reverse	EXC:IndexOutOfBoundsException	init=3 elements; expected (List(),0); got EXC:IndexOutOfBoundsException
+Buffer	ArrayDeque	pushAll (Stack)	view.reverse	n/a	
+Buffer	ArrayDeque	addAll	reverseIterator	ok	
+Buffer	ArrayDeque	prependAll	reverseIterator	ok	
+Buffer	ArrayDeque	insertAll(1, _)	reverseIterator	ok	
+Buffer	ArrayDeque	patchInPlace(1, _, 1)	reverseIterator	WRONG	init=3 elements; expected (List(1, 3, 2, 1, 3),5); got (List(1, 3, 3, 1, 3),5)
+Buffer	ArrayDeque	subtractAll	reverseIterator	ok	
+Buffer	ArrayDeque	pushAll (Stack)	reverseIterator	n/a	
+Buffer	ArrayDeque	addAll	view.slice(1,3)	ok	
+Buffer	ArrayDeque	prependAll	view.slice(1,3)	ok	
+Buffer	ArrayDeque	insertAll(1, _)	view.slice(1,3)	ok	
+Buffer	ArrayDeque	patchInPlace(1, _, 1)	view.slice(1,3)	ok	
+Buffer	ArrayDeque	subtractAll	view.slice(1,3)	WRONG	init=40 elements; expected (List(1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40),38); got (List(1, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40),38)
+Buffer	ArrayDeque	pushAll (Stack)	view.slice(1,3)	n/a	
+Buffer	ArrayDeque	mapInPlace	f = x + self.head	WRONG	init=3 elements; expected (List(2, 3, 4),3); got (List(2, 4, 5),3)
+Buffer	ArrayDeque	mapInPlace	f = x + self.last	ok	
+Buffer	ArrayDeque	filterInPlace	p = !self.contains(x+1)	ok	
+Buffer	ArrayDeque	filterInPlace	p = self.length is even	ok	
+Buffer	ArrayDeque	flatMapInPlace	f = self.view.take(2)	WRONG	init=3 elements; expected (List(1, 2, 1, 2, 1, 2),6); got (List(),0)
+Buffer	ArrayDeque	flatMapInPlace	f = self.iterator.take(2)	EXC:IndexOutOfBoundsException	init=3 elements; expected (List(1, 2, 1, 2, 1, 2),6); got EXC:IndexOutOfBoundsException
+Buffer	ArrayDeque	dropWhileInPlace	p = x < self.last	ok	
+Buffer	ArrayDeque	takeWhileInPlace	p = x < self.length	ok	
+Buffer	Queue	addAll	self	ok	
+Buffer	Queue	prependAll	self	ok	
+Buffer	Queue	insertAll(1, _)	self	ok	
+Buffer	Queue	patchInPlace(1, _, 1)	self	WRONG	init=3 elements; expected (List(1, 1, 2, 3, 3),5); got (List(1, 1, 1, 3, 3),5)
+Buffer	Queue	subtractAll	self	ok	
+Buffer	Queue	pushAll (Stack)	self	n/a	
+Buffer	Queue	addAll	view	ok	
+Buffer	Queue	prependAll	view	ok	
+Buffer	Queue	insertAll(1, _)	view	ok	
+Buffer	Queue	patchInPlace(1, _, 1)	view	WRONG	init=3 elements; expected (List(1, 1, 2, 3, 3),5); got (List(1, 1, 1, 3, 3),5)
+Buffer	Queue	subtractAll	view	EXC:IndexOutOfBoundsException	init=3 elements; expected (List(),0); got EXC:IndexOutOfBoundsException
+Buffer	Queue	pushAll (Stack)	view	n/a	
+Buffer	Queue	addAll	view.map	ok	
+Buffer	Queue	prependAll	view.map	ok	
+Buffer	Queue	insertAll(1, _)	view.map	ok	
+Buffer	Queue	patchInPlace(1, _, 1)	view.map	ok	
+Buffer	Queue	subtractAll	view.map	EXC:IndexOutOfBoundsException	init=3 elements; expected (List(1),1); got EXC:IndexOutOfBoundsException
+Buffer	Queue	pushAll (Stack)	view.map	n/a	
+Buffer	Queue	addAll	view.filter	ok	
+Buffer	Queue	prependAll	view.filter	ok	
+Buffer	Queue	insertAll(1, _)	view.filter	ok	
+Buffer	Queue	patchInPlace(1, _, 1)	view.filter	WRONG	init=3 elements; expected (List(1, 1, 3, 3),4); got (List(1, 1, 1, 3, 3),5)
+Buffer	Queue	subtractAll	view.filter	EXC:IndexOutOfBoundsException	init=3 elements; expected (List(2),1); got EXC:IndexOutOfBoundsException
+Buffer	Queue	pushAll (Stack)	view.filter	n/a	
+Buffer	Queue	addAll	view.take(2)	ok	
+Buffer	Queue	prependAll	view.take(2)	ok	
+Buffer	Queue	insertAll(1, _)	view.take(2)	ok	
+Buffer	Queue	patchInPlace(1, _, 1)	view.take(2)	WRONG	init=3 elements; expected (List(1, 1, 2, 3),4); got (List(1, 1, 1, 3),4)
+Buffer	Queue	subtractAll	view.take(2)	WRONG	init=3 elements; expected (List(3),1); got (List(2),1)
+Buffer	Queue	pushAll (Stack)	view.take(2)	n/a	
+Buffer	Queue	addAll	iterator	ok	
+Buffer	Queue	prependAll	iterator	ok	
+Buffer	Queue	insertAll(1, _)	iterator	ok	
+Buffer	Queue	patchInPlace(1, _, 1)	iterator	WRONG	init=3 elements; expected (List(1, 1, 2, 3, 3),5); got (List(1, 1, 1, 3, 3),5)
+Buffer	Queue	subtractAll	iterator	EXC:IndexOutOfBoundsException	init=3 elements; expected (List(),0); got EXC:IndexOutOfBoundsException
+Buffer	Queue	pushAll (Stack)	iterator	n/a	
+Buffer	Queue	addAll	iterator.map	ok	
+Buffer	Queue	prependAll	iterator.map	ok	
+Buffer	Queue	insertAll(1, _)	iterator.map	ok	
+Buffer	Queue	patchInPlace(1, _, 1)	iterator.map	ok	
+Buffer	Queue	subtractAll	iterator.map	EXC:IndexOutOfBoundsException	init=3 elements; expected (List(1),1); got EXC:IndexOutOfBoundsException
+Buffer	Queue	pushAll (Stack)	iterator.map	n/a	
+Buffer	Queue	addAll	to(LazyList)	ok	
+Buffer	Queue	prependAll	to(LazyList)	ok	
+Buffer	Queue	insertAll(1, _)	to(LazyList)	ok	
+Buffer	Queue	patchInPlace(1, _, 1)	to(LazyList)	WRONG	init=3 elements; expected (List(1, 1, 2, 3, 3),5); got (List(1, 1, 1, 3, 3),5)
+Buffer	Queue	subtractAll	to(LazyList)	EXC:IndexOutOfBoundsException	init=3 elements; expected (List(),0); got EXC:IndexOutOfBoundsException
+Buffer	Queue	pushAll (Stack)	to(LazyList)	n/a	
+Buffer	Queue	addAll	toList (control)	ok	
+Buffer	Queue	prependAll	toList (control)	ok	
+Buffer	Queue	insertAll(1, _)	toList (control)	ok	
+Buffer	Queue	patchInPlace(1, _, 1)	toList (control)	ok	
+Buffer	Queue	subtractAll	toList (control)	ok	
+Buffer	Queue	pushAll (Stack)	toList (control)	n/a	
+Buffer	Queue	addAll	view.reverse	WRONG	init=3 elements; expected (List(1, 2, 3, 3, 2, 1),6); got (List(1, 2, 3, 3, 3, 3),6)
+Buffer	Queue	prependAll	view.reverse	ok	
+Buffer	Queue	insertAll(1, _)	view.reverse	ok	
+Buffer	Queue	patchInPlace(1, _, 1)	view.reverse	WRONG	init=3 elements; expected (List(1, 3, 2, 1, 3),5); got (List(1, 3, 3, 1, 3),5)
+Buffer	Queue	subtractAll	view.reverse	EXC:IndexOutOfBoundsException	init=3 elements; expected (List(),0); got EXC:IndexOutOfBoundsException
+Buffer	Queue	pushAll (Stack)	view.reverse	n/a	
+Buffer	Queue	addAll	reverseIterator	ok	
+Buffer	Queue	prependAll	reverseIterator	ok	
+Buffer	Queue	insertAll(1, _)	reverseIterator	ok	
+Buffer	Queue	patchInPlace(1, _, 1)	reverseIterator	WRONG	init=3 elements; expected (List(1, 3, 2, 1, 3),5); got (List(1, 3, 3, 1, 3),5)
+Buffer	Queue	subtractAll	reverseIterator	ok	
+Buffer	Queue	pushAll (Stack)	reverseIterator	n/a	
+Buffer	Queue	addAll	view.slice(1,3)	ok	
+Buffer	Queue	prependAll	view.slice(1,3)	ok	
+Buffer	Queue	insertAll(1, _)	view.slice(1,3)	ok	
+Buffer	Queue	patchInPlace(1, _, 1)	view.slice(1,3)	ok	
+Buffer	Queue	subtractAll	view.slice(1,3)	WRONG	init=40 elements; expected (List(1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40),38); got (List(1, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40),38)
+Buffer	Queue	pushAll (Stack)	view.slice(1,3)	n/a	
+Buffer	Queue	mapInPlace	f = x + self.head	WRONG	init=3 elements; expected (List(2, 3, 4),3); got (List(2, 4, 5),3)
+Buffer	Queue	mapInPlace	f = x + self.last	ok	
+Buffer	Queue	filterInPlace	p = !self.contains(x+1)	ok	
+Buffer	Queue	filterInPlace	p = self.length is even	ok	
+Buffer	Queue	flatMapInPlace	f = self.view.take(2)	WRONG	init=3 elements; expected (List(1, 2, 1, 2, 1, 2),6); got (List(),0)
+Buffer	Queue	flatMapInPlace	f = self.iterator.take(2)	EXC:IndexOutOfBoundsException	init=3 elements; expected (List(1, 2, 1, 2, 1, 2),6); got EXC:IndexOutOfBoundsException
+Buffer	Queue	dropWhileInPlace	p = x < self.last	ok	
+Buffer	Queue	takeWhileInPlace	p = x < self.length	ok	
+Buffer	Stack	addAll	self	ok	
+Buffer	Stack	prependAll	self	ok	
+Buffer	Stack	insertAll(1, _)	self	ok	
+Buffer	Stack	patchInPlace(1, _, 1)	self	WRONG	init=3 elements; expected (List(1, 1, 2, 3, 3),5); got (List(1, 1, 1, 3, 3),5)
+Buffer	Stack	subtractAll	self	ok	
+Buffer	Stack	pushAll (Stack)	self	ok	
+Buffer	Stack	addAll	view	ok	
+Buffer	Stack	prependAll	view	ok	
+Buffer	Stack	insertAll(1, _)	view	ok	
+Buffer	Stack	patchInPlace(1, _, 1)	view	WRONG	init=3 elements; expected (List(1, 1, 2, 3, 3),5); got (List(1, 1, 1, 3, 3),5)
+Buffer	Stack	subtractAll	view	EXC:IndexOutOfBoundsException	init=3 elements; expected (List(),0); got EXC:IndexOutOfBoundsException
+Buffer	Stack	pushAll (Stack)	view	ok	
+Buffer	Stack	addAll	view.map	ok	
+Buffer	Stack	prependAll	view.map	ok	
+Buffer	Stack	insertAll(1, _)	view.map	ok	
+Buffer	Stack	patchInPlace(1, _, 1)	view.map	ok	
+Buffer	Stack	subtractAll	view.map	EXC:IndexOutOfBoundsException	init=3 elements; expected (List(1),1); got EXC:IndexOutOfBoundsException
+Buffer	Stack	pushAll (Stack)	view.map	ok	
+Buffer	Stack	addAll	view.filter	ok	
+Buffer	Stack	prependAll	view.filter	ok	
+Buffer	Stack	insertAll(1, _)	view.filter	ok	
+Buffer	Stack	patchInPlace(1, _, 1)	view.filter	WRONG	init=3 elements; expected (List(1, 1, 3, 3),4); got (List(1, 1, 1, 3, 3),5)
+Buffer	Stack	subtractAll	view.filter	EXC:IndexOutOfBoundsException	init=3 elements; expected (List(2),1); got EXC:IndexOutOfBoundsException
+Buffer	Stack	pushAll (Stack)	view.filter	ok	
+Buffer	Stack	addAll	view.take(2)	ok	
+Buffer	Stack	prependAll	view.take(2)	ok	
+Buffer	Stack	insertAll(1, _)	view.take(2)	ok	
+Buffer	Stack	patchInPlace(1, _, 1)	view.take(2)	WRONG	init=3 elements; expected (List(1, 1, 2, 3),4); got (List(1, 1, 1, 3),4)
+Buffer	Stack	subtractAll	view.take(2)	WRONG	init=3 elements; expected (List(3),1); got (List(2),1)
+Buffer	Stack	pushAll (Stack)	view.take(2)	ok	
+Buffer	Stack	addAll	iterator	ok	
+Buffer	Stack	prependAll	iterator	ok	
+Buffer	Stack	insertAll(1, _)	iterator	ok	
+Buffer	Stack	patchInPlace(1, _, 1)	iterator	WRONG	init=3 elements; expected (List(1, 1, 2, 3, 3),5); got (List(1, 1, 1, 3, 3),5)
+Buffer	Stack	subtractAll	iterator	EXC:IndexOutOfBoundsException	init=3 elements; expected (List(),0); got EXC:IndexOutOfBoundsException
+Buffer	Stack	pushAll (Stack)	iterator	ok	
+Buffer	Stack	addAll	iterator.map	ok	
+Buffer	Stack	prependAll	iterator.map	ok	
+Buffer	Stack	insertAll(1, _)	iterator.map	ok	
+Buffer	Stack	patchInPlace(1, _, 1)	iterator.map	ok	
+Buffer	Stack	subtractAll	iterator.map	EXC:IndexOutOfBoundsException	init=3 elements; expected (List(1),1); got EXC:IndexOutOfBoundsException
+Buffer	Stack	pushAll (Stack)	iterator.map	ok	
+Buffer	Stack	addAll	to(LazyList)	ok	
+Buffer	Stack	prependAll	to(LazyList)	ok	
+Buffer	Stack	insertAll(1, _)	to(LazyList)	ok	
+Buffer	Stack	patchInPlace(1, _, 1)	to(LazyList)	WRONG	init=3 elements; expected (List(1, 1, 2, 3, 3),5); got (List(1, 1, 1, 3, 3),5)
+Buffer	Stack	subtractAll	to(LazyList)	EXC:IndexOutOfBoundsException	init=3 elements; expected (List(),0); got EXC:IndexOutOfBoundsException
+Buffer	Stack	pushAll (Stack)	to(LazyList)	ok	
+Buffer	Stack	addAll	toList (control)	ok	
+Buffer	Stack	prependAll	toList (control)	ok	
+Buffer	Stack	insertAll(1, _)	toList (control)	ok	
+Buffer	Stack	patchInPlace(1, _, 1)	toList (control)	ok	
+Buffer	Stack	subtractAll	toList (control)	ok	
+Buffer	Stack	pushAll (Stack)	toList (control)	ok	
+Buffer	Stack	addAll	view.reverse	WRONG	init=3 elements; expected (List(1, 2, 3, 3, 2, 1),6); got (List(1, 2, 3, 3, 3, 3),6)
+Buffer	Stack	prependAll	view.reverse	ok	
+Buffer	Stack	insertAll(1, _)	view.reverse	ok	
+Buffer	Stack	patchInPlace(1, _, 1)	view.reverse	WRONG	init=3 elements; expected (List(1, 3, 2, 1, 3),5); got (List(1, 3, 3, 1, 3),5)
+Buffer	Stack	subtractAll	view.reverse	EXC:IndexOutOfBoundsException	init=3 elements; expected (List(),0); got EXC:IndexOutOfBoundsException
+Buffer	Stack	pushAll (Stack)	view.reverse	ok	
+Buffer	Stack	addAll	reverseIterator	ok	
+Buffer	Stack	prependAll	reverseIterator	ok	
+Buffer	Stack	insertAll(1, _)	reverseIterator	ok	
+Buffer	Stack	patchInPlace(1, _, 1)	reverseIterator	WRONG	init=3 elements; expected (List(1, 3, 2, 1, 3),5); got (List(1, 3, 3, 1, 3),5)
+Buffer	Stack	subtractAll	reverseIterator	ok	
+Buffer	Stack	pushAll (Stack)	reverseIterator	ok	
+Buffer	Stack	addAll	view.slice(1,3)	ok	
+Buffer	Stack	prependAll	view.slice(1,3)	ok	
+Buffer	Stack	insertAll(1, _)	view.slice(1,3)	ok	
+Buffer	Stack	patchInPlace(1, _, 1)	view.slice(1,3)	ok	
+Buffer	Stack	subtractAll	view.slice(1,3)	WRONG	init=40 elements; expected (List(1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40),38); got (List(1, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40),38)
+Buffer	Stack	pushAll (Stack)	view.slice(1,3)	ok	
+Buffer	Stack	mapInPlace	f = x + self.head	WRONG	init=3 elements; expected (List(2, 3, 4),3); got (List(2, 4, 5),3)
+Buffer	Stack	mapInPlace	f = x + self.last	ok	
+Buffer	Stack	filterInPlace	p = !self.contains(x+1)	ok	
+Buffer	Stack	filterInPlace	p = self.length is even	ok	
+Buffer	Stack	flatMapInPlace	f = self.view.take(2)	WRONG	init=3 elements; expected (List(1, 2, 1, 2, 1, 2),6); got (List(),0)
+Buffer	Stack	flatMapInPlace	f = self.iterator.take(2)	EXC:IndexOutOfBoundsException	init=3 elements; expected (List(1, 2, 1, 2, 1, 2),6); got EXC:IndexOutOfBoundsException
+Buffer	Stack	dropWhileInPlace	p = x < self.last	ok	
+Buffer	Stack	takeWhileInPlace	p = x < self.length	ok	
+Buffer	UnrolledBuffer	addAll	self	ok	
+Buffer	UnrolledBuffer	prependAll	self	ok	
+Buffer	UnrolledBuffer	insertAll(1, _)	self	ok	
+Buffer	UnrolledBuffer	patchInPlace(1, _, 1)	self	ok	
+Buffer	UnrolledBuffer	subtractAll	self	ok	
+Buffer	UnrolledBuffer	pushAll (Stack)	self	n/a	
+Buffer	UnrolledBuffer	addAll	view	HANG	init=3 elements; expected (List(1, 2, 3, 1, 2, 3),6); got HANG
+Buffer	UnrolledBuffer	prependAll	view	WRONG	init=3 elements; expected (List(1, 2, 3, 1, 2, 3),6); got (List(1, 2, 3),3)
+Buffer	UnrolledBuffer	insertAll(1, _)	view	WRONG	init=3 elements; expected (List(1, 1, 2, 3, 2, 3),6); got (List(1, 1, 2, 3),4)
+Buffer	UnrolledBuffer	patchInPlace(1, _, 1)	view	WRONG	init=3 elements; expected (List(1, 1, 2, 3, 3),5); got (List(1, 1, 3),3)
+Buffer	UnrolledBuffer	subtractAll	view	WRONG	init=3 elements; expected (List(),0); got (List(2),1)
+Buffer	UnrolledBuffer	pushAll (Stack)	view	n/a	
+Buffer	UnrolledBuffer	addAll	view.map	HANG	init=3 elements; expected (List(1, 2, 3, 2, 3, 4),6); got HANG
+Buffer	UnrolledBuffer	prependAll	view.map	WRONG	init=3 elements; expected (List(2, 3, 4, 1, 2, 3),6); got (List(1, 2, 3),3)
+Buffer	UnrolledBuffer	insertAll(1, _)	view.map	WRONG	init=3 elements; expected (List(1, 2, 3, 4, 2, 3),6); got (List(1, 2, 2, 3),4)
+Buffer	UnrolledBuffer	patchInPlace(1, _, 1)	view.map	WRONG	init=3 elements; expected (List(1, 2, 3, 4, 3),5); got (List(1, 2, 3),3)
+Buffer	UnrolledBuffer	subtractAll	view.map	WRONG	init=3 elements; expected (List(1),1); got (List(1, 3),2)
+Buffer	UnrolledBuffer	pushAll (Stack)	view.map	n/a	
+Buffer	UnrolledBuffer	addAll	view.filter	HANG	init=3 elements; expected (List(1, 2, 3, 1, 3),5); got HANG
+Buffer	UnrolledBuffer	prependAll	view.map	HANG(heap exhausted)	the driver ran out of heap
+Buffer	UnrolledBuffer	insertAll(1, _)	view.filter	WRONG	init=3 elements; expected (List(1, 1, 3, 2, 3),5); got (List(1, 1, 2, 3),4)
+Buffer	UnrolledBuffer	patchInPlace(1, _, 1)	view.filter	WRONG	init=3 elements; expected (List(1, 1, 3, 3),4); got (List(1, 1, 3),3)
+Buffer	UnrolledBuffer	subtractAll	view.filter	ok	
+Buffer	UnrolledBuffer	pushAll (Stack)	view.filter	n/a	
+Buffer	UnrolledBuffer	addAll	view.take(2)	ok	
+Buffer	UnrolledBuffer	prependAll	view.take(2)	WRONG	init=3 elements; expected (List(1, 2, 1, 2, 3),5); got (List(1, 2, 3),3)
+Buffer	UnrolledBuffer	insertAll(1, _)	view.take(2)	WRONG	init=3 elements; expected (List(1, 1, 2, 2, 3),5); got (List(1, 1, 2, 3),4)
+Buffer	UnrolledBuffer	patchInPlace(1, _, 1)	view.take(2)	WRONG	init=3 elements; expected (List(1, 1, 2, 3),4); got (List(1, 1, 3),3)
+Buffer	UnrolledBuffer	subtractAll	view.take(2)	WRONG	init=3 elements; expected (List(3),1); got (List(2),1)
+Buffer	UnrolledBuffer	pushAll (Stack)	view.take(2)	n/a	
+Buffer	UnrolledBuffer	addAll	iterator	HANG(heap exhausted)	init=3 elements; expected (List(1, 2, 3, 1, 2, 3),6); got HANG(heap exhausted)
+Buffer	UnrolledBuffer	prependAll	iterator	WRONG	init=3 elements; expected (List(1, 2, 3, 1, 2, 3),6); got (List(0, 1, 2, 3),4)
+Buffer	UnrolledBuffer	insertAll(1, _)	iterator	WRONG	init=3 elements; expected (List(1, 1, 2, 3, 2, 3),6); got (List(1, 1, 2, 3),4)
+Buffer	UnrolledBuffer	patchInPlace(1, _, 1)	iterator	WRONG	init=3 elements; expected (List(1, 1, 2, 3, 3),5); got (List(1, 1, 3),3)
+Buffer	UnrolledBuffer	subtractAll	iterator	WRONG	init=3 elements; expected (List(),0); got (List(2),1)
+Buffer	UnrolledBuffer	pushAll (Stack)	iterator	n/a	
+Buffer	UnrolledBuffer	addAll	iterator.map	HANG	init=3 elements; expected (List(1, 2, 3, 2, 3, 4),6); got HANG
+Buffer	UnrolledBuffer	prependAll	iterator.map	WRONG	init=3 elements; expected (List(2, 3, 4, 1, 2, 3),6); got (List(1, 1, 2, 3),4)
+Buffer	UnrolledBuffer	insertAll(1, _)	iterator.map	WRONG	init=3 elements; expected (List(1, 2, 3, 4, 2, 3),6); got (List(1, 2, 2, 3),4)
+Buffer	UnrolledBuffer	patchInPlace(1, _, 1)	iterator.map	WRONG	init=3 elements; expected (List(1, 2, 3, 4, 3),5); got (List(1, 2, 3),3)
+Buffer	UnrolledBuffer	subtractAll	iterator.map	WRONG	init=3 elements; expected (List(1),1); got (List(1, 3),2)
+Buffer	UnrolledBuffer	pushAll (Stack)	iterator.map	n/a	
+Buffer	UnrolledBuffer	addAll	to(LazyList)	HANG	init=3 elements; expected (List(1, 2, 3, 1, 2, 3),6); got HANG
+Buffer	UnrolledBuffer	prependAll	to(LazyList)	WRONG	init=3 elements; expected (List(1, 2, 3, 1, 2, 3),6); got (List(1, 2, 3),3)
+Buffer	UnrolledBuffer	insertAll(1, _)	to(LazyList)	WRONG	init=3 elements; expected (List(1, 1, 2, 3, 2, 3),6); got (List(1, 1, 2, 3),4)
+Buffer	UnrolledBuffer	patchInPlace(1, _, 1)	to(LazyList)	WRONG	init=3 elements; expected (List(1, 1, 2, 3, 3),5); got (List(1, 1, 3),3)
+Buffer	UnrolledBuffer	subtractAll	to(LazyList)	WRONG	init=3 elements; expected (List(),0); got (List(2),1)
+Buffer	UnrolledBuffer	pushAll (Stack)	to(LazyList)	n/a	
+Buffer	UnrolledBuffer	addAll	toList (control)	ok	
+Buffer	UnrolledBuffer	prependAll	toList (control)	ok	
+Buffer	UnrolledBuffer	insertAll(1, _)	toList (control)	ok	
+Buffer	UnrolledBuffer	patchInPlace(1, _, 1)	toList (control)	ok	
+Buffer	UnrolledBuffer	subtractAll	toList (control)	ok	
+Buffer	UnrolledBuffer	pushAll (Stack)	toList (control)	n/a	
+Buffer	UnrolledBuffer	addAll	view.reverse	ok	
+Buffer	UnrolledBuffer	prependAll	view.reverse	WRONG	init=3 elements; expected (List(3, 2, 1, 1, 2, 3),6); got (List(1, 2, 3),3)
+Buffer	UnrolledBuffer	insertAll(1, _)	view.reverse	WRONG	init=3 elements; expected (List(1, 3, 2, 1, 2, 3),6); got (List(1, 1, 2, 3),4)
+Buffer	UnrolledBuffer	patchInPlace(1, _, 1)	view.reverse	WRONG	init=3 elements; expected (List(1, 3, 2, 1, 3),5); got (List(1, 1, 3),3)
+Buffer	UnrolledBuffer	subtractAll	view.reverse	ok	
+Buffer	UnrolledBuffer	pushAll (Stack)	view.reverse	n/a	
+Buffer	UnrolledBuffer	addAll	reverseIterator	ok	
+Buffer	UnrolledBuffer	prependAll	reverseIterator	ok	
+Buffer	UnrolledBuffer	insertAll(1, _)	reverseIterator	ok	
+Buffer	UnrolledBuffer	patchInPlace(1, _, 1)	reverseIterator	ok	
+Buffer	UnrolledBuffer	subtractAll	reverseIterator	ok	
+Buffer	UnrolledBuffer	pushAll (Stack)	reverseIterator	n/a	
+Buffer	UnrolledBuffer	addAll	view.slice(1,3)	ok	
+Buffer	UnrolledBuffer	prependAll	view.slice(1,3)	WRONG	init=3 elements; expected (List(2, 3, 1, 2, 3),5); got (List(1, 2, 3),3)
+Buffer	UnrolledBuffer	insertAll(1, _)	view.slice(1,3)	WRONG	init=3 elements; expected (List(1, 2, 3, 2, 3),5); got (List(1, 2, 3),3)
+Buffer	UnrolledBuffer	patchInPlace(1, _, 1)	view.slice(1,3)	WRONG	init=3 elements; expected (List(1, 2, 3, 3),4); got (List(1, 3),2)
+Buffer	UnrolledBuffer	subtractAll	view.slice(1,3)	WRONG	init=3 elements; expected (List(1),1); got (List(1, 3),2)
+Buffer	UnrolledBuffer	pushAll (Stack)	view.slice(1,3)	n/a	
+Buffer	UnrolledBuffer	mapInPlace	f = x + self.head	n/a	
+Buffer	UnrolledBuffer	mapInPlace	f = x + self.last	n/a	
+Buffer	UnrolledBuffer	filterInPlace	p = !self.contains(x+1)	n/a	
+Buffer	UnrolledBuffer	filterInPlace	p = self.length is even	n/a	
+Buffer	UnrolledBuffer	flatMapInPlace	f = self.view.take(2)	n/a	
+Buffer	UnrolledBuffer	flatMapInPlace	f = self.iterator.take(2)	n/a	
+Buffer	UnrolledBuffer	dropWhileInPlace	p = x < self.last	ok	
+Buffer	UnrolledBuffer	takeWhileInPlace	p = x < self.length	ok	
+Buffer	ju.ArrayList.asScala	addAll	self	ok	
+Buffer	ju.ArrayList.asScala	prependAll	self	CME	init=3 elements; expected (List(1, 2, 3, 1, 2, 3),6); got EXC:ConcurrentModificationException
+Buffer	ju.ArrayList.asScala	insertAll(1, _)	self	CME	init=3 elements; expected (List(1, 1, 2, 3, 2, 3),6); got EXC:ConcurrentModificationException
+Buffer	ju.ArrayList.asScala	patchInPlace(1, _, 1)	self	CME	init=3 elements; expected (List(1, 1, 2, 3, 3),5); got EXC:ConcurrentModificationException
+Buffer	ju.ArrayList.asScala	subtractAll	self	ok	
+Buffer	ju.ArrayList.asScala	pushAll (Stack)	self	n/a	
+Buffer	ju.ArrayList.asScala	addAll	view	CME	init=3 elements; expected (List(1, 2, 3, 1, 2, 3),6); got EXC:ConcurrentModificationException
+Buffer	ju.ArrayList.asScala	prependAll	view	CME	init=3 elements; expected (List(1, 2, 3, 1, 2, 3),6); got EXC:ConcurrentModificationException
+Buffer	ju.ArrayList.asScala	insertAll(1, _)	view	CME	init=3 elements; expected (List(1, 1, 2, 3, 2, 3),6); got EXC:ConcurrentModificationException
+Buffer	ju.ArrayList.asScala	patchInPlace(1, _, 1)	view	CME	init=3 elements; expected (List(1, 1, 2, 3, 3),5); got EXC:ConcurrentModificationException
+Buffer	ju.ArrayList.asScala	subtractAll	view	CME	init=3 elements; expected (List(),0); got EXC:ConcurrentModificationException
+Buffer	ju.ArrayList.asScala	pushAll (Stack)	view	n/a	
+Buffer	ju.ArrayList.asScala	addAll	view.map	CME	init=3 elements; expected (List(1, 2, 3, 2, 3, 4),6); got EXC:ConcurrentModificationException
+Buffer	ju.ArrayList.asScala	prependAll	view.map	CME	init=3 elements; expected (List(2, 3, 4, 1, 2, 3),6); got EXC:ConcurrentModificationException
+Buffer	ju.ArrayList.asScala	insertAll(1, _)	view.map	CME	init=3 elements; expected (List(1, 2, 3, 4, 2, 3),6); got EXC:ConcurrentModificationException
+Buffer	ju.ArrayList.asScala	patchInPlace(1, _, 1)	view.map	CME	init=3 elements; expected (List(1, 2, 3, 4, 3),5); got EXC:ConcurrentModificationException
+Buffer	ju.ArrayList.asScala	subtractAll	view.map	CME	init=3 elements; expected (List(1),1); got EXC:ConcurrentModificationException
+Buffer	ju.ArrayList.asScala	pushAll (Stack)	view.map	n/a	
+Buffer	ju.ArrayList.asScala	addAll	view.filter	CME	init=3 elements; expected (List(1, 2, 3, 1, 3),5); got EXC:ConcurrentModificationException
+Buffer	ju.ArrayList.asScala	prependAll	view.filter	CME	init=3 elements; expected (List(1, 3, 1, 2, 3),5); got EXC:ConcurrentModificationException
+Buffer	ju.ArrayList.asScala	insertAll(1, _)	view.filter	CME	init=3 elements; expected (List(1, 1, 3, 2, 3),5); got EXC:ConcurrentModificationException
+Buffer	ju.ArrayList.asScala	patchInPlace(1, _, 1)	view.filter	CME	init=3 elements; expected (List(1, 1, 3, 3),4); got EXC:ConcurrentModificationException
+Buffer	ju.ArrayList.asScala	subtractAll	view.filter	CME	init=3 elements; expected (List(2),1); got EXC:ConcurrentModificationException
+Buffer	ju.ArrayList.asScala	pushAll (Stack)	view.filter	n/a	
+Buffer	ju.ArrayList.asScala	addAll	view.take(2)	CME	init=3 elements; expected (List(1, 2, 3, 1, 2),5); got EXC:ConcurrentModificationException
+Buffer	ju.ArrayList.asScala	prependAll	view.take(2)	CME	init=3 elements; expected (List(1, 2, 1, 2, 3),5); got EXC:ConcurrentModificationException
+Buffer	ju.ArrayList.asScala	insertAll(1, _)	view.take(2)	CME	init=3 elements; expected (List(1, 1, 2, 2, 3),5); got EXC:ConcurrentModificationException
+Buffer	ju.ArrayList.asScala	patchInPlace(1, _, 1)	view.take(2)	CME	init=3 elements; expected (List(1, 1, 2, 3),4); got EXC:ConcurrentModificationException
+Buffer	ju.ArrayList.asScala	subtractAll	view.take(2)	CME	init=3 elements; expected (List(3),1); got EXC:ConcurrentModificationException
+Buffer	ju.ArrayList.asScala	pushAll (Stack)	view.take(2)	n/a	
+Buffer	ju.ArrayList.asScala	addAll	iterator	CME	init=3 elements; expected (List(1, 2, 3, 1, 2, 3),6); got EXC:ConcurrentModificationException
+Buffer	ju.ArrayList.asScala	prependAll	iterator	CME	init=3 elements; expected (List(1, 2, 3, 1, 2, 3),6); got EXC:ConcurrentModificationException
+Buffer	ju.ArrayList.asScala	insertAll(1, _)	iterator	CME	init=3 elements; expected (List(1, 1, 2, 3, 2, 3),6); got EXC:ConcurrentModificationException
+Buffer	ju.ArrayList.asScala	patchInPlace(1, _, 1)	iterator	CME	init=3 elements; expected (List(1, 1, 2, 3, 3),5); got EXC:ConcurrentModificationException
+Buffer	ju.ArrayList.asScala	subtractAll	iterator	CME	init=3 elements; expected (List(),0); got EXC:ConcurrentModificationException
+Buffer	ju.ArrayList.asScala	pushAll (Stack)	iterator	n/a	
+Buffer	ju.ArrayList.asScala	addAll	iterator.map	CME	init=3 elements; expected (List(1, 2, 3, 2, 3, 4),6); got EXC:ConcurrentModificationException
+Buffer	ju.ArrayList.asScala	prependAll	iterator.map	CME	init=3 elements; expected (List(2, 3, 4, 1, 2, 3),6); got EXC:ConcurrentModificationException
+Buffer	ju.ArrayList.asScala	insertAll(1, _)	iterator.map	CME	init=3 elements; expected (List(1, 2, 3, 4, 2, 3),6); got EXC:ConcurrentModificationException
+Buffer	ju.ArrayList.asScala	patchInPlace(1, _, 1)	iterator.map	CME	init=3 elements; expected (List(1, 2, 3, 4, 3),5); got EXC:ConcurrentModificationException
+Buffer	ju.ArrayList.asScala	subtractAll	iterator.map	CME	init=3 elements; expected (List(1),1); got EXC:ConcurrentModificationException
+Buffer	ju.ArrayList.asScala	pushAll (Stack)	iterator.map	n/a	
+Buffer	ju.ArrayList.asScala	addAll	to(LazyList)	CME	init=3 elements; expected (List(1, 2, 3, 1, 2, 3),6); got EXC:ConcurrentModificationException
+Buffer	ju.ArrayList.asScala	prependAll	to(LazyList)	CME	init=3 elements; expected (List(1, 2, 3, 1, 2, 3),6); got EXC:ConcurrentModificationException
+Buffer	ju.ArrayList.asScala	insertAll(1, _)	to(LazyList)	CME	init=3 elements; expected (List(1, 1, 2, 3, 2, 3),6); got EXC:ConcurrentModificationException
+Buffer	ju.ArrayList.asScala	patchInPlace(1, _, 1)	to(LazyList)	CME	init=3 elements; expected (List(1, 1, 2, 3, 3),5); got EXC:ConcurrentModificationException
+Buffer	ju.ArrayList.asScala	subtractAll	to(LazyList)	CME	init=3 elements; expected (List(),0); got EXC:ConcurrentModificationException
+Buffer	ju.ArrayList.asScala	pushAll (Stack)	to(LazyList)	n/a	
+Buffer	ju.ArrayList.asScala	addAll	toList (control)	ok	
+Buffer	ju.ArrayList.asScala	prependAll	toList (control)	ok	
+Buffer	ju.ArrayList.asScala	insertAll(1, _)	toList (control)	ok	
+Buffer	ju.ArrayList.asScala	patchInPlace(1, _, 1)	toList (control)	ok	
+Buffer	ju.ArrayList.asScala	subtractAll	toList (control)	ok	
+Buffer	ju.ArrayList.asScala	pushAll (Stack)	toList (control)	n/a	
+Buffer	ju.ArrayList.asScala	addAll	view.reverse	ok	
+Buffer	ju.ArrayList.asScala	prependAll	view.reverse	ok	
+Buffer	ju.ArrayList.asScala	insertAll(1, _)	view.reverse	ok	
+Buffer	ju.ArrayList.asScala	patchInPlace(1, _, 1)	view.reverse	WRONG	init=3 elements; expected (List(1, 3, 2, 1, 3),5); got (List(1, 3, 1, 3),4)
+Buffer	ju.ArrayList.asScala	subtractAll	view.reverse	ok	
+Buffer	ju.ArrayList.asScala	pushAll (Stack)	view.reverse	n/a	
+Buffer	ju.ArrayList.asScala	addAll	reverseIterator	ok	
+Buffer	ju.ArrayList.asScala	prependAll	reverseIterator	ok	
+Buffer	ju.ArrayList.asScala	insertAll(1, _)	reverseIterator	ok	
+Buffer	ju.ArrayList.asScala	patchInPlace(1, _, 1)	reverseIterator	ok	
+Buffer	ju.ArrayList.asScala	subtractAll	reverseIterator	ok	
+Buffer	ju.ArrayList.asScala	pushAll (Stack)	reverseIterator	n/a	
+Buffer	ju.ArrayList.asScala	addAll	view.slice(1,3)	CME	init=3 elements; expected (List(1, 2, 3, 2, 3),5); got EXC:ConcurrentModificationException
+Buffer	ju.ArrayList.asScala	prependAll	view.slice(1,3)	CME	init=3 elements; expected (List(2, 3, 1, 2, 3),5); got EXC:ConcurrentModificationException
+Buffer	ju.ArrayList.asScala	insertAll(1, _)	view.slice(1,3)	CME	init=3 elements; expected (List(1, 2, 3, 2, 3),5); got EXC:ConcurrentModificationException
+Buffer	ju.ArrayList.asScala	patchInPlace(1, _, 1)	view.slice(1,3)	CME	init=3 elements; expected (List(1, 2, 3, 3),4); got EXC:ConcurrentModificationException
+Buffer	ju.ArrayList.asScala	subtractAll	view.slice(1,3)	WRONG	init=3 elements; expected (List(1),1); got (List(1, 3),2)
+Buffer	ju.ArrayList.asScala	pushAll (Stack)	view.slice(1,3)	n/a	
+Buffer	ju.ArrayList.asScala	mapInPlace	f = x + self.head	n/a	
+Buffer	ju.ArrayList.asScala	mapInPlace	f = x + self.last	n/a	
+Buffer	ju.ArrayList.asScala	filterInPlace	p = !self.contains(x+1)	n/a	
+Buffer	ju.ArrayList.asScala	filterInPlace	p = self.length is even	n/a	
+Buffer	ju.ArrayList.asScala	flatMapInPlace	f = self.view.take(2)	n/a	
+Buffer	ju.ArrayList.asScala	flatMapInPlace	f = self.iterator.take(2)	n/a	
+Buffer	ju.ArrayList.asScala	dropWhileInPlace	p = x < self.last	ok	
+Buffer	ju.ArrayList.asScala	takeWhileInPlace	p = x < self.length	ok	
+Buffer	ju.LinkedList.asScala	addAll	self	ok	
+Buffer	ju.LinkedList.asScala	prependAll	self	CME	init=3 elements; expected (List(1, 2, 3, 1, 2, 3),6); got EXC:ConcurrentModificationException
+Buffer	ju.LinkedList.asScala	insertAll(1, _)	self	CME	init=3 elements; expected (List(1, 1, 2, 3, 2, 3),6); got EXC:ConcurrentModificationException
+Buffer	ju.LinkedList.asScala	patchInPlace(1, _, 1)	self	CME	init=3 elements; expected (List(1, 1, 2, 3, 3),5); got EXC:ConcurrentModificationException
+Buffer	ju.LinkedList.asScala	subtractAll	self	ok	
+Buffer	ju.LinkedList.asScala	pushAll (Stack)	self	n/a	
+Buffer	ju.LinkedList.asScala	addAll	view	CME	init=3 elements; expected (List(1, 2, 3, 1, 2, 3),6); got EXC:ConcurrentModificationException
+Buffer	ju.LinkedList.asScala	prependAll	view	CME	init=3 elements; expected (List(1, 2, 3, 1, 2, 3),6); got EXC:ConcurrentModificationException
+Buffer	ju.LinkedList.asScala	insertAll(1, _)	view	CME	init=3 elements; expected (List(1, 1, 2, 3, 2, 3),6); got EXC:ConcurrentModificationException
+Buffer	ju.LinkedList.asScala	patchInPlace(1, _, 1)	view	CME	init=3 elements; expected (List(1, 1, 2, 3, 3),5); got EXC:ConcurrentModificationException
+Buffer	ju.LinkedList.asScala	subtractAll	view	CME	init=3 elements; expected (List(),0); got EXC:ConcurrentModificationException
+Buffer	ju.LinkedList.asScala	pushAll (Stack)	view	n/a	
+Buffer	ju.LinkedList.asScala	addAll	view.map	CME	init=3 elements; expected (List(1, 2, 3, 2, 3, 4),6); got EXC:ConcurrentModificationException
+Buffer	ju.LinkedList.asScala	prependAll	view.map	CME	init=3 elements; expected (List(2, 3, 4, 1, 2, 3),6); got EXC:ConcurrentModificationException
+Buffer	ju.LinkedList.asScala	insertAll(1, _)	view.map	CME	init=3 elements; expected (List(1, 2, 3, 4, 2, 3),6); got EXC:ConcurrentModificationException
+Buffer	ju.LinkedList.asScala	patchInPlace(1, _, 1)	view.map	CME	init=3 elements; expected (List(1, 2, 3, 4, 3),5); got EXC:ConcurrentModificationException
+Buffer	ju.LinkedList.asScala	subtractAll	view.map	CME	init=3 elements; expected (List(1),1); got EXC:ConcurrentModificationException
+Buffer	ju.LinkedList.asScala	pushAll (Stack)	view.map	n/a	
+Buffer	ju.LinkedList.asScala	addAll	view.filter	CME	init=3 elements; expected (List(1, 2, 3, 1, 3),5); got EXC:ConcurrentModificationException
+Buffer	ju.LinkedList.asScala	prependAll	view.filter	CME	init=3 elements; expected (List(1, 3, 1, 2, 3),5); got EXC:ConcurrentModificationException
+Buffer	ju.LinkedList.asScala	insertAll(1, _)	view.filter	CME	init=3 elements; expected (List(1, 1, 3, 2, 3),5); got EXC:ConcurrentModificationException
+Buffer	ju.LinkedList.asScala	patchInPlace(1, _, 1)	view.filter	CME	init=3 elements; expected (List(1, 1, 3, 3),4); got EXC:ConcurrentModificationException
+Buffer	ju.LinkedList.asScala	subtractAll	view.filter	CME	init=3 elements; expected (List(2),1); got EXC:ConcurrentModificationException
+Buffer	ju.LinkedList.asScala	pushAll (Stack)	view.filter	n/a	
+Buffer	ju.LinkedList.asScala	addAll	view.take(2)	CME	init=3 elements; expected (List(1, 2, 3, 1, 2),5); got EXC:ConcurrentModificationException
+Buffer	ju.LinkedList.asScala	prependAll	view.take(2)	CME	init=3 elements; expected (List(1, 2, 1, 2, 3),5); got EXC:ConcurrentModificationException
+Buffer	ju.LinkedList.asScala	insertAll(1, _)	view.take(2)	CME	init=3 elements; expected (List(1, 1, 2, 2, 3),5); got EXC:ConcurrentModificationException
+Buffer	ju.LinkedList.asScala	patchInPlace(1, _, 1)	view.take(2)	CME	init=3 elements; expected (List(1, 1, 2, 3),4); got EXC:ConcurrentModificationException
+Buffer	ju.LinkedList.asScala	subtractAll	view.take(2)	CME	init=3 elements; expected (List(3),1); got EXC:ConcurrentModificationException
+Buffer	ju.LinkedList.asScala	pushAll (Stack)	view.take(2)	n/a	
+Buffer	ju.LinkedList.asScala	addAll	iterator	CME	init=3 elements; expected (List(1, 2, 3, 1, 2, 3),6); got EXC:ConcurrentModificationException
+Buffer	ju.LinkedList.asScala	prependAll	iterator	CME	init=3 elements; expected (List(1, 2, 3, 1, 2, 3),6); got EXC:ConcurrentModificationException
+Buffer	ju.LinkedList.asScala	insertAll(1, _)	iterator	CME	init=3 elements; expected (List(1, 1, 2, 3, 2, 3),6); got EXC:ConcurrentModificationException
+Buffer	ju.LinkedList.asScala	patchInPlace(1, _, 1)	iterator	CME	init=3 elements; expected (List(1, 1, 2, 3, 3),5); got EXC:ConcurrentModificationException
+Buffer	ju.LinkedList.asScala	subtractAll	iterator	CME	init=3 elements; expected (List(),0); got EXC:ConcurrentModificationException
+Buffer	ju.LinkedList.asScala	pushAll (Stack)	iterator	n/a	
+Buffer	ju.LinkedList.asScala	addAll	iterator.map	CME	init=3 elements; expected (List(1, 2, 3, 2, 3, 4),6); got EXC:ConcurrentModificationException
+Buffer	ju.LinkedList.asScala	prependAll	iterator.map	CME	init=3 elements; expected (List(2, 3, 4, 1, 2, 3),6); got EXC:ConcurrentModificationException
+Buffer	ju.LinkedList.asScala	insertAll(1, _)	iterator.map	CME	init=3 elements; expected (List(1, 2, 3, 4, 2, 3),6); got EXC:ConcurrentModificationException
+Buffer	ju.LinkedList.asScala	patchInPlace(1, _, 1)	iterator.map	CME	init=3 elements; expected (List(1, 2, 3, 4, 3),5); got EXC:ConcurrentModificationException
+Buffer	ju.LinkedList.asScala	subtractAll	iterator.map	CME	init=3 elements; expected (List(1),1); got EXC:ConcurrentModificationException
+Buffer	ju.LinkedList.asScala	pushAll (Stack)	iterator.map	n/a	
+Buffer	ju.LinkedList.asScala	addAll	to(LazyList)	CME	init=3 elements; expected (List(1, 2, 3, 1, 2, 3),6); got EXC:ConcurrentModificationException
+Buffer	ju.LinkedList.asScala	prependAll	to(LazyList)	CME	init=3 elements; expected (List(1, 2, 3, 1, 2, 3),6); got EXC:ConcurrentModificationException
+Buffer	ju.LinkedList.asScala	insertAll(1, _)	to(LazyList)	CME	init=3 elements; expected (List(1, 1, 2, 3, 2, 3),6); got EXC:ConcurrentModificationException
+Buffer	ju.LinkedList.asScala	patchInPlace(1, _, 1)	to(LazyList)	CME	init=3 elements; expected (List(1, 1, 2, 3, 3),5); got EXC:ConcurrentModificationException
+Buffer	ju.LinkedList.asScala	subtractAll	to(LazyList)	CME	init=3 elements; expected (List(),0); got EXC:ConcurrentModificationException
+Buffer	ju.LinkedList.asScala	pushAll (Stack)	to(LazyList)	n/a	
+Buffer	ju.LinkedList.asScala	addAll	toList (control)	ok	
+Buffer	ju.LinkedList.asScala	prependAll	toList (control)	ok	
+Buffer	ju.LinkedList.asScala	insertAll(1, _)	toList (control)	ok	
+Buffer	ju.LinkedList.asScala	patchInPlace(1, _, 1)	toList (control)	ok	
+Buffer	ju.LinkedList.asScala	subtractAll	toList (control)	ok	
+Buffer	ju.LinkedList.asScala	pushAll (Stack)	toList (control)	n/a	
+Buffer	ju.LinkedList.asScala	addAll	view.reverse	ok	
+Buffer	ju.LinkedList.asScala	prependAll	view.reverse	ok	
+Buffer	ju.LinkedList.asScala	insertAll(1, _)	view.reverse	ok	
+Buffer	ju.LinkedList.asScala	patchInPlace(1, _, 1)	view.reverse	WRONG	init=3 elements; expected (List(1, 3, 2, 1, 3),5); got (List(1, 3, 1, 3),4)
+Buffer	ju.LinkedList.asScala	subtractAll	view.reverse	ok	
+Buffer	ju.LinkedList.asScala	pushAll (Stack)	view.reverse	n/a	
+Buffer	ju.LinkedList.asScala	addAll	reverseIterator	ok	
+Buffer	ju.LinkedList.asScala	prependAll	reverseIterator	ok	
+Buffer	ju.LinkedList.asScala	insertAll(1, _)	reverseIterator	ok	
+Buffer	ju.LinkedList.asScala	patchInPlace(1, _, 1)	reverseIterator	ok	
+Buffer	ju.LinkedList.asScala	subtractAll	reverseIterator	ok	
+Buffer	ju.LinkedList.asScala	pushAll (Stack)	reverseIterator	n/a	
+Buffer	ju.LinkedList.asScala	addAll	view.slice(1,3)	CME	init=3 elements; expected (List(1, 2, 3, 2, 3),5); got EXC:ConcurrentModificationException
+Buffer	ju.LinkedList.asScala	prependAll	view.slice(1,3)	CME	init=3 elements; expected (List(2, 3, 1, 2, 3),5); got EXC:ConcurrentModificationException
+Buffer	ju.LinkedList.asScala	insertAll(1, _)	view.slice(1,3)	CME	init=3 elements; expected (List(1, 2, 3, 2, 3),5); got EXC:ConcurrentModificationException
+Buffer	ju.LinkedList.asScala	patchInPlace(1, _, 1)	view.slice(1,3)	CME	init=3 elements; expected (List(1, 2, 3, 3),4); got EXC:ConcurrentModificationException
+Buffer	ju.LinkedList.asScala	subtractAll	view.slice(1,3)	WRONG	init=3 elements; expected (List(1),1); got (List(1, 3),2)
+Buffer	ju.LinkedList.asScala	pushAll (Stack)	view.slice(1,3)	n/a	
+Buffer	ju.LinkedList.asScala	mapInPlace	f = x + self.head	n/a	
+Buffer	ju.LinkedList.asScala	mapInPlace	f = x + self.last	n/a	
+Buffer	ju.LinkedList.asScala	filterInPlace	p = !self.contains(x+1)	n/a	
+Buffer	ju.LinkedList.asScala	filterInPlace	p = self.length is even	n/a	
+Buffer	ju.LinkedList.asScala	flatMapInPlace	f = self.view.take(2)	n/a	
+Buffer	ju.LinkedList.asScala	flatMapInPlace	f = self.iterator.take(2)	n/a	
+Buffer	ju.LinkedList.asScala	dropWhileInPlace	p = x < self.last	ok	
+Buffer	ju.LinkedList.asScala	takeWhileInPlace	p = x < self.length	ok	
+PriorityQueue	PriorityQueue	addAll	self	ok	
+PriorityQueue	PriorityQueue	addAll	view	ok	
+PriorityQueue	PriorityQueue	addAll	view.map	ok	
+PriorityQueue	PriorityQueue	addAll	view.filter	ok	
+PriorityQueue	PriorityQueue	addAll	view.take(2)	ok	
+PriorityQueue	PriorityQueue	addAll	iterator	ok	
+PriorityQueue	PriorityQueue	addAll	iterator.map	ok	
+PriorityQueue	PriorityQueue	addAll	to(LazyList)	ok	
+PriorityQueue	PriorityQueue	addAll	toList (control)	ok	
+PriorityQueue	PriorityQueue	addAll	reverseIterator	ok	
+PriorityQueue	PriorityQueue	addAll	dequeueAll view	ok	
+ArraySeq	ArraySeq	mapInPlace	f = x + self.head	WRONG	init=3 elements; expected List(2, 3, 4); got List(2, 4, 5)
+ArraySeq	ArraySeq	mapInPlace	f = x + self.last	ok	
+ArraySeq	ArraySeq	sortInPlaceBy	f = self(x % self.length)	WRONG	init=3 elements; expected List(2, 1, 3); got List(2, 3, 1)
+Map	HashMap	addAll	self	ok	
+Map	HashMap	addAll	view	ok	
+Map	HashMap	addAll	view.map	WRONG	init=3 elements; expected (List((1,2), (2,12), (3,13), (4,14)),4); got (List((1,2), (2,12), (3,22), (4,32), (5,42), (6,52), (7,62), (8,72), (9,82), (10,92), (11,102), (12,112), (13,122), (14,132), (15,142), (16,152)),16)
+Map	HashMap	addAll	view.filter	ok	
+Map	HashMap	addAll	view.mapValues	ok	
+Map	HashMap	addAll	view.filterKeys	ok	
+Map	HashMap	addAll	iterator	ok	
+Map	HashMap	addAll	iterator.map	WRONG	init=3 elements; expected (List((1,2), (2,12), (3,13), (4,14)),4); got (List((1,2), (2,12), (3,22), (4,32), (5,42), (6,52), (7,62), (8,72), (9,82), (10,92), (11,102), (12,112), (13,122), (14,132), (15,142), (16,152)),16)
+Map	HashMap	addAll	keysIterator.map	WRONG	init=3 elements; expected (List((1,2), (2,0), (3,0), (4,0)),4); got (List((1,2), (2,0), (3,0), (4,0), (5,0), (6,0), (7,0), (8,0), (9,0), (10,0), (11,0), (12,0), (13,0), (14,0), (15,0), (16,0)),16)
+Map	HashMap	addAll	keySet.view.map	WRONG	init=3 elements; expected (List((1,2), (2,0), (3,0), (4,0)),4); got (List((1,2), (2,0), (3,0), (4,0), (5,0), (6,0), (7,0), (8,0), (9,0), (10,0), (11,0), (12,0), (13,0), (14,0), (15,0), (16,0)),16)
+Map	HashMap	addAll	values.view.map	ok	
+Map	HashMap	addAll	to(LazyList)	ok	
+Map	HashMap	addAll	toList (control)	ok	
+Map	HashMap	subtractAll	keySet	ok	
+Map	HashMap	subtractAll	keys	ok	
+Map	HashMap	subtractAll	keysIterator	ok	
+Map	HashMap	subtractAll	keySet.view.filter	ok	
+Map	HashMap	subtractAll	keySet.view.map(_+1)	WRONG	init=3 elements; expected (List((1,2)),1); got (List((1,2), (3,4)),2)
+Map	HashMap	subtractAll	view.map(_._1)	ok	
+Map	HashMap	subtractAll	values.map(key)	ok	
+Map	HashMap	subtractAll	valuesIterator.map(key)	WRONG	init=3 elements; expected (List((1,2)),1); got (List((1,2), (3,4)),2)
+Map	HashMap	subtractAll	keySet.toList (control)	ok	
+Map	HashMap	filterInPlace	p = !self.contains(k+1)	ok	
+Map	HashMap	filterInPlace	p = self.size is even	WRONG	init=3 elements; expected (List(),0); got (List((2,3), (3,4)),2)
+Map	HashMap	mapValuesInPlace	f = self.getOrElse(k+1, 0)	ok	
+Map	HashMap	getOrElseUpdate(new, _)	default adds 1 key	ok	
+Map	HashMap	getOrElseUpdate(new, _)	default adds 64 keys	ok	
+Map	HashMap	getOrElseUpdate(new, _)	default removes a key	ok	
+Map	HashMap	getOrElseUpdate(new, _)	default clears	ok	
+Map	HashMap	getOrElseUpdate(new, _)	default adds the key	ok	
+Map	HashMap	updateWith(present)	f adds 1 key	ok	
+Map	HashMap	updateWith(present)	f adds 64 keys	ok	
+Map	HashMap	updateWith(present)	f removes the key	WRONG	init=3 elements; expected (List((1,7), (2,3), (3,4)),3); got (List((2,3), (3,4)),2)
+Map	HashMap	updateWith(present)	f clears	WRONG	init=3 elements; expected (List((1,7)),1); got (List(),0)
+Map	HashMap	updateWith(present)	f adds 64 keys, returns None	ok	
+Map	HashMap	updateWith(absent)	f adds 64 keys	ok	
+Map	HashMap	updateWith(absent)	f adds the key	ok	
+Map	LinkedHashMap	addAll	self	ok	
+Map	LinkedHashMap	addAll	view	ok	
+Map	LinkedHashMap	addAll	view.map	WRONG	init=3 elements; expected (List((1,2), (2,12), (3,13), (4,14)),4); got (List((1,2), (2,12), (3,22), (4,32)),4)
+Map	LinkedHashMap	addAll	view.filter	ok	
+Map	LinkedHashMap	addAll	view.mapValues	ok	
+Map	LinkedHashMap	addAll	view.filterKeys	ok	
+Map	LinkedHashMap	addAll	iterator	ok	
+Map	LinkedHashMap	addAll	iterator.map	WRONG	init=3 elements; expected (List((1,2), (2,12), (3,13), (4,14)),4); got (List((1,2), (2,12), (3,22), (4,32)),4)
+Map	LinkedHashMap	addAll	keysIterator.map	ok	
+Map	LinkedHashMap	addAll	keySet.view.map	ok	
+Map	LinkedHashMap	addAll	values.view.map	ok	
+Map	LinkedHashMap	addAll	to(LazyList)	ok	
+Map	LinkedHashMap	addAll	toList (control)	ok	
+Map	LinkedHashMap	subtractAll	keySet	ok	
+Map	LinkedHashMap	subtractAll	keys	ok	
+Map	LinkedHashMap	subtractAll	keysIterator	ok	
+Map	LinkedHashMap	subtractAll	keySet.view.filter	ok	
+Map	LinkedHashMap	subtractAll	keySet.view.map(_+1)	WRONG	init=40 elements; expected (List((1,2)),1); got (List((1,2), (4,5), (5,6), (6,7), (7,8), (8,9), (9,10), (10,11), (11,12), (12,13), (13,14), (14,15), (15,16), (16,17), (17,18), (18,19), (19,20), (20,21), (21,2...
+Map	LinkedHashMap	subtractAll	view.map(_._1)	ok	
+Map	LinkedHashMap	subtractAll	values.map(key)	ok	
+Map	LinkedHashMap	subtractAll	valuesIterator.map(key)	WRONG	init=40 elements; expected (List((1,2)),1); got (List((1,2), (4,5), (5,6), (6,7), (7,8), (8,9), (9,10), (10,11), (11,12), (12,13), (13,14), (14,15), (15,16), (16,17), (17,18), (18,19), (19,20), (20,21), (21,2...
+Map	LinkedHashMap	subtractAll	keySet.toList (control)	ok	
+Map	LinkedHashMap	filterInPlace	p = !self.contains(k+1)	ok	
+Map	LinkedHashMap	filterInPlace	p = self.size is even	WRONG	init=3 elements; expected (List(),0); got (List((2,3), (3,4)),2)
+Map	LinkedHashMap	mapValuesInPlace	f = self.getOrElse(k+1, 0)	ok	
+Map	LinkedHashMap	getOrElseUpdate(new, _)	default adds 1 key	ok	
+Map	LinkedHashMap	getOrElseUpdate(new, _)	default adds 64 keys	ok	
+Map	LinkedHashMap	getOrElseUpdate(new, _)	default removes a key	ok	
+Map	LinkedHashMap	getOrElseUpdate(new, _)	default clears	ok	
+Map	LinkedHashMap	getOrElseUpdate(new, _)	default adds the key	ok	
+Map	LinkedHashMap	updateWith(present)	f adds 1 key	ok	
+Map	LinkedHashMap	updateWith(present)	f adds 64 keys	ok	
+Map	LinkedHashMap	updateWith(present)	f removes the key	WRONG	init=3 elements; expected (List((1,7), (2,3), (3,4)),3); got (List((2,3), (3,4)),2)
+Map	LinkedHashMap	updateWith(present)	f clears	WRONG	init=3 elements; expected (List((1,7)),1); got (List(),0)
+Map	LinkedHashMap	updateWith(present)	f adds 64 keys, returns None	ok	
+Map	LinkedHashMap	updateWith(absent)	f adds 64 keys	ok	
+Map	LinkedHashMap	updateWith(absent)	f adds the key	ok	
+Map	TreeMap	addAll	self	ok	
+Map	TreeMap	addAll	view	ok	
+Map	TreeMap	addAll	view.map	WRONG	init=3 elements; expected (List((1,2), (2,12), (3,13), (4,14)),4); got (List((1,2), (2,12), (3,22), (4,32)),4)
+Map	TreeMap	addAll	view.filter	ok	
+Map	TreeMap	addAll	view.mapValues	ok	
+Map	TreeMap	addAll	view.filterKeys	ok	
+Map	TreeMap	addAll	iterator	ok	
+Map	TreeMap	addAll	iterator.map	WRONG	init=3 elements; expected (List((1,2), (2,12), (3,13), (4,14)),4); got (List((1,2), (2,12), (3,22), (4,32)),4)
+Map	TreeMap	addAll	keysIterator.map	ok	
+Map	TreeMap	addAll	keySet.view.map	ok	
+Map	TreeMap	addAll	values.view.map	ok	
+Map	TreeMap	addAll	to(LazyList)	ok	
+Map	TreeMap	addAll	toList (control)	ok	
+Map	TreeMap	subtractAll	keySet	ok	
+Map	TreeMap	subtractAll	keys	ok	
+Map	TreeMap	subtractAll	keysIterator	ok	
+Map	TreeMap	subtractAll	keySet.view.filter	ok	
+Map	TreeMap	subtractAll	keySet.view.map(_+1)	WRONG	init=40 elements; expected (List((1,2)),1); got (List((1,2), (4,5), (9,10), (13,14), (17,18), (25,26), (29,30)),7)
+Map	TreeMap	subtractAll	view.map(_._1)	ok	
+Map	TreeMap	subtractAll	values.map(key)	ok	
+Map	TreeMap	subtractAll	valuesIterator.map(key)	WRONG	init=40 elements; expected (List((1,2)),1); got (List((1,2), (4,5), (9,10), (13,14), (17,18), (25,26), (29,30)),7)
+Map	TreeMap	subtractAll	keySet.toList (control)	ok	
+Map	TreeMap	filterInPlace	p = !self.contains(k+1)	ok	
+Map	TreeMap	filterInPlace	p = self.size is even	WRONG	init=3 elements; expected (List(),0); got (List((2,3), (3,4)),2)
+Map	TreeMap	mapValuesInPlace	f = self.getOrElse(k+1, 0)	ok	
+Map	TreeMap	getOrElseUpdate(new, _)	default adds 1 key	ok	
+Map	TreeMap	getOrElseUpdate(new, _)	default adds 64 keys	ok	
+Map	TreeMap	getOrElseUpdate(new, _)	default removes a key	ok	
+Map	TreeMap	getOrElseUpdate(new, _)	default clears	ok	
+Map	TreeMap	getOrElseUpdate(new, _)	default adds the key	ok	
+Map	TreeMap	updateWith(present)	f adds 1 key	ok	
+Map	TreeMap	updateWith(present)	f adds 64 keys	ok	
+Map	TreeMap	updateWith(present)	f removes the key	ok	
+Map	TreeMap	updateWith(present)	f clears	ok	
+Map	TreeMap	updateWith(present)	f adds 64 keys, returns None	ok	
+Map	TreeMap	updateWith(absent)	f adds 64 keys	ok	
+Map	TreeMap	updateWith(absent)	f adds the key	ok	
+Map	ListMap	addAll	self	ok	
+Map	ListMap	addAll	view	ok	
+Map	ListMap	addAll	view.map	ok	
+Map	ListMap	addAll	view.filter	ok	
+Map	ListMap	addAll	view.mapValues	ok	
+Map	ListMap	addAll	view.filterKeys	ok	
+Map	ListMap	addAll	iterator	ok	
+Map	ListMap	addAll	iterator.map	ok	
+Map	ListMap	addAll	keysIterator.map	ok	
+Map	ListMap	addAll	keySet.view.map	ok	
+Map	ListMap	addAll	values.view.map	ok	
+Map	ListMap	addAll	to(LazyList)	ok	
+Map	ListMap	addAll	toList (control)	ok	
+Map	ListMap	subtractAll	keySet	ok	
+Map	ListMap	subtractAll	keys	ok	
+Map	ListMap	subtractAll	keysIterator	ok	
+Map	ListMap	subtractAll	keySet.view.filter	ok	
+Map	ListMap	subtractAll	keySet.view.map(_+1)	ok	
+Map	ListMap	subtractAll	view.map(_._1)	ok	
+Map	ListMap	subtractAll	values.map(key)	ok	
+Map	ListMap	subtractAll	valuesIterator.map(key)	ok	
+Map	ListMap	subtractAll	keySet.toList (control)	ok	
+Map	ListMap	filterInPlace	p = !self.contains(k+1)	WRONG	init=40 elements; expected (List((40,41)),1); got (List((1,2), (3,4), (5,6), (7,8), (9,10), (11,12), (13,14), (15,16), (17,18), (19,20), (21,22), (23,24), (25,26), (27,28), (29,30), (31,32), (33,34), (35,36), (...
+Map	ListMap	filterInPlace	p = self.size is even	WRONG	init=3 elements; expected (List(),0); got (List((1,2), (2,3)),2)
+Map	ListMap	mapValuesInPlace	f = self.getOrElse(k+1, 0)	WRONG	init=3 elements; expected (List((1,3), (2,4), (3,0)),3); got (List((1,3), (2,0), (3,0)),3)
+Map	ListMap	getOrElseUpdate(new, _)	default adds 1 key	ok	
+Map	ListMap	getOrElseUpdate(new, _)	default adds 64 keys	ok	
+Map	ListMap	getOrElseUpdate(new, _)	default removes a key	ok	
+Map	ListMap	getOrElseUpdate(new, _)	default clears	ok	
+Map	ListMap	getOrElseUpdate(new, _)	default adds the key	ok	
+Map	ListMap	updateWith(present)	f adds 1 key	ok	
+Map	ListMap	updateWith(present)	f adds 64 keys	ok	
+Map	ListMap	updateWith(present)	f removes the key	ok	
+Map	ListMap	updateWith(present)	f clears	ok	
+Map	ListMap	updateWith(present)	f adds 64 keys, returns None	ok	
+Map	ListMap	updateWith(absent)	f adds 64 keys	ok	
+Map	ListMap	updateWith(absent)	f adds the key	ok	
+Map	CollisionProofHashMap	addAll	self	ok	
+Map	CollisionProofHashMap	addAll	view	ok	
+Map	CollisionProofHashMap	addAll	view.map	WRONG	init=3 elements; expected (List((1,2), (2,12), (3,13), (4,14)),4); got (List((1,2), (2,12), (3,22), (4,32), (5,42), (6,52), (7,62), (8,72), (9,82), (10,92), (11,102), (12,112), (13,122), (14,132), (15,142), (16,152)),16)
+Map	CollisionProofHashMap	addAll	view.filter	ok	
+Map	CollisionProofHashMap	addAll	view.mapValues	ok	
+Map	CollisionProofHashMap	addAll	view.filterKeys	ok	
+Map	CollisionProofHashMap	addAll	iterator	ok	
+Map	CollisionProofHashMap	addAll	iterator.map	WRONG	init=3 elements; expected (List((1,2), (2,12), (3,13), (4,14)),4); got (List((1,2), (2,12), (3,22), (4,32), (5,42), (6,52), (7,62), (8,72), (9,82), (10,92), (11,102), (12,112), (13,122), (14,132), (15,142), (16,152)),16)
+Map	CollisionProofHashMap	addAll	keysIterator.map	WRONG	init=3 elements; expected (List((1,2), (2,0), (3,0), (4,0)),4); got (List((1,2), (2,0), (3,0), (4,0), (5,0), (6,0), (7,0), (8,0), (9,0), (10,0), (11,0), (12,0), (13,0), (14,0), (15,0), (16,0)),16)
+Map	CollisionProofHashMap	addAll	keySet.view.map	WRONG	init=3 elements; expected (List((1,2), (2,0), (3,0), (4,0)),4); got (List((1,2), (2,0), (3,0), (4,0), (5,0), (6,0), (7,0), (8,0), (9,0), (10,0), (11,0), (12,0), (13,0), (14,0), (15,0), (16,0)),16)
+Map	CollisionProofHashMap	addAll	values.view.map	ok	
+Map	CollisionProofHashMap	addAll	to(LazyList)	ok	
+Map	CollisionProofHashMap	addAll	toList (control)	ok	
+Map	CollisionProofHashMap	subtractAll	keySet	ok	
+Map	CollisionProofHashMap	subtractAll	keys	ok	
+Map	CollisionProofHashMap	subtractAll	keysIterator	ok	
+Map	CollisionProofHashMap	subtractAll	keySet.view.filter	ok	
+Map	CollisionProofHashMap	subtractAll	keySet.view.map(_+1)	WRONG	init=3 elements; expected (List((1,2)),1); got (List((1,2), (3,4)),2)
+Map	CollisionProofHashMap	subtractAll	view.map(_._1)	ok	
+Map	CollisionProofHashMap	subtractAll	values.map(key)	ok	
+Map	CollisionProofHashMap	subtractAll	valuesIterator.map(key)	WRONG	init=3 elements; expected (List((1,2)),1); got (List((1,2), (3,4)),2)
+Map	CollisionProofHashMap	subtractAll	keySet.toList (control)	ok	
+Map	CollisionProofHashMap	filterInPlace	p = !self.contains(k+1)	ok	
+Map	CollisionProofHashMap	filterInPlace	p = self.size is even	WRONG	init=3 elements; expected (List(),0); got (List((2,3), (3,4)),2)
+Map	CollisionProofHashMap	mapValuesInPlace	f = self.getOrElse(k+1, 0)	ok	
+Map	CollisionProofHashMap	getOrElseUpdate(new, _)	default adds 1 key	ok	
+Map	CollisionProofHashMap	getOrElseUpdate(new, _)	default adds 64 keys	ok	
+Map	CollisionProofHashMap	getOrElseUpdate(new, _)	default removes a key	ok	
+Map	CollisionProofHashMap	getOrElseUpdate(new, _)	default clears	ok	
+Map	CollisionProofHashMap	getOrElseUpdate(new, _)	default adds the key	ok	
+Map	CollisionProofHashMap	updateWith(present)	f adds 1 key	ok	
+Map	CollisionProofHashMap	updateWith(present)	f adds 64 keys	ok	
+Map	CollisionProofHashMap	updateWith(present)	f removes the key	ok	
+Map	CollisionProofHashMap	updateWith(present)	f clears	ok	
+Map	CollisionProofHashMap	updateWith(present)	f adds 64 keys, returns None	ok	
+Map	CollisionProofHashMap	updateWith(absent)	f adds 64 keys	ok	
+Map	CollisionProofHashMap	updateWith(absent)	f adds the key	ok	
+Map	OpenHashMap	addAll	self	ok	
+Map	OpenHashMap	addAll	view	ok	
+Map	OpenHashMap	addAll	view.map	CME	init=3 elements; expected (List((1,2), (2,12), (3,13), (4,14)),4); got EXC:ConcurrentModificationException
+Map	OpenHashMap	addAll	view.filter	ok	
+Map	OpenHashMap	addAll	view.mapValues	ok	
+Map	OpenHashMap	addAll	view.filterKeys	ok	
+Map	OpenHashMap	addAll	iterator	ok	
+Map	OpenHashMap	addAll	iterator.map	CME	init=3 elements; expected (List((1,2), (2,12), (3,13), (4,14)),4); got EXC:ConcurrentModificationException
+Map	OpenHashMap	addAll	keysIterator.map	CME	init=3 elements; expected (List((1,2), (2,0), (3,0), (4,0)),4); got EXC:ConcurrentModificationException
+Map	OpenHashMap	addAll	keySet.view.map	CME	init=3 elements; expected (List((1,2), (2,0), (3,0), (4,0)),4); got EXC:ConcurrentModificationException
+Map	OpenHashMap	addAll	values.view.map	CME	init=3 elements; expected (List((1,2), (2,3), (3,4), (52,2), (53,3), (54,4)),6); got EXC:ConcurrentModificationException
+Map	OpenHashMap	addAll	to(LazyList)	ok	
+Map	OpenHashMap	addAll	toList (control)	ok	
+Map	OpenHashMap	subtractAll	keySet	ok	
+Map	OpenHashMap	subtractAll	keys	ok	
+Map	OpenHashMap	subtractAll	keysIterator	ok	
+Map	OpenHashMap	subtractAll	keySet.view.filter	ok	
+Map	OpenHashMap	subtractAll	keySet.view.map(_+1)	WRONG	init=3 elements; expected (List((1,2)),1); got (List((1,2), (3,4)),2)
+Map	OpenHashMap	subtractAll	view.map(_._1)	ok	
+Map	OpenHashMap	subtractAll	values.map(key)	ok	
+Map	OpenHashMap	subtractAll	valuesIterator.map(key)	WRONG	init=3 elements; expected (List((1,2)),1); got (List((1,2), (3,4)),2)
+Map	OpenHashMap	subtractAll	keySet.toList (control)	ok	
+Map	OpenHashMap	filterInPlace	p = !self.contains(k+1)	WRONG	init=40 elements; expected (List((40,41)),1); got (List((16,17), (18,19), (20,21), (22,23), (24,25), (26,27), (28,29), (30,31), (33,34), (37,38), (40,41)),11)
+Map	OpenHashMap	filterInPlace	p = self.size is even	WRONG	init=3 elements; expected (List(),0); got (List((2,3), (3,4)),2)
+Map	OpenHashMap	mapValuesInPlace	f = self.getOrElse(k+1, 0)	WRONG	init=40 elements; expected (List((1,3), (2,4), (3,5), (4,6), (5,7), (6,8), (7,9), (8,10), (9,11), (10,12), (11,13), (12,14), (13,15), (14,16), (15,17), (16,18), (17,19), (18,20), (19,21),...; got (List((1,3), (2,4), (3,5), (4,6), (5,7), (6,8), (7,9), (8,10), (9,11), (10,12), (11,13), (12,14), (13,15), (14,16), (15,17), (16,19), (17,19), (18,21), (19,21),...
+Map	OpenHashMap	getOrElseUpdate(new, _)	default adds 1 key	ok	
+Map	OpenHashMap	getOrElseUpdate(new, _)	default adds 64 keys	ok	
+Map	OpenHashMap	getOrElseUpdate(new, _)	default removes a key	ok	
+Map	OpenHashMap	getOrElseUpdate(new, _)	default clears	ok	
+Map	OpenHashMap	getOrElseUpdate(new, _)	default adds the key	ok	
+Map	OpenHashMap	updateWith(present)	f adds 1 key	ok	
+Map	OpenHashMap	updateWith(present)	f adds 64 keys	ok	
+Map	OpenHashMap	updateWith(present)	f removes the key	ok	
+Map	OpenHashMap	updateWith(present)	f clears	ok	
+Map	OpenHashMap	updateWith(present)	f adds 64 keys, returns None	ok	
+Map	OpenHashMap	updateWith(absent)	f adds 64 keys	ok	
+Map	OpenHashMap	updateWith(absent)	f adds the key	ok	
+Map	WeakHashMap	addAll	self	ok	
+Map	WeakHashMap	addAll	view	ok	
+Map	WeakHashMap	addAll	view.map	CME	init=3 elements; expected (List((1,2), (2,12), (3,13), (4,14)),4); got EXC:ConcurrentModificationException
+Map	WeakHashMap	addAll	view.filter	ok	
+Map	WeakHashMap	addAll	view.mapValues	ok	
+Map	WeakHashMap	addAll	view.filterKeys	ok	
+Map	WeakHashMap	addAll	iterator	ok	
+Map	WeakHashMap	addAll	iterator.map	CME	init=3 elements; expected (List((1,2), (2,12), (3,13), (4,14)),4); got EXC:ConcurrentModificationException
+Map	WeakHashMap	addAll	keysIterator.map	CME	init=3 elements; expected (List((1,2), (2,0), (3,0), (4,0)),4); got EXC:ConcurrentModificationException
+Map	WeakHashMap	addAll	keySet.view.map	CME	init=3 elements; expected (List((1,2), (2,0), (3,0), (4,0)),4); got EXC:ConcurrentModificationException
+Map	WeakHashMap	addAll	values.view.map	CME	init=3 elements; expected (List((1,2), (2,3), (3,4), (52,2), (53,3), (54,4)),6); got EXC:ConcurrentModificationException
+Map	WeakHashMap	addAll	to(LazyList)	ok	
+Map	WeakHashMap	addAll	toList (control)	ok	
+Map	WeakHashMap	subtractAll	keySet	CME	init=3 elements; expected (List(),0); got EXC:ConcurrentModificationException
+Map	WeakHashMap	subtractAll	keys	CME	init=3 elements; expected (List(),0); got EXC:ConcurrentModificationException
+Map	WeakHashMap	subtractAll	keysIterator	CME	init=3 elements; expected (List(),0); got EXC:ConcurrentModificationException
+Map	WeakHashMap	subtractAll	keySet.view.filter	CME	init=3 elements; expected (List((2,3)),1); got EXC:ConcurrentModificationException
+Map	WeakHashMap	subtractAll	keySet.view.map(_+1)	CME	init=3 elements; expected (List((1,2)),1); got EXC:ConcurrentModificationException
+Map	WeakHashMap	subtractAll	view.map(_._1)	CME	init=3 elements; expected (List(),0); got EXC:ConcurrentModificationException
+Map	WeakHashMap	subtractAll	values.map(key)	ok	
+Map	WeakHashMap	subtractAll	valuesIterator.map(key)	CME	init=3 elements; expected (List((1,2)),1); got EXC:ConcurrentModificationException
+Map	WeakHashMap	subtractAll	keySet.toList (control)	ok	
+Map	WeakHashMap	filterInPlace	p = !self.contains(k+1)	WRONG	init=3 elements; expected (List((3,4)),1); got (List((1,2), (3,4)),2)
+Map	WeakHashMap	filterInPlace	p = self.size is even	WRONG	init=3 elements; expected (List(),0); got (List((1,2), (2,3)),2)
+Map	WeakHashMap	mapValuesInPlace	f = self.getOrElse(k+1, 0)	WRONG	init=3 elements; expected (List((1,3), (2,4), (3,0)),3); got (List((1,0), (2,0), (3,0)),3)
+Map	WeakHashMap	getOrElseUpdate(new, _)	default adds 1 key	ok	
+Map	WeakHashMap	getOrElseUpdate(new, _)	default adds 64 keys	ok	
+Map	WeakHashMap	getOrElseUpdate(new, _)	default removes a key	ok	
+Map	WeakHashMap	getOrElseUpdate(new, _)	default clears	ok	
+Map	WeakHashMap	getOrElseUpdate(new, _)	default adds the key	ok	
+Map	WeakHashMap	updateWith(present)	f adds 1 key	ok	
+Map	WeakHashMap	updateWith(present)	f adds 64 keys	ok	
+Map	WeakHashMap	updateWith(present)	f removes the key	ok	
+Map	WeakHashMap	updateWith(present)	f clears	ok	
+Map	WeakHashMap	updateWith(present)	f adds 64 keys, returns None	ok	
+Map	WeakHashMap	updateWith(absent)	f adds 64 keys	ok	
+Map	WeakHashMap	updateWith(absent)	f adds the key	ok	
+Map	TrieMap	addAll	self	ok	
+Map	TrieMap	addAll	view	ok	
+Map	TrieMap	addAll	view.map	ok	
+Map	TrieMap	addAll	view.filter	ok	
+Map	TrieMap	addAll	view.mapValues	ok	
+Map	TrieMap	addAll	view.filterKeys	ok	
+Map	TrieMap	addAll	iterator	ok	
+Map	TrieMap	addAll	iterator.map	ok	
+Map	TrieMap	addAll	keysIterator.map	ok	
+Map	TrieMap	addAll	keySet.view.map	ok	
+Map	TrieMap	addAll	values.view.map	ok	
+Map	TrieMap	addAll	to(LazyList)	ok	
+Map	TrieMap	addAll	toList (control)	ok	
+Map	TrieMap	subtractAll	keySet	ok	
+Map	TrieMap	subtractAll	keys	ok	
+Map	TrieMap	subtractAll	keysIterator	ok	
+Map	TrieMap	subtractAll	keySet.view.filter	ok	
+Map	TrieMap	subtractAll	keySet.view.map(_+1)	ok	
+Map	TrieMap	subtractAll	view.map(_._1)	ok	
+Map	TrieMap	subtractAll	values.map(key)	ok	
+Map	TrieMap	subtractAll	valuesIterator.map(key)	ok	
+Map	TrieMap	subtractAll	keySet.toList (control)	ok	
+Map	TrieMap	filterInPlace	p = !self.contains(k+1)	WRONG	init=40 elements; expected (List((40,41)),1); got (List((4,5), (8,9), (11,12), (14,15), (18,19), (23,24), (26,27), (29,30), (32,33), (36,37), (40,41)),11)
+Map	TrieMap	filterInPlace	p = self.size is even	WRONG	init=3 elements; expected (List(),0); got (List((2,3), (3,4)),2)
+Map	TrieMap	mapValuesInPlace	f = self.getOrElse(k+1, 0)	WRONG	init=40 elements; expected (List((1,3), (2,4), (3,5), (4,6), (5,7), (6,8), (7,9), (8,10), (9,11), (10,12), (11,13), (12,14), (13,15), (14,16), (15,17), (16,18), (17,19), (18,20), (19,21),...; got (List((1,3), (2,4), (3,5), (4,7), (5,7), (6,8), (7,9), (8,11), (9,11), (10,12), (11,14), (12,14), (13,15), (14,17), (15,17), (16,18), (17,19), (18,21), (19,21),...
+Map	TrieMap	getOrElseUpdate(new, _)	default adds 1 key	ok	
+Map	TrieMap	getOrElseUpdate(new, _)	default adds 64 keys	ok	
+Map	TrieMap	getOrElseUpdate(new, _)	default removes a key	ok	
+Map	TrieMap	getOrElseUpdate(new, _)	default clears	ok	
+Map	TrieMap	getOrElseUpdate(new, _)	default adds the key	WRONG	init=3 elements; expected (List((1,2), (2,3), (3,4), (50,2)),4); got (List((1,2), (2,3), (3,4), (50,1)),4)
+Map	TrieMap	updateWith(present)	f adds 1 key	ok	
+Map	TrieMap	updateWith(present)	f adds 64 keys	ok	
+Map	TrieMap	updateWith(present)	f removes the key	ok	
+Map	TrieMap	updateWith(present)	f clears	ok	
+Map	TrieMap	updateWith(present)	f adds 64 keys, returns None	ok	
+Map	TrieMap	updateWith(absent)	f adds 64 keys	ok	
+Map	TrieMap	updateWith(absent)	f adds the key	ok	
+Map	ju.HashMap.asScala	addAll	self	ok	
+Map	ju.HashMap.asScala	addAll	view	ok	
+Map	ju.HashMap.asScala	addAll	view.map	WRONG	init=3 elements; expected (List((1,2), (2,12), (3,13), (4,14)),4); got (List((1,2), (2,12), (3,22), (4,32)),4)
+Map	ju.HashMap.asScala	addAll	view.filter	ok	
+Map	ju.HashMap.asScala	addAll	view.mapValues	ok	
+Map	ju.HashMap.asScala	addAll	view.filterKeys	ok	
+Map	ju.HashMap.asScala	addAll	iterator	ok	
+Map	ju.HashMap.asScala	addAll	iterator.map	WRONG	init=3 elements; expected (List((1,2), (2,12), (3,13), (4,14)),4); got (List((1,2), (2,12), (3,22), (4,32)),4)
+Map	ju.HashMap.asScala	addAll	keysIterator.map	ok	
+Map	ju.HashMap.asScala	addAll	keySet.view.map	ok	
+Map	ju.HashMap.asScala	addAll	values.view.map	CME	init=3 elements; expected (List((1,2), (2,3), (3,4), (52,2), (53,3), (54,4)),6); got EXC:ConcurrentModificationException
+Map	ju.HashMap.asScala	addAll	to(LazyList)	ok	
+Map	ju.HashMap.asScala	addAll	toList (control)	ok	
+Map	ju.HashMap.asScala	subtractAll	keySet	CME	init=3 elements; expected (List(),0); got EXC:ConcurrentModificationException
+Map	ju.HashMap.asScala	subtractAll	keys	CME	init=3 elements; expected (List(),0); got EXC:ConcurrentModificationException
+Map	ju.HashMap.asScala	subtractAll	keysIterator	CME	init=3 elements; expected (List(),0); got EXC:ConcurrentModificationException
+Map	ju.HashMap.asScala	subtractAll	keySet.view.filter	CME	init=3 elements; expected (List((2,3)),1); got EXC:ConcurrentModificationException
+Map	ju.HashMap.asScala	subtractAll	keySet.view.map(_+1)	CME	init=3 elements; expected (List((1,2)),1); got EXC:ConcurrentModificationException
+Map	ju.HashMap.asScala	subtractAll	view.map(_._1)	CME	init=3 elements; expected (List(),0); got EXC:ConcurrentModificationException
+Map	ju.HashMap.asScala	subtractAll	values.map(key)	ok	
+Map	ju.HashMap.asScala	subtractAll	valuesIterator.map(key)	CME	init=3 elements; expected (List((1,2)),1); got EXC:ConcurrentModificationException
+Map	ju.HashMap.asScala	subtractAll	keySet.toList (control)	ok	
+Map	ju.HashMap.asScala	filterInPlace	p = !self.contains(k+1)	ok	
+Map	ju.HashMap.asScala	filterInPlace	p = self.size is even	WRONG	init=3 elements; expected (List(),0); got (List((2,3), (3,4)),2)
+Map	ju.HashMap.asScala	mapValuesInPlace	f = self.getOrElse(k+1, 0)	ok	
+Map	ju.HashMap.asScala	getOrElseUpdate(new, _)	default adds 1 key	CME	init=3 elements; expected (List((1,2), (2,3), (3,4), (50,2), (51,1)),5); got EXC:ConcurrentModificationException
+Map	ju.HashMap.asScala	getOrElseUpdate(new, _)	default adds 64 keys	CME	init=3 elements; expected (List((1,2), (2,3), (3,4), (50,2), (60,0), (61,1), (62,2), (63,3), (64,4), (65,5), (66,6), (67,7), (68,8), (69,9), (70,10), (71,11), (72,12), (73,13), (74,14), ...; got EXC:ConcurrentModificationException
+Map	ju.HashMap.asScala	getOrElseUpdate(new, _)	default removes a key	CME	init=3 elements; expected (List((2,3), (3,4), (50,2)),3); got EXC:ConcurrentModificationException
+Map	ju.HashMap.asScala	getOrElseUpdate(new, _)	default clears	CME	init=3 elements; expected (List((50,2)),1); got EXC:ConcurrentModificationException
+Map	ju.HashMap.asScala	getOrElseUpdate(new, _)	default adds the key	CME	init=3 elements; expected (List((1,2), (2,3), (3,4), (50,2)),4); got EXC:ConcurrentModificationException
+Map	ju.HashMap.asScala	updateWith(present)	f adds 1 key	CME	init=3 elements; expected (List((1,7), (2,3), (3,4), (51,1)),4); got EXC:ConcurrentModificationException
+Map	ju.HashMap.asScala	updateWith(present)	f adds 64 keys	CME	init=3 elements; expected (List((1,7), (2,3), (3,4), (60,0), (61,1), (62,2), (63,3), (64,4), (65,5), (66,6), (67,7), (68,8), (69,9), (70,10), (71,11), (72,12), (73,13), (74,14), (75,15),...; got EXC:ConcurrentModificationException
+Map	ju.HashMap.asScala	updateWith(present)	f removes the key	CME	init=3 elements; expected (List((1,7), (2,3), (3,4)),3); got EXC:ConcurrentModificationException
+Map	ju.HashMap.asScala	updateWith(present)	f clears	CME	init=3 elements; expected (List((1,7)),1); got EXC:ConcurrentModificationException
+Map	ju.HashMap.asScala	updateWith(present)	f adds 64 keys, returns None	CME	init=3 elements; expected (List((2,3), (3,4), (60,0), (61,1), (62,2), (63,3), (64,4), (65,5), (66,6), (67,7), (68,8), (69,9), (70,10), (71,11), (72,12), (73,13), (74,14), (75,15), (76,16...; got EXC:ConcurrentModificationException
+Map	ju.HashMap.asScala	updateWith(absent)	f adds 64 keys	CME	init=3 elements; expected (List((1,2), (2,3), (3,4), (50,7), (60,0), (61,1), (62,2), (63,3), (64,4), (65,5), (66,6), (67,7), (68,8), (69,9), (70,10), (71,11), (72,12), (73,13), (74,14), ...; got EXC:ConcurrentModificationException
+Map	ju.HashMap.asScala	updateWith(absent)	f adds the key	CME	init=3 elements; expected (List((1,2), (2,3), (3,4), (50,7)),4); got EXC:ConcurrentModificationException
+Map	ju.TreeMap.asScala	addAll	self	ok	
+Map	ju.TreeMap.asScala	addAll	view	ok	
+Map	ju.TreeMap.asScala	addAll	view.map	WRONG	init=3 elements; expected (List((1,2), (2,12), (3,13), (4,14)),4); got (List((1,2), (2,12), (3,22), (4,32)),4)
+Map	ju.TreeMap.asScala	addAll	view.filter	ok	
+Map	ju.TreeMap.asScala	addAll	view.mapValues	ok	
+Map	ju.TreeMap.asScala	addAll	view.filterKeys	ok	
+Map	ju.TreeMap.asScala	addAll	iterator	ok	
+Map	ju.TreeMap.asScala	addAll	iterator.map	WRONG	init=3 elements; expected (List((1,2), (2,12), (3,13), (4,14)),4); got (List((1,2), (2,12), (3,22), (4,32)),4)
+Map	ju.TreeMap.asScala	addAll	keysIterator.map	ok	
+Map	ju.TreeMap.asScala	addAll	keySet.view.map	ok	
+Map	ju.TreeMap.asScala	addAll	values.view.map	CME	init=3 elements; expected (List((1,2), (2,3), (3,4), (52,2), (53,3), (54,4)),6); got EXC:ConcurrentModificationException
+Map	ju.TreeMap.asScala	addAll	to(LazyList)	ok	
+Map	ju.TreeMap.asScala	addAll	toList (control)	ok	
+Map	ju.TreeMap.asScala	subtractAll	keySet	CME	init=3 elements; expected (List(),0); got EXC:ConcurrentModificationException
+Map	ju.TreeMap.asScala	subtractAll	keys	CME	init=3 elements; expected (List(),0); got EXC:ConcurrentModificationException
+Map	ju.TreeMap.asScala	subtractAll	keysIterator	CME	init=3 elements; expected (List(),0); got EXC:ConcurrentModificationException
+Map	ju.TreeMap.asScala	subtractAll	keySet.view.filter	CME	init=3 elements; expected (List((2,3)),1); got EXC:ConcurrentModificationException
+Map	ju.TreeMap.asScala	subtractAll	keySet.view.map(_+1)	CME	init=3 elements; expected (List((1,2)),1); got EXC:ConcurrentModificationException
+Map	ju.TreeMap.asScala	subtractAll	view.map(_._1)	CME	init=3 elements; expected (List(),0); got EXC:ConcurrentModificationException
+Map	ju.TreeMap.asScala	subtractAll	values.map(key)	ok	
+Map	ju.TreeMap.asScala	subtractAll	valuesIterator.map(key)	CME	init=3 elements; expected (List((1,2)),1); got EXC:ConcurrentModificationException
+Map	ju.TreeMap.asScala	subtractAll	keySet.toList (control)	ok	
+Map	ju.TreeMap.asScala	filterInPlace	p = !self.contains(k+1)	ok	
+Map	ju.TreeMap.asScala	filterInPlace	p = self.size is even	WRONG	init=3 elements; expected (List(),0); got (List((2,3), (3,4)),2)
+Map	ju.TreeMap.asScala	mapValuesInPlace	f = self.getOrElse(k+1, 0)	ok	
+Map	ju.TreeMap.asScala	getOrElseUpdate(new, _)	default adds 1 key	CME	init=3 elements; expected (List((1,2), (2,3), (3,4), (50,2), (51,1)),5); got EXC:ConcurrentModificationException
+Map	ju.TreeMap.asScala	getOrElseUpdate(new, _)	default adds 64 keys	CME	init=3 elements; expected (List((1,2), (2,3), (3,4), (50,2), (60,0), (61,1), (62,2), (63,3), (64,4), (65,5), (66,6), (67,7), (68,8), (69,9), (70,10), (71,11), (72,12), (73,13), (74,14), ...; got EXC:ConcurrentModificationException
+Map	ju.TreeMap.asScala	getOrElseUpdate(new, _)	default removes a key	CME	init=3 elements; expected (List((2,3), (3,4), (50,2)),3); got EXC:ConcurrentModificationException
+Map	ju.TreeMap.asScala	getOrElseUpdate(new, _)	default clears	CME	init=3 elements; expected (List((50,2)),1); got EXC:ConcurrentModificationException
+Map	ju.TreeMap.asScala	getOrElseUpdate(new, _)	default adds the key	CME	init=3 elements; expected (List((1,2), (2,3), (3,4), (50,2)),4); got EXC:ConcurrentModificationException
+Map	ju.TreeMap.asScala	updateWith(present)	f adds 1 key	CME	init=3 elements; expected (List((1,7), (2,3), (3,4), (51,1)),4); got EXC:ConcurrentModificationException
+Map	ju.TreeMap.asScala	updateWith(present)	f adds 64 keys	CME	init=3 elements; expected (List((1,7), (2,3), (3,4), (60,0), (61,1), (62,2), (63,3), (64,4), (65,5), (66,6), (67,7), (68,8), (69,9), (70,10), (71,11), (72,12), (73,13), (74,14), (75,15),...; got EXC:ConcurrentModificationException
+Map	ju.TreeMap.asScala	updateWith(present)	f removes the key	CME	init=3 elements; expected (List((1,7), (2,3), (3,4)),3); got EXC:ConcurrentModificationException
+Map	ju.TreeMap.asScala	updateWith(present)	f clears	CME	init=3 elements; expected (List((1,7)),1); got EXC:ConcurrentModificationException
+Map	ju.TreeMap.asScala	updateWith(present)	f adds 64 keys, returns None	CME	init=3 elements; expected (List((2,3), (3,4), (60,0), (61,1), (62,2), (63,3), (64,4), (65,5), (66,6), (67,7), (68,8), (69,9), (70,10), (71,11), (72,12), (73,13), (74,14), (75,15), (76,16...; got EXC:ConcurrentModificationException
+Map	ju.TreeMap.asScala	updateWith(absent)	f adds 64 keys	CME	init=3 elements; expected (List((1,2), (2,3), (3,4), (50,7), (60,0), (61,1), (62,2), (63,3), (64,4), (65,5), (66,6), (67,7), (68,8), (69,9), (70,10), (71,11), (72,12), (73,13), (74,14), ...; got EXC:ConcurrentModificationException
+Map	ju.TreeMap.asScala	updateWith(absent)	f adds the key	CME	init=3 elements; expected (List((1,2), (2,3), (3,4), (50,7)),4); got EXC:ConcurrentModificationException
+Map	ju.LinkedHashMap.asScala	addAll	self	ok	
+Map	ju.LinkedHashMap.asScala	addAll	view	ok	
+Map	ju.LinkedHashMap.asScala	addAll	view.map	WRONG	init=3 elements; expected (List((1,2), (2,12), (3,13), (4,14)),4); got (List((1,2), (2,12), (3,22), (4,32)),4)
+Map	ju.LinkedHashMap.asScala	addAll	view.filter	ok	
+Map	ju.LinkedHashMap.asScala	addAll	view.mapValues	ok	
+Map	ju.LinkedHashMap.asScala	addAll	view.filterKeys	ok	
+Map	ju.LinkedHashMap.asScala	addAll	iterator	ok	
+Map	ju.LinkedHashMap.asScala	addAll	iterator.map	WRONG	init=3 elements; expected (List((1,2), (2,12), (3,13), (4,14)),4); got (List((1,2), (2,12), (3,22), (4,32)),4)
+Map	ju.LinkedHashMap.asScala	addAll	keysIterator.map	ok	
+Map	ju.LinkedHashMap.asScala	addAll	keySet.view.map	ok	
+Map	ju.LinkedHashMap.asScala	addAll	values.view.map	CME	init=3 elements; expected (List((1,2), (2,3), (3,4), (52,2), (53,3), (54,4)),6); got EXC:ConcurrentModificationException
+Map	ju.LinkedHashMap.asScala	addAll	to(LazyList)	ok	
+Map	ju.LinkedHashMap.asScala	addAll	toList (control)	ok	
+Map	ju.LinkedHashMap.asScala	subtractAll	keySet	CME	init=3 elements; expected (List(),0); got EXC:ConcurrentModificationException
+Map	ju.LinkedHashMap.asScala	subtractAll	keys	CME	init=3 elements; expected (List(),0); got EXC:ConcurrentModificationException
+Map	ju.LinkedHashMap.asScala	subtractAll	keysIterator	CME	init=3 elements; expected (List(),0); got EXC:ConcurrentModificationException
+Map	ju.LinkedHashMap.asScala	subtractAll	keySet.view.filter	CME	init=3 elements; expected (List((2,3)),1); got EXC:ConcurrentModificationException
+Map	ju.LinkedHashMap.asScala	subtractAll	keySet.view.map(_+1)	CME	init=3 elements; expected (List((1,2)),1); got EXC:ConcurrentModificationException
+Map	ju.LinkedHashMap.asScala	subtractAll	view.map(_._1)	CME	init=3 elements; expected (List(),0); got EXC:ConcurrentModificationException
+Map	ju.LinkedHashMap.asScala	subtractAll	values.map(key)	ok	
+Map	ju.LinkedHashMap.asScala	subtractAll	valuesIterator.map(key)	CME	init=3 elements; expected (List((1,2)),1); got EXC:ConcurrentModificationException
+Map	ju.LinkedHashMap.asScala	subtractAll	keySet.toList (control)	ok	
+Map	ju.LinkedHashMap.asScala	filterInPlace	p = !self.contains(k+1)	ok	
+Map	ju.LinkedHashMap.asScala	filterInPlace	p = self.size is even	WRONG	init=3 elements; expected (List(),0); got (List((2,3), (3,4)),2)
+Map	ju.LinkedHashMap.asScala	mapValuesInPlace	f = self.getOrElse(k+1, 0)	ok	
+Map	ju.LinkedHashMap.asScala	getOrElseUpdate(new, _)	default adds 1 key	CME	init=3 elements; expected (List((1,2), (2,3), (3,4), (50,2), (51,1)),5); got EXC:ConcurrentModificationException
+Map	ju.LinkedHashMap.asScala	getOrElseUpdate(new, _)	default adds 64 keys	CME	init=3 elements; expected (List((1,2), (2,3), (3,4), (50,2), (60,0), (61,1), (62,2), (63,3), (64,4), (65,5), (66,6), (67,7), (68,8), (69,9), (70,10), (71,11), (72,12), (73,13), (74,14), ...; got EXC:ConcurrentModificationException
+Map	ju.LinkedHashMap.asScala	getOrElseUpdate(new, _)	default removes a key	CME	init=3 elements; expected (List((2,3), (3,4), (50,2)),3); got EXC:ConcurrentModificationException
+Map	ju.LinkedHashMap.asScala	getOrElseUpdate(new, _)	default clears	CME	init=3 elements; expected (List((50,2)),1); got EXC:ConcurrentModificationException
+Map	ju.LinkedHashMap.asScala	getOrElseUpdate(new, _)	default adds the key	CME	init=3 elements; expected (List((1,2), (2,3), (3,4), (50,2)),4); got EXC:ConcurrentModificationException
+Map	ju.LinkedHashMap.asScala	updateWith(present)	f adds 1 key	CME	init=3 elements; expected (List((1,7), (2,3), (3,4), (51,1)),4); got EXC:ConcurrentModificationException
+Map	ju.LinkedHashMap.asScala	updateWith(present)	f adds 64 keys	CME	init=3 elements; expected (List((1,7), (2,3), (3,4), (60,0), (61,1), (62,2), (63,3), (64,4), (65,5), (66,6), (67,7), (68,8), (69,9), (70,10), (71,11), (72,12), (73,13), (74,14), (75,15),...; got EXC:ConcurrentModificationException
+Map	ju.LinkedHashMap.asScala	updateWith(present)	f removes the key	CME	init=3 elements; expected (List((1,7), (2,3), (3,4)),3); got EXC:ConcurrentModificationException
+Map	ju.LinkedHashMap.asScala	updateWith(present)	f clears	CME	init=3 elements; expected (List((1,7)),1); got EXC:ConcurrentModificationException
+Map	ju.LinkedHashMap.asScala	updateWith(present)	f adds 64 keys, returns None	CME	init=3 elements; expected (List((2,3), (3,4), (60,0), (61,1), (62,2), (63,3), (64,4), (65,5), (66,6), (67,7), (68,8), (69,9), (70,10), (71,11), (72,12), (73,13), (74,14), (75,15), (76,16...; got EXC:ConcurrentModificationException
+Map	ju.LinkedHashMap.asScala	updateWith(absent)	f adds 64 keys	CME	init=3 elements; expected (List((1,2), (2,3), (3,4), (50,7), (60,0), (61,1), (62,2), (63,3), (64,4), (65,5), (66,6), (67,7), (68,8), (69,9), (70,10), (71,11), (72,12), (73,13), (74,14), ...; got EXC:ConcurrentModificationException
+Map	ju.LinkedHashMap.asScala	updateWith(absent)	f adds the key	CME	init=3 elements; expected (List((1,2), (2,3), (3,4), (50,7)),4); got EXC:ConcurrentModificationException
+Map	ju.ConcurrentHashMap.asScala	addAll	self	ok	
+Map	ju.ConcurrentHashMap.asScala	addAll	view	ok	
+Map	ju.ConcurrentHashMap.asScala	addAll	view.map	WRONG	init=3 elements; expected (List((1,2), (2,12), (3,13), (4,14)),4); got (List((1,2), (2,12), (3,22), (4,32)),4)
+Map	ju.ConcurrentHashMap.asScala	addAll	view.filter	ok	
+Map	ju.ConcurrentHashMap.asScala	addAll	view.mapValues	ok	
+Map	ju.ConcurrentHashMap.asScala	addAll	view.filterKeys	ok	
+Map	ju.ConcurrentHashMap.asScala	addAll	iterator	ok	
+Map	ju.ConcurrentHashMap.asScala	addAll	iterator.map	WRONG	init=3 elements; expected (List((1,2), (2,12), (3,13), (4,14)),4); got (List((1,2), (2,12), (3,22), (4,32)),4)
+Map	ju.ConcurrentHashMap.asScala	addAll	keysIterator.map	ok	
+Map	ju.ConcurrentHashMap.asScala	addAll	keySet.view.map	ok	
+Map	ju.ConcurrentHashMap.asScala	addAll	values.view.map	ok	
+Map	ju.ConcurrentHashMap.asScala	addAll	to(LazyList)	ok	
+Map	ju.ConcurrentHashMap.asScala	addAll	toList (control)	ok	
+Map	ju.ConcurrentHashMap.asScala	subtractAll	keySet	ok	
+Map	ju.ConcurrentHashMap.asScala	subtractAll	keys	ok	
+Map	ju.ConcurrentHashMap.asScala	subtractAll	keysIterator	ok	
+Map	ju.ConcurrentHashMap.asScala	subtractAll	keySet.view.filter	ok	
+Map	ju.ConcurrentHashMap.asScala	subtractAll	keySet.view.map(_+1)	ok	
+Map	ju.ConcurrentHashMap.asScala	subtractAll	view.map(_._1)	ok	
+Map	ju.ConcurrentHashMap.asScala	subtractAll	values.map(key)	ok	
+Map	ju.ConcurrentHashMap.asScala	subtractAll	valuesIterator.map(key)	ok	
+Map	ju.ConcurrentHashMap.asScala	subtractAll	keySet.toList (control)	ok	
+Map	ju.ConcurrentHashMap.asScala	filterInPlace	p = !self.contains(k+1)	ok	
+Map	ju.ConcurrentHashMap.asScala	filterInPlace	p = self.size is even	WRONG	init=3 elements; expected (List(),0); got (List((2,3), (3,4)),2)
+Map	ju.ConcurrentHashMap.asScala	mapValuesInPlace	f = self.getOrElse(k+1, 0)	ok	
+Map	ju.ConcurrentHashMap.asScala	getOrElseUpdate(new, _)	default adds 1 key	ok	
+Map	ju.ConcurrentHashMap.asScala	getOrElseUpdate(new, _)	default adds 64 keys	EXC:IllegalStateException	init=3 elements; expected (List((1,2), (2,3), (3,4), (50,2), (60,0), (61,1), (62,2), (63,3), (64,4), (65,5), (66,6), (67,7), (68,8), (69,9), (70,10), (71,11), (72,12), (73,13), (74,14), ...; got EXC:IllegalStateException
+Map	ju.ConcurrentHashMap.asScala	getOrElseUpdate(new, _)	default removes a key	ok	
+Map	ju.ConcurrentHashMap.asScala	getOrElseUpdate(new, _)	default clears	WRONG	init=3 elements; expected (List((50,2)),1); got (List(),1)
+Map	ju.ConcurrentHashMap.asScala	getOrElseUpdate(new, _)	default adds the key	EXC:IllegalStateException	init=3 elements; expected (List((1,2), (2,3), (3,4), (50,2)),4); got EXC:IllegalStateException
+Map	ju.ConcurrentHashMap.asScala	updateWith(present)	f adds 1 key	ok	
+Map	ju.ConcurrentHashMap.asScala	updateWith(present)	f adds 64 keys	WRONG	init=3 elements; expected (List((1,7), (2,3), (3,4), (60,0), (61,1), (62,2), (63,3), (64,4), (65,5), (66,6), (67,7), (68,8), (69,9), (70,10), (71,11), (72,12), (73,13), (74,14), (75,15),...; got (List((1,2), (2,3), (3,4), (60,0), (61,1), (62,2), (63,3), (64,4), (65,5), (66,6), (67,7), (68,8), (69,9), (70,10), (71,11), (72,12), (73,13), (74,14), (75,15),...
+Map	ju.ConcurrentHashMap.asScala	updateWith(present)	f removes the key	WRONG	init=3 elements; expected (List((1,7), (2,3), (3,4)),3); got (List((2,3), (3,4)),2)
+Map	ju.ConcurrentHashMap.asScala	updateWith(present)	f clears	WRONG	init=3 elements; expected (List((1,7)),1); got (List(),0)
+Map	ju.ConcurrentHashMap.asScala	updateWith(present)	f adds 64 keys, returns None	WRONG	init=3 elements; expected (List((2,3), (3,4), (60,0), (61,1), (62,2), (63,3), (64,4), (65,5), (66,6), (67,7), (68,8), (69,9), (70,10), (71,11), (72,12), (73,13), (74,14), (75,15), (76,16...; got (List((1,2), (2,3), (3,4), (60,0), (61,1), (62,2), (63,3), (64,4), (65,5), (66,6), (67,7), (68,8), (69,9), (70,10), (71,11), (72,12), (73,13), (74,14), (75,15),...
+Map	ju.ConcurrentHashMap.asScala	updateWith(absent)	f adds 64 keys	EXC:IllegalStateException	init=3 elements; expected (List((1,2), (2,3), (3,4), (50,7), (60,0), (61,1), (62,2), (63,3), (64,4), (65,5), (66,6), (67,7), (68,8), (69,9), (70,10), (71,11), (72,12), (73,13), (74,14), ...; got EXC:IllegalStateException
+Map	ju.ConcurrentHashMap.asScala	updateWith(absent)	f adds the key	EXC:IllegalStateException	init=3 elements; expected (List((1,2), (2,3), (3,4), (50,7)),4); got EXC:IllegalStateException
+Map	LongMap	addAll	self	ok	
+Map	LongMap	addAll	view	ok	
+Map	LongMap	addAll	view.map	WRONG	init=3 elements; expected (List((1,2), (2,12), (3,13), (4,14)),4); got (List((1,2), (2,12), (3,13), (4,23), (5,33)),5)
+Map	LongMap	addAll	view.filter	ok	
+Map	LongMap	addAll	view.mapValues	ok	
+Map	LongMap	addAll	view.filterKeys	ok	
+Map	LongMap	addAll	iterator	ok	
+Map	LongMap	addAll	iterator.map	WRONG	init=3 elements; expected (List((1,2), (2,12), (3,13), (4,14)),4); got (List((1,2), (2,12), (3,13), (4,23), (5,33)),5)
+Map	LongMap	addAll	keysIterator.map	WRONG	init=3 elements; expected (List((1,2), (2,0), (3,0), (4,0)),4); got (List((1,2), (2,0), (3,0), (4,0), (5,0)),5)
+Map	LongMap	addAll	keySet.view.map	WRONG	init=3 elements; expected (List((1,2), (2,0), (3,0), (4,0)),4); got (List((1,2), (2,0), (3,0), (4,0), (5,0)),5)
+Map	LongMap	addAll	values.view.map	ok	
+Map	LongMap	addAll	to(LazyList)	ok	
+Map	LongMap	addAll	toList (control)	ok	
+Map	LongMap	subtractAll	keySet	ok	
+Map	LongMap	subtractAll	keys	ok	
+Map	LongMap	subtractAll	keysIterator	ok	
+Map	LongMap	subtractAll	keySet.view.filter	ok	
+Map	LongMap	subtractAll	keySet.view.map(_+1)	WRONG	init=40 elements; expected (List((1,2)),1); got (List((1,2), (3,4), (8,9), (12,13), (15,16), (17,18), (20,21), (22,23), (24,25), (27,28), (29,30), (32,33), (34,35), (36,37), (38,39)),15)
+Map	LongMap	subtractAll	view.map(_._1)	ok	
+Map	LongMap	subtractAll	values.map(key)	ok	
+Map	LongMap	subtractAll	valuesIterator.map(key)	WRONG	init=40 elements; expected (List((1,2)),1); got (List((1,2), (3,4), (8,9), (12,13), (15,16), (17,18), (20,21), (22,23), (24,25), (27,28), (29,30), (32,33), (34,35), (36,37), (38,39)),15)
+Map	LongMap	subtractAll	keySet.toList (control)	ok	
+Map	LongMap	filterInPlace	p = !self.contains(k+1)	WRONG	init=3 elements; expected (List((3,4)),1); got (List((1,2), (3,4)),2)
+Map	LongMap	filterInPlace	p = self.size is even	WRONG	init=3 elements; expected (List(),0); got (List((1,2), (3,4)),2)
+Map	LongMap	mapValuesInPlace	f = self.getOrElse(k+1, 0)	WRONG	init=3 elements; expected (List((1,3), (2,4), (3,0)),3); got (List((1,4), (2,4), (3,0)),3)
+Map	LongMap	getOrElseUpdate(new, _)	default adds 1 key	ok	
+Map	LongMap	getOrElseUpdate(new, _)	default adds 64 keys	ok	
+Map	LongMap	getOrElseUpdate(new, _)	default removes a key	ok	
+Map	LongMap	getOrElseUpdate(new, _)	default clears	ok	
+Map	LongMap	getOrElseUpdate(new, _)	default adds the key	ok	
+Map	LongMap	updateWith(present)	f adds 1 key	ok	
+Map	LongMap	updateWith(present)	f adds 64 keys	ok	
+Map	LongMap	updateWith(present)	f removes the key	ok	
+Map	LongMap	updateWith(present)	f clears	ok	
+Map	LongMap	updateWith(present)	f adds 64 keys, returns None	ok	
+Map	LongMap	updateWith(absent)	f adds 64 keys	ok	
+Map	LongMap	updateWith(absent)	f adds the key	ok	
+Map	AnyRefMap	addAll	self	ok	
+Map	AnyRefMap	addAll	view	ok	
+Map	AnyRefMap	addAll	view.map	WRONG	init=3 elements; expected (List((1,2), (2,12), (3,13), (4,14)),4); got (List((1,2), (2,12), (3,13), (4,14), (5,24)),5)
+Map	AnyRefMap	addAll	view.filter	ok	
+Map	AnyRefMap	addAll	view.mapValues	ok	
+Map	AnyRefMap	addAll	view.filterKeys	ok	
+Map	AnyRefMap	addAll	iterator	ok	
+Map	AnyRefMap	addAll	iterator.map	WRONG	init=3 elements; expected (List((1,2), (2,12), (3,13), (4,14)),4); got (List((1,2), (2,12), (3,13), (4,14), (5,24)),5)
+Map	AnyRefMap	addAll	keysIterator.map	WRONG	init=3 elements; expected (List((1,2), (2,0), (3,0), (4,0)),4); got (List((1,2), (2,0), (3,0), (4,0), (5,0)),5)
+Map	AnyRefMap	addAll	keySet.view.map	WRONG	init=3 elements; expected (List((1,2), (2,0), (3,0), (4,0)),4); got (List((1,2), (2,0), (3,0), (4,0), (5,0)),5)
+Map	AnyRefMap	addAll	values.view.map	ok	
+Map	AnyRefMap	addAll	to(LazyList)	ok	
+Map	AnyRefMap	addAll	toList (control)	ok	
+Map	AnyRefMap	subtractAll	keySet	ok	
+Map	AnyRefMap	subtractAll	keys	ok	
+Map	AnyRefMap	subtractAll	keysIterator	ok	
+Map	AnyRefMap	subtractAll	keySet.view.filter	ok	
+Map	AnyRefMap	subtractAll	keySet.view.map(_+1)	WRONG	init=40 elements; expected (List((1,2)),1); got (List((1,2), (4,5), (7,8), (9,10), (13,14), (16,17), (18,19), (20,21), (22,23), (24,25), (26,27), (29,30), (31,32), (33,34), (35,36), (39,40)),16)
+Map	AnyRefMap	subtractAll	view.map(_._1)	ok	
+Map	AnyRefMap	subtractAll	values.map(key)	ok	
+Map	AnyRefMap	subtractAll	valuesIterator.map(key)	WRONG	init=40 elements; expected (List((1,2)),1); got (List((1,2), (4,5), (7,8), (9,10), (13,14), (16,17), (18,19), (20,21), (22,23), (24,25), (26,27), (29,30), (31,32), (33,34), (35,36), (39,40)),16)
+Map	AnyRefMap	subtractAll	keySet.toList (control)	ok	
+Map	AnyRefMap	filterInPlace	p = !self.contains(k+1)	WRONG	init=3 elements; expected (List((3,4)),1); got (List((1,2), (3,4)),2)
+Map	AnyRefMap	filterInPlace	p = self.size is even	WRONG	init=3 elements; expected (List(),0); got (List((1,2), (2,3)),2)
+Map	AnyRefMap	mapValuesInPlace	f = self.getOrElse(k+1, 0)	WRONG	init=3 elements; expected (List((1,3), (2,4), (3,0)),3); got (List((1,0), (2,0), (3,0)),3)
+Map	AnyRefMap	getOrElseUpdate(new, _)	default adds 1 key	ok	
+Map	AnyRefMap	getOrElseUpdate(new, _)	default adds 64 keys	ok	
+Map	AnyRefMap	getOrElseUpdate(new, _)	default removes a key	ok	
+Map	AnyRefMap	getOrElseUpdate(new, _)	default clears	ok	
+Map	AnyRefMap	getOrElseUpdate(new, _)	default adds the key	ok	
+Map	AnyRefMap	updateWith(present)	f adds 1 key	ok	
+Map	AnyRefMap	updateWith(present)	f adds 64 keys	ok	
+Map	AnyRefMap	updateWith(present)	f removes the key	ok	
+Map	AnyRefMap	updateWith(present)	f clears	ok	
+Map	AnyRefMap	updateWith(present)	f adds 64 keys, returns None	ok	
+Map	AnyRefMap	updateWith(absent)	f adds 64 keys	ok	
+Map	AnyRefMap	updateWith(absent)	f adds the key	ok	

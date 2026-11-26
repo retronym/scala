@@ -1,0 +1,21 @@
+{
+  "id": "GC5",
+  "theme": "generated",
+  "track": "collections3",
+  "area": "scala.collection.immutable.NumericRange",
+  "title": "NumericRange.count throws 'More than Int.MaxValue elements' for a BigDecimal range that crosses zero from a fractional start and has slightly fewer than Int.MaxValue elements, so take(Int.MaxValue) of a longer range is unusable",
+  "kind": "wrong exception",
+  "oracle": "BigInt model of the range on scaled integers: length is the count when it is at most Int.MaxValue",
+  "generator": "wave4/harness/collections3/RangeDiff.scala: BigDecimal ranges at scale 2 and 5 with more than Int.MaxValue elements followed by take or splitAt with an argument at Int.MaxValue",
+  "signature": "NR[BigDecimal/2] | .take(#,#) | length | val -> EX:IllegalArgumentException",
+  "seed": "seed 5, 200 s run; case number not recorded",
+  "measure": "n/a",
+  "detail": "For a range whose start and end have different signs NumericRange.count (src/library/scala/collection/immutable/NumericRange.scala, the 'jump in three pieces' branch) first steps from start to 1 or -1. When the start lies between 0 and the limit on the far side (0.34 with a negative step: startlim is 1, which is greater than start) it takes startdiff = start, and quot(0.34, -0.01) is -34: a negative number of steps, so waypointA is 0.68, further from the end. The final sum startq + endq + 2 is still right because endq is 68 too large, but endq is passed through the check against Int.MaxValue on its own. A range with between Int.MaxValue - 67 and Int.MaxValue elements therefore throws from length: Range.BigDecimal.inclusive(0.34, -21474836.11, -0.01) has 2147483646 elements and length throws. take(Int.MaxValue) on a longer range of this shape returns such a range, whose length, last, apply and min all throw. Only BigDecimal reaches this (integral types have no start strictly between 0 and 1), and only next to the Int.MaxValue limit.",
+  "fix_sketch": "Take startdiff = start only when start is on the step's side of zero, otherwise 0 steps; or apply the limit check to the final sum only. No compatibility cost.",
+  "on_integration": "present",
+  "on_base": "same",
+  "on_2_13_18": "same",
+  "scala3": "not run (the 2.13 library is shared)",
+  "prior": "none found; LB4 (retronym/scala#533) and LI3 are other defects in the same count function",
+  "confidence": "confirmed"
+}

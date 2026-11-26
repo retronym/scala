@@ -1,0 +1,11 @@
+b = NumericRange.inclusive[Byte](-128, 57, 5); b.length                     = 38
+b.iterator.knownSize                                                       = 38
+b2 = NumericRange.inclusive[Byte](-128, 126, 127); b2.toList               = List(-128, -1, 126)
+b2.iterator.knownSize                                                      = 3
+b2.iterator.toVector                                                       = Vector(-128, -1, 126)
+s = NumericRange[Short](29199, -32768, -6025); s.length                    = 11
+s.iterator.knownSize                                                       = 11
+s.iterator.drop(1).toList.size                                             = 10
+l = NumericRange.inclusive(Long.MinValue, Long.MaxValue, Long.MaxValue); l.length = 3
+l.iterator.knownSize                                                       = 3
+l.iterator.toVector.size                                                   = 3

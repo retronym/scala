@@ -1,0 +1,5 @@
+scalac failed:
+repro/Test.scala:5: error: double definition:
+override def m(p: Int, q: => Long): Int at line 5 and
+override def m(p: Int, q: () => Long): Int at line 5
+have same type after erasure: (p: Int, q: Function0): Int

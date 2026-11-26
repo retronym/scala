@@ -1,0 +1,153 @@
+{
+  "phases": [
+    [
+      "Wave four: design and first spike",
+      "done",
+      "Generated inputs checked by oracles, steered by JaCoCo coverage; the loop is borrowed from Datadog's Ephyra, rebuilt on the JVM. Design note, harnesses and tools: retronym/scala#745 (wave4/README.md). First spike: differential harnesses for the Seq, buffer, set and map APIs on the integration build of earlier draft fixes"
+    ],
+    [
+      "Wave four: parallel spikes",
+      "done",
+      "Four tracks of about 45 minutes each on the integration build: Java sources through scalac's parser against javac (GJ), a third collections round (GC), primitive expressions in many embeddings (GF), generated Scala programs compiled several ways that must agree (GE). 22 findings with the first spike, each re-run by the coordinating session except the two unshrunk crashes GE7 and GE8; none independently reviewed, none with a pull request. Findings came in each track's first cases; more volume of the same kind found nothing"
+    ],
+    [
+      "Wave four: steered campaign",
+      "pending",
+      "Longer sessions for the tracks whose spike produced a signature or whose coverage is still rising, with one generator change per round, a shared compile-and-run driver, and a table of known signatures so unfixed earlier findings stop masking new ones"
+    ]
+  ],
+  "agents": [
+    [
+      "w4 collections",
+      "Fable",
+      "Seq, buffer, set and map APIs against List and reference models",
+      "done",
+      "1 finding (GA1). Read-only Seq API: 89,103 calls on 30 implementations, no value difference. Sets and maps: only the known unfixed range-view defect LB2, which masks everything else on those views. Lines of scala.collection reached: 24.2% after round one, 55.3% after round two; the existing scalacheck suite reached 47.0% on 19 November"
+    ],
+    [
+      "w4 javaparser",
+      "Fable",
+      "Generated Java 21 sources: joint compilation against javac's class files",
+      "done",
+      "4 findings (GJ1 to GJ4): a sealed interface with record implementors loses its exhaustivity warning in joint compilation (regression since 2.13.18), a varargs record component is typed Int* from source, a @Deprecated with a constant-expression argument loses its warning, an enum body of a lone comma is rejected. 300 cases in 92 seconds; all findings within the first 70"
+    ],
+    [
+      "w4 collections3",
+      "Fable",
+      "Coverage-chosen library files under ordinary usage; Range against exact arithmetic",
+      "done",
+      "7 findings (GC1 to GC7), all from the Range model and the re-entrancy matrix built before the track was re-aimed: knownSize overflow in Range and NumericRange iterators, an empty Range iterator revived by drop, updateWith losing the update, and self-aliasing in sets and maps recorded as one open class with GA1. After re-aiming at coverage: about 20 million checks of ordinary usage of Vector, ArrayOps, StringOps, the string parsers and the hash tries per run, no signature; ArrayOps from 96 to 484 of 618 lines, StringParsers from 0 to all 139"
+    ],
+    [
+      "w4 erasure",
+      "Fable",
+      "Generated Scala programs compiled several ways that must agree",
+      "done",
+      "8 findings (GE1 to GE8): crashes and wrong rejections where @specialized meets super calls, by-name overrides, partial functions and local lazy vals; an inliner budget failure new since 2.13.18 (GE6); two unshrunk crashes (GE7, GE8). The generator compiles 17 of 17 programs without @specialized and 28 of 40 with it at ordinary weight; the general grammar ran only 17 programs. One round reaches 69% of transform, 68% of patmat, 69% of backend.jvm, 47% of typechecker"
+    ],
+    [
+      "w4 fold",
+      "Fable",
+      "Primitive expressions: constant-folded against evaluated at run time, boxed against unboxed, optimizer on against off",
+      "done",
+      "2 findings (GF1, GF2). About 3,100 expression trees, each printed in up to 22 forms with the optimizer on and off: no wrong value in primitive arithmetic, shifts, conversions, equality, hashing or concatenation. GF1 is a back-end crash on a match whose scrutinee is an if with a constant condition and a Nothing branch; GF2 is an annotation argument block whose statements are dropped. One 150-tree batch reaches 77% of the lines of ConstantFolder and BCodeBodyBuilder and 43% of CleanUp"
+    ]
+  ],
+  "log": [
+    [
+      "26 Nov 21:47",
+      "All wave-four spike tracks reported and their findings are in wave4/findings (retronym/scala#745): GA1, GC1 to GC7, GE1 to GE8, GF1, GF2, GJ1 to GJ4. The coordinating session re-ran 20 of the 22 from their recorded commands; all match. Next is an independent review of each and a decision on which tracks get a steered campaign."
+    ],
+    [
+      "26 Nov 21:42",
+      "Expression and program tracks reported: GF1, GF2, GE1 to GE8. The coordinating session re-ran GA1, GE1 to GE6, GF1 and GF2 on the integration build; all reproduce as recorded. GE7 and GE8 are unshrunk and not re-run. The Java parser and collections tracks are converting their findings into finding directories (GJ, GC)."
+    ],
+    [
+      "26 Nov 21:41",
+      "Wave four started as a spike: design note and tools in retronym/scala#745. The first collections harness rediscovered wave-two LI5 on the unfixed base within 90 seconds and found self-aliasing cells in ArrayDeque and UnrolledBuffer that the draft fixes do not cover (GA1). Three of four parallel tracks have reported; their findings are being put into the usual finding directories."
+    ]
+  ],
+  "meta": [],
+  "verify": {
+    "GA1": {
+      "state": "verified",
+      "note": "cmd.sh re-run by the coordinating session on the integration build at 26 Nov 21:42; output matches actual.txt"
+    },
+    "GE1": {
+      "state": "verified",
+      "note": "cmd.sh re-run by the coordinating session on the integration build at 26 Nov 21:42; output matches actual.txt"
+    },
+    "GE2": {
+      "state": "verified",
+      "note": "cmd.sh re-run by the coordinating session on the integration build at 26 Nov 21:42; output matches actual.txt"
+    },
+    "GE3": {
+      "state": "verified",
+      "note": "cmd.sh re-run by the coordinating session on the integration build at 26 Nov 21:42; output matches actual.txt"
+    },
+    "GE4": {
+      "state": "verified",
+      "note": "cmd.sh re-run by the coordinating session on the integration build at 26 Nov 21:42; output matches actual.txt"
+    },
+    "GE5": {
+      "state": "verified",
+      "note": "cmd.sh re-run by the coordinating session on the integration build at 26 Nov 21:42; output matches actual.txt"
+    },
+    "GE6": {
+      "state": "verified",
+      "note": "cmd.sh re-run by the coordinating session on the integration build at 26 Nov 21:42; output matches actual.txt"
+    },
+    "GF1": {
+      "state": "verified",
+      "note": "cmd.sh re-run by the coordinating session on the integration build at 26 Nov 21:42; output matches actual.txt"
+    },
+    "GF2": {
+      "state": "verified",
+      "note": "cmd.sh re-run by the coordinating session on the integration build at 26 Nov 21:42; output matches actual.txt"
+    },
+    "GC1": {
+      "state": "verified",
+      "note": "cmd.sh re-run by the coordinating session on the integration build at 26 Nov 21:47; output matches actual.txt"
+    },
+    "GC2": {
+      "state": "verified",
+      "note": "cmd.sh re-run by the coordinating session on the integration build at 26 Nov 21:47; output matches actual.txt"
+    },
+    "GC3": {
+      "state": "verified",
+      "note": "cmd.sh re-run by the coordinating session on the integration build at 26 Nov 21:47; output matches actual.txt"
+    },
+    "GC4": {
+      "state": "verified",
+      "note": "cmd.sh re-run by the coordinating session on the integration build at 26 Nov 21:47; output matches actual.txt"
+    },
+    "GC5": {
+      "state": "verified",
+      "note": "cmd.sh re-run by the coordinating session on the integration build at 26 Nov 21:47; output matches actual.txt"
+    },
+    "GC6": {
+      "state": "verified",
+      "note": "cmd.sh re-run by the coordinating session on the integration build at 26 Nov 21:47; output matches actual.txt"
+    },
+    "GC7": {
+      "state": "verified",
+      "note": "cmd.sh re-run by the coordinating session on the integration build at 26 Nov 21:47; output matches actual.txt"
+    },
+    "GJ1": {
+      "state": "verified",
+      "note": "cmd.sh re-run by the coordinating session on the integration build at 26 Nov 21:47; output matches actual.txt"
+    },
+    "GJ2": {
+      "state": "verified",
+      "note": "cmd.sh re-run by the coordinating session on the integration build at 26 Nov 21:47; output matches actual.txt"
+    },
+    "GJ3": {
+      "state": "verified",
+      "note": "cmd.sh re-run by the coordinating session on the integration build at 26 Nov 21:47; output matches actual.txt"
+    },
+    "GJ4": {
+      "state": "verified",
+      "note": "cmd.sh re-run by the coordinating session on the integration build at 26 Nov 21:47; output matches actual.txt"
+    }
+  }
+}

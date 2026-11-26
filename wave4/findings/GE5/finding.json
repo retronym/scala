@@ -1,0 +1,21 @@
+{
+  "id": "GE5",
+  "theme": "generated",
+  "track": "erasure",
+  "area": "scala.tools.nsc.transform.SpecializeTypes / typechecker.Duplicators",
+  "title": "Local lazy val captured by a lambda inside a local def in a method with a @specialized type parameter is rejected with \"found Int, required x.type\"",
+  "kind": "wrong rejection",
+  "oracle": "the program with every @specialized removed compiles and prints Some(1)",
+  "generator": "wave4/harness/erasure (Gen.scala, Driver.scala): block with a local lazy val of the method type parameter and a local def returning a lambda that reads it",
+  "signature": "novc|run-throw/compile-error|type mismatch; (first seen through the value-class rewrite, because methods of a value class are not specialized)",
+  "seed": "30014 (round 2)",
+  "measure": "n/a",
+  "detail": "def m[@specialized(Int) B](p: B) declares lazy val x: B = p and def loc(q: Int): B => B = (y: B) => x. The compiler reports \"type mismatch; found: Int; required: x.type\" at the reference to x inside the lambda. The error comes from retyping the duplicated body for the Int variant. A lambda that reads the lazy val directly in the method body, without the enclosing local def, compiles and runs, as does the generic method. The mechanism was not traced further.",
+  "fix_sketch": "Not established; the reference to the local lazy val in the duplicated tree should be typed at the widened type B (here Int) as it is outside the local def. No compatibility cost: the program does not compile today.",
+  "on_integration": "present",
+  "on_base": "same",
+  "on_2_13_18": "same",
+  "scala3": "not run",
+  "prior": "none found",
+  "confidence": "confirmed"
+}
