@@ -1,8 +1,100 @@
 [
-{"round": 1, "change": "New harness wave4/harness/library: programs of 1-30 calls on the specialised maps (mutable LongMap, AnyRefMap, OpenHashMap, CollisionProofHashMap, TrieMap with snapshots; immutable IntMap, LongMap, TreeSeqMap both orders, VectorMap, ListMap), PriorityQueue, mutable Stack/Queue and immutable Queue, against TreeMap / sorted-list / List models, keeping every version and snapshot live.",
- "cases": 523839, "seconds": 150, "signatures_new": 1, "signatures_known": 0,
- "false_alarms": {"count": 3, "cause": "harness: IntMap/LongMap firstKey on empty throws IllegalStateException not NoSuchElementException (unspecified); TreeSeqMap companion builder orders by insertion whatever the receiver's ordering (mapFactory has no ordering); PriorityQueue.map returns Iterable"},
- "coverage": {"scope (31 files + convert/impl)": [2907, 7713], "maps, queues targeted this round": [2653, 3132], "convert + jdk + steppers": [0, 2430]},
- "largest_unreached": ["convert/JavaCollectionWrappers.scala (325 lines)", "jdk/IntAccumulator, LongAccumulator, DoubleAccumulator, AnyAccumulator (1031 lines)", "convert/StreamExtensions.scala and convert/impl steppers (770 lines)", "immutable/LazyList.scala (443 unreached)", "util/Sorting.scala (139)"],
- "next": "Add the scala.jdk / convert family: wrappers both ways against java.util models with the same contract, steppers split recursively, Java streams and accumulators; that is the largest unreached block."}
+ {
+  "round": 1,
+  "change": "New harness wave4/harness/library: programs of 1-30 calls on the specialised maps (mutable LongMap, AnyRefMap, OpenHashMap, CollisionProofHashMap, TrieMap with snapshots; immutable IntMap, LongMap, TreeSeqMap both orders, VectorMap, ListMap), PriorityQueue, mutable Stack/Queue and immutable Queue, against TreeMap / sorted-list / List models, keeping every version and snapshot live.",
+  "cases": 523839,
+  "seconds": 150,
+  "signatures_new": 1,
+  "signatures_known": 0,
+  "false_alarms": {
+   "count": 3,
+   "cause": "harness: IntMap/LongMap firstKey on empty throws IllegalStateException not NoSuchElementException (unspecified); TreeSeqMap companion builder orders by insertion whatever the receiver's ordering (mapFactory has no ordering); PriorityQueue.map returns Iterable"
+  },
+  "coverage": {
+   "scope (31 files + convert/impl)": [
+    2907,
+    7713
+   ],
+   "maps, queues targeted this round": [
+    2653,
+    3132
+   ],
+   "convert + jdk + steppers": [
+    0,
+    2430
+   ]
+  },
+  "largest_unreached": [
+   "convert/JavaCollectionWrappers.scala (325 lines)",
+   "jdk/IntAccumulator, LongAccumulator, DoubleAccumulator, AnyAccumulator (1031 lines)",
+   "convert/StreamExtensions.scala and convert/impl steppers (770 lines)",
+   "immutable/LazyList.scala (443 unreached)",
+   "util/Sorting.scala (139)"
+  ],
+  "next": "Add the scala.jdk / convert family: wrappers both ways against java.util models with the same contract, steppers split recursively, Java streams and accumulators; that is the largest unreached block."
+ },
+ {
+  "round": 2,
+  "change": "Added the scala.jdk / convert families: Scala collections viewed as java.util List/Set/Map against java.util models with the same contract, Java collections viewed as Scala Buffer/Set/Map/concurrent.Map against ArrayBuffer/Set/TreeMap models, steppers over 48 collection shapes split recursively, sequential and parallel Java streams, and Int/Long/Double/Any accumulator programs.",
+  "cases": 744573,
+  "seconds": 160,
+  "signatures_new": 2,
+  "signatures_known": 1,
+  "false_alarms": {
+   "count": 9,
+   "cause": "harness: optional UnsupportedOperationException/ClassCastException/NullPointerException in java.util contracts (read-only views that return no-change answers, TreeMap model throwing on foreign keys); values().remove picks a different one of two equal values; ConcurrentSkipListMap model rejects null old values and setValue; out-of-range Buffer index exception types; Buffer.remove(i, 0) with i out of range. Known: LM7 (Buffer.asJava iterator cannot remove), excluded 257,196 times"
+  },
+  "coverage": {
+   "scope (31 files + convert/impl)": [
+    4657,
+    7713
+   ],
+   "convert + jdk + steppers": [
+    1802,
+    2430
+   ],
+   "LazyList, Iterator, Sorting, BigInt, BigDecimal, Random, StringOps": [
+    289,
+    2036
+   ]
+  },
+  "largest_unreached": [
+   "util/Sorting.scala (139 of 139 unreached)",
+   "immutable/LazyList.scala (391 unreached)",
+   "math/BigInt.scala and BigDecimal.scala (350 unreached)",
+   "Iterator.scala (323 unreached)",
+   "util/Random.scala (81 unreached)"
+  ],
+  "next": "Add Iterator combinator chains, LazyList evaluation counting against the Scaladoc $initiallyLazy/$preservesLaziness tags, Sorting against java.util.Arrays with stability, BigInt/BigDecimal against java.math, Random bounds and StringOps.format."
+ },
+ {
+  "round": 3,
+  "change": "Added Iterator combinator chains (10 sources, 22 combinators, 24 terminals including span, partition and duplicate consumed in both orders), LazyList evaluation counting against the Scaladoc ($initiallyLazy, $preservesLaziness, memoisation, computed in order and never skipped), Sorting and sorted/sortInPlace against java.util.Arrays with stability, BigInt/BigDecimal against java.math, Random bounds, StringOps.format/formatLocal, StringView.",
+  "cases": 8475744,
+  "seconds": 110,
+  "signatures_new": 0,
+  "signatures_known": 0,
+  "false_alarms": {
+   "count": 6,
+   "cause": "harness: terminals that consumed one iterator twice; signatures keyed by the combinator chain; Float NaN compared with ==; java.math model rounding the operands although BigDecimal(String) is exact with a widened MathContext; BigDecimal == Double uses the decimal expansion; LazyList forces an element with its cell (documented: computed in order, never skipped), so element-free length/apply oracles were wrong. LazyList.updated/tail out of range excluded (exception type unspecified) 48,172 times"
+  },
+  "coverage": {
+   "scope (31 files + convert/impl)": [
+    5660,
+    7713
+   ],
+   "LazyList, Iterator, Sorting, BigInt, BigDecimal, Random, StringOps": [
+    1292,
+    2036
+   ]
+  },
+  "largest_unreached": [
+   "StringOps.scala (403 unreached; measured sound by collections3, not re-run here)",
+   "immutable/LazyList.scala (144 unreached: addStringNoForce, serialization, lazy builders)",
+   "convert/JavaCollectionWrappers.scala (110 unreached: Dictionary, Properties, ConcurrentMap wrappers of Scala maps)",
+   "immutable/TreeSeqMap.scala (89 unreached)",
+   "concurrent/TrieMap.scala (148 unreached: concurrent paths)"
+  ],
+  "next": "Stop: three rounds within budget. Next would be the java.util.Dictionary/Properties wrappers and LazyList builders and serialization."
+ }
 ]

@@ -11,6 +11,7 @@ final case class Mismatch(sig: String, detail: String) extends RuntimeException(
 object H {
   def norm(a: Any): Any = a match {
     case d: Double => "d" + java.lang.Double.doubleToLongBits(d)
+    case f: Float => "f" + java.lang.Float.floatToIntBits(f)
     case arr: Array[_] => arr.iterator.map(norm).toList
     case it: Iterator[_] => it.map(norm).toList
     case s: scala.collection.Set[_] => s.iterator.map(norm).toSet

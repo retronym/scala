@@ -58,5 +58,123 @@
    "BCodeBodyBuilder.genStringConcat (spill)"
   ],
   "next": "Aim at UnCurry.liftedTryCall/liftedTryReturn: try, match, while, synchronized and return in argument, operand, constructor and super-constructor position; and add an oracle: each context has a hand-written expected trace from the specification."
+ },
+ {
+  "round": 2,
+  "change": "Added the lift family (try, match, while, synchronized, return and throw in argument, operand, constructor, super-constructor, default, by-name, interpolator and lambda position; 30 contexts) and an oracle: a hand-written expected trace per context from the specification, checked against the expression evaluated alone.",
+  "cases": 2100,
+  "seconds": 430,
+  "signatures_new": 0,
+  "signatures_known": 0,
+  "false_alarms": "0",
+  "coverage": {
+   "BCodeSkelBuilder": {
+    "covered": 260,
+    "total": 335
+   },
+   "BCodeBodyBuilder": {
+    "covered": 725,
+    "total": 917
+   },
+   "UnCurry": {
+    "covered": 344,
+    "total": 488
+   },
+   "Erasure": {
+    "covered": 574,
+    "total": 823
+   },
+   "Fields": {
+    "covered": 203,
+    "total": 276
+   },
+   "Constructors": {
+    "covered": 192,
+    "total": 337
+   },
+   "CleanUp": {
+    "covered": 137,
+    "total": 346
+   },
+   "ScalaPrimitives": {
+    "covered": 272,
+    "total": 288
+   },
+   "ConstantFolder": {
+    "covered": 147,
+    "total": 176
+   },
+   "RefChecks": {
+    "covered": 610,
+    "total": 1371
+   }
+  },
+  "largest_unreached": [
+   "CleanUp.transformApplyDynamic",
+   "CleanUp.genArrayCall",
+   "BCodeBodyBuilder.genStringConcat (spill)",
+   "Constructors.DelayedInitHelper",
+   "BCodeSkelBuilder.appendToStaticCtor"
+  ],
+  "next": "Aim at CleanUp.transformApplyDynamic: structural calls on primitive, array and Unit-returning receivers, Dynamic, interpolators, varargs, arrays and concatenations past 200 slots (dyn family), plus definition and named-argument contexts. A hand probe of the result branch of fixResult while writing these found WX1."
+ },
+ {
+  "round": 3,
+  "change": "Added the dyn family (structural calls on primitive, array, Unit, generic, curried, by-name and varargs members; Dynamic; interpolators; varargs; arrays; concatenations up to 230 operands) and ran it with the def and named families (named and default arguments, super calls, right-associative operators, compound assignment through qualifiers, Unit-typed and elidable fields).",
+  "cases": 2400,
+  "seconds": 436,
+  "signatures_new": 0,
+  "signatures_known": 0,
+  "false_alarms": "0 (template rejections fixed in smoke runs before the round: refinements need an Any parent for primitive receivers; Array(...)(i) passes i as the ClassTag; Scala 2 rejects compound assignment through a block receiver)",
+  "coverage": {
+   "BCodeSkelBuilder": {
+    "covered": 269,
+    "total": 335
+   },
+   "BCodeBodyBuilder": {
+    "covered": 713,
+    "total": 917
+   },
+   "UnCurry": {
+    "covered": 267,
+    "total": 488
+   },
+   "Erasure": {
+    "covered": 581,
+    "total": 823
+   },
+   "Fields": {
+    "covered": 260,
+    "total": 276
+   },
+   "Constructors": {
+    "covered": 207,
+    "total": 337
+   },
+   "CleanUp": {
+    "covered": 278,
+    "total": 346
+   },
+   "ScalaPrimitives": {
+    "covered": 261,
+    "total": 288
+   },
+   "ConstantFolder": {
+    "covered": 158,
+    "total": 176
+   },
+   "RefChecks": {
+    "covered": 648,
+    "total": 1371
+   }
+  },
+  "largest_unreached": [
+   "UnCurry.liftedTryCall (reached in round 2, not run here)",
+   "BCodeBodyBuilder.genStringConcat join of more than 200 partial strings",
+   "Constructors.DelayedInitHelper",
+   "UnCurry.nonLocalReturnTry",
+   "BCodeSkelBuilder.appendToStaticCtor"
+  ],
+  "next": "Stop: budget spent; three rounds produced no generated disagreement. A further round would add DelayedInit (App), static initialisers and concatenations past 40,000 operands, which ordinary code rarely writes."
  }
 ]

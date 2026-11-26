@@ -24,7 +24,8 @@ object Hunt {
     (if (seed % 20 == 0 && src.length <= inlineMaxChars) List(Config("inline", int, List("-opt:inline:**", "-opt:local"))) else Nil)
 
   /** Known defects (wave4/known-signatures.md), excluded and counted. */
-  val known = List("GE6" -> "LimitExceededException: Too many allocated bytes".r, "GE4" -> "found: x\\d*\\.type".r)
+  val known = List("GE6" -> "LimitExceededException: Too many allocated bytes|^opt-local\\|ok/timeout-compile".r, "GE4" -> "found: x\\d*\\.type".r,
+                   "WP1" -> "^ycheck\\|log\\|.*Tree has erroneous type: N\\(\\)$".r)
   def knownId(sig: String): Option[String] = known.collectFirst { case (id, rx) if rx.findFirstIn(sig).nonEmpty => id }
 
   def normErr(e: String): String =

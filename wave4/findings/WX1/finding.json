@@ -1,0 +1,22 @@
+{
+ "id": "WX1",
+ "theme": "generated",
+ "track": "fold",
+ "area": "transform/CleanUp (structural calls)",
+ "area_code": "ER",
+ "title": "A structural call to a Unit method through a refinement whose result type is Any (or another supertype of Unit) returns null instead of ()",
+ "kind": "wrong result",
+ "oracle": "the same member called through a trait declaration with the same signature returns the boxed unit",
+ "generator": "wave4/harness/fold/ctx.py, 'dyn' family (structural calls); found while choosing round-four structural contexts from CleanUp.transformApplyDynamic coverage, by a hand probe of the result-type branch of fixResult",
+ "signature": "structural Unit-to-Any result null",
+ "seed": "not recorded (hand probe written from coverage of CleanUp.fixResult)",
+ "measure": "n/a",
+ "detail": "For class K { def m(x: Int): Unit } and (new K: { def m(x: Int): Any }).m(1), the call yields null. A Unit method conforms to a refinement member with result Any, so the call is well typed. CleanUp expands the call to Method.invoke, which returns null for a void method; fixResult boxes the result to BoxedUnit only when the refinement's own result type is Unit (resultSym == UnitClass) and passes it through unchanged when it is Object, although the code already computes isMaybeUnit for exactly this case and uses it only for arrays. The same member reached through a trait declaring def n: Any gets a bridge that returns BoxedUnit.UNIT. Ordinary code hits it when a structural type is written with a wide result type (Any, AnyVal, AnyRef is rejected) for a callback or close-like method; the result then compares unequal to () and throws NullPointerException on toString.",
+ "fix_sketch": "When the refinement's erased result is Object, map a null result to BoxedUnit.UNIT if the resolved java.lang.reflect.Method's return type is void (Method.getReturnType == Void.TYPE), in the reflective call path. No binary compatibility cost; one extra check per reflective call with an Object result.",
+ "on_integration": "present",
+ "on_base": "same",
+ "on_2_13_18": "same",
+ "scala3": "same (reflectiveSelectable also returns null)",
+ "prior": "none found; scala/bug#6199 is the same symptom in runtime reflection (fixed in 2.10); fork PRs 355, 394, 469, 437, 562 touch structural calls but not the result",
+ "confidence": "confirmed"
+}

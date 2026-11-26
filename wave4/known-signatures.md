@@ -13,3 +13,10 @@ Exclude these narrowly in a harness so they do not mask what is behind them.
 | GJ3 | a Java annotation argument that is a constant expression | the annotation is dropped from source |
 | scala/bug#8156 | lambdas in constructors of specialized classes | different cause from GE7, still fails |
 | J9 (wave one, remark) | a Java member whose name has a supplementary character (`int 𝑥`, `int x𝟙`), from source or class file | Scala source cannot select it: Scala encodes the surrogate pair as `$uD835$uDC65`, so "value 𝑥 is not a member" in both compilation orders (retronym/scala#291 leaves this open) |
+| WX1 | structural call to a Unit method through a refinement member whose result type is `Any` | the call returns `null` instead of `()`; the fold harness generates no such refinement |
+| GE6 (wider) | `-opt:local` alone, no inliner: a method with about 150 or more try/catch blocks | `CopyProp`'s `ProdConsAnalyzer`: 6 s at 100 handlers, `Too many allocated bytes` at 200 (2.13.18: 68 s, 25 GB allocated); in a harness, `-opt:local` compile timeouts |
+| WP1 | `-Ycheck:all` on a guarded Int or String switch whose result is boxed | `Tree has erroneous type: default4()` at posterasure; the program is correct |
+| LM7 | `Buffer.asJava` (`MutableBufferWrapper`) | `iterator().remove()` throws UnsupportedOperationException although `remove(int)` works; the open fix keeps the iterator read-only |
+| WL1 | `TrieMap.readOnlySnapshot()` result | `snapshot()` or `readOnlySnapshot()` on it throws NullPointerException from `CAS_ROOT` |
+| WL2 | `IntAccumulator`, `LongAccumulator`, `DoubleAccumulator`, `AnyAccumulator` | `apply(i)` / `update(i, x)` with `i == size` (or anywhere in the current chunk's spare capacity) return 0/null or write nothing instead of throwing |
+| WL3 | `asJava` views of `BitSet`, `TreeSet[Int]`, `mutable.LongMap`, `IntMap`, `TreeMap[Int, V]` | `contains(null)`, `get(null)`, `remove(null)` act on key 0 |

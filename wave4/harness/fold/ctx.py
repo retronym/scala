@@ -296,6 +296,22 @@ EXPECT.update(unitfield='E,E,m1', unittrait='E,m1,E', unitobj='m1,E', unitlocal=
     moduleintrait='m2,m1,E', overridelazy='m1,E', overrideval='m5,E', traitprivate='E', traitabs='m3,E', traitlazyunit='m2,m1,E')
 CTX = {c[0]: c for c in CONTEXTS}
 
+CONTEXTS += [
+    # ---- structural calls on arrays and Unit methods (CleanUp's array and result paths); WX1 excluded: no refinement widens a Unit result
+    ('structarr', 'dyn', ALL, '', '{ val a = Array[$T]($Z, $Z); val s: Any { def update(i: Int, x: $T): Unit; def apply(i: Int): $T } = a; s.update(mk(1), $E); s.apply(1) }'),
+    ('structarrlen', 'dyn', ALL, '', '{ val s: Any { def length: Int } = Array[$T]($E, $Z); s.length }'),
+    ('structarrclone', 'dyn', ALL, '', '{ val s: Any { def clone(): Any } = Array[$T]($E); s.clone().asInstanceOf[Array[$T]](0) }'),
+    ('structunit', 'dyn', ALL, 'class K { def m(x: $T): Unit = mk(3) }', '(new K: { def m(x: $T): Unit }).m($E)'),
+    ('structvar', 'dyn', ALL, 'class K { var f: $T = $Z }', '{ val k: { var f: $T } = new K; k.f = $E; k.f }'),
+    ('structgen', 'dyn', ALL, 'class K { def m[A](x: A): A = { mk(2); x } }', '(new K: { def m[A](x: A): A }).m($E)'),
+    ('structcurry', 'dyn', ALL, 'class K { def m(a: Int)(x: $T): $T = x }', '(new K: { def m(a: Int)(x: $T): $T }).m(mk(1))($E)'),
+    ('structbyname', 'dyn', ALL, 'class K { def m(x: => $T): String = { mk(2); "" + x } }', '(new K: { def m(x: => $T): String }).m($E)'),
+    ('structvarargs', 'dyn', NUMT + ['T'], 'class K { def m(xs: $T*): String = xs.mkString(",") }', '(new K: { def m(xs: $T*): String }).m(mk(1).to$T2, $E)'),
+]
+EXPECT.update(structarr='m1,E', structarrlen='E', structarrclone='E', structunit='E,m3', structvar='E', structgen='E,m2',
+    structcurry='m1,E', structbyname='m2,E', structvarargs='m1,E')
+CTX = {c[0]: c for c in CONTEXTS}
+
 
 def concat_long(rng):
     parts = []

@@ -1,0 +1,22 @@
+{
+ "id": "WP1",
+ "theme": "generated",
+ "track": "programs",
+ "area": "typechecker/TreeCheckers (posterasure check of patmat switches)",
+ "area_code": "C",
+ "title": "-Ycheck reports the default label jump of a guarded switch with a boxed result as erroneous after erasure",
+ "kind": "spurious warning",
+ "oracle": "-Ycheck:all on a sample of generated programs that compile and run correctly without it",
+ "generator": "wave4/harness/programs/Gen.scala, round-2 Int/Char/String literal switches (a guarded arm whose match result is boxed)",
+ "signature": "ycheck|log|Caught java.lang.AssertionError: assertion failed: Tree has erroneous type: N()",
+ "seed": "40000 (and 30010); 10 of the 17 -Ycheck samples of round 2",
+ "measure": "n/a",
+ "detail": "A match on an Int or String literal with a guarded arm, whose result is boxed (expected type Any with Double arms), compiles and runs correctly, but -Ycheck:all prints about 25 AssertionErrors 'Tree has erroneous type: default4()' and 'scala.Double.box(2.0)' while checking posterasure. After erasure the guard's else branch is a jump to the switch's default label, which is defined in the last case of the switch Match rather than in an enclosing Block; when the checker retypes the tree from scratch the jump does not resolve. The compiler's own erasure typer accepts the tree, and the bytecode is right. On the base and 2.13.18 the checker additionally throws NullPointerExceptions and the compilation writes no class files (the non-destructive -Ycheck of retronym/scala#419 is on the integration build). Any guarded switch with three or more literal arms in a boxed position triggers it, so -Ycheck:all is unusable on ordinary code with such matches.",
+ "fix_sketch": "Teach TreeCheckers to pre-enter LabelDefs found in the cases of a Match after patmat (or skip retyping label applies whose symbol is a label defined in the same method). Checker-only change, no compatibility cost.",
+ "on_integration": "present",
+ "on_base": "different: same reports plus NullPointerExceptions, and no class files are written",
+ "on_2_13_18": "different: same reports plus NullPointerExceptions, and no class files are written",
+ "scala3": "n/a",
+ "prior": "none found (retronym/scala#419, #460, #509 fix other -Ycheck false reports; wave one H4 and H11 are other tree-checker false reports)",
+ "confidence": "needs a second look: the cause (label in a later case, not pre-entered on retyping) is inferred from the posterasure tree, not traced in the typer"
+}

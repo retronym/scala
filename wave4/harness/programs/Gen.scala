@@ -258,8 +258,10 @@ class Gen(seed: Long, opts: GenOpts = GenOpts()) {
       nodes += (() => { val x = fresh("x"); s"({ case $x if $x > 1 => ${gen(t, w(Var(x, TInt)), d - 1)} }: PartialFunction[Int, ${show(t)}]).applyOrElse(${g(TInt)}, (($x: Int) => ${g(t)}))" })
       env.vars.filter(_.mutable).foreach(v => nodes += (() => s"({ ${v.name} = ${g(v.ty)}; ${g(t)} })"))
       if (Gen.round >= 3) { // structural (reflective) calls and @varargs members
-        nodes += (() => s"({ val s: { def get(n: Int): ${show(t)} } = new Box[${show(t)}](${g(t)}); s.get(${g(TInt)}) })")
-        if (!env.inVC) nodes += (() => { val x = fresh("x"); s"(new { def k($x: Int): ${show(t)} = ${gen(t, w(Var(x, TInt)), d - 1)} }).k(${g(TInt)})" })
+        // a structural result type may not be a value class (SIP-15); type parameters are left out as they may stand for one
+        val structOk = !t.isInstanceOf[TVC] && !t.isInstanceOf[TP]
+        if (structOk) nodes += (() => s"({ val s: { def get(n: Int): ${show(t)} } = new Box[${show(t)}](${g(t)}); s.get(${g(TInt)}) })")
+        if (structOk && !env.inVC) nodes += (() => { val x = fresh("x"); s"(new { def k($x: Int): ${show(t)} = ${gen(t, w(Var(x, TInt)), d - 1)} }).k(${g(TInt)})" })
         if (t == TLong) nodes += (() => s"({ val s: { def sum(a: Int, b: Long): Long } = new Box(0); s.sum(${g(TInt)}, ${g(TLong)}) })")
         if (t == TStr) nodes += (() => s"({ val s: { def cat(s: String, d: Double): String } = new Box(1); s.cat(${g(TStr)}, ${g(TDouble)}) })")
         if (t == TStr) nodes += (() => s"Va.cat(${List.fill(r.nextInt(3))(g(TStr)).mkString(", ")})")
@@ -502,16 +504,19 @@ class Gen(seed: Long, opts: GenOpts = GenOpts()) {
       fields += s"  var $v: ${c.name}$targs = null"
       val m0 = newM()
       m0 += s"    $v = new ${c.name}$targs(${args.mkString(", ")}); sb.append(\"$v [\" + Tr.take() + \"]\\n\")"
-      c.meths.foreach(m => exercise(v, v, substM(m, s), m0))
+      // at most 12 calls per method: -opt:local's cost grows steeply with the exception handlers in a method (GE6)
+      c.meths.grouped(12).zipWithIndex.foreach { case (ms, i) => val b = if (i == 0) m0 else newM(); ms.foreach(m => exercise(v, v, substM(m, s), b)) }
       // the same object through each ancestor's type
       var anc = c.parent; var sub = s
       while (anc.nonEmpty) {
         val (p, pa) = anc.get
         val ps: Map[String, Ty] = p.tps.map(_.name).zip(pa.map(subst(_, sub))).toMap
         val w = v + p.name
-        val mk = newM()
-        mk += s"    val $w: ${p.name}${p.tps.map(tp => show(ps(tp.name))).mkString("[", ", ", "]")} = $v"
-        p.meths.foreach(m => exercise(w, w, substM(m, ps), mk))
+        p.meths.grouped(12).foreach { ms =>
+          val mk = newM()
+          mk += s"    val $w: ${p.name}${p.tps.map(tp => show(ps(tp.name))).mkString("[", ", ", "]")} = $v"
+          ms.foreach(m => exercise(w, w, substM(m, ps), mk))
+        }
         anc = p.parent; sub = ps
       }
     }

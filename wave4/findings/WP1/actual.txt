@@ -1,0 +1,8 @@
+      2         during phase: posterasure
+      2   Tree has erroneous type: default4()
+      1 Caught java.lang.AssertionError: assertion failed: 
+     11 Caught java.lang.AssertionError: assertion failed: Tree has erroneous type: default4()
+     12 Caught java.lang.AssertionError: assertion failed: Tree has erroneous type: scala.Double.box(2.0)
+     11 java.lang.AssertionError: assertion failed: Tree has erroneous type: default4()
+     12 java.lang.AssertionError: assertion failed: Tree has erroneous type: scala.Double.box(2.0)
+List(0.5, 1.0, 2.0, 0.5, 2.0, 2.0)

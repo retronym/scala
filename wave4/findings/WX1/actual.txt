@@ -1,0 +1,3 @@
+structural m(1): null
+structural n:    null
+through a trait: ()

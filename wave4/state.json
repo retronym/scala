@@ -28,11 +28,25 @@
   ],
   "agents": [
     [
+      "w4 review campaign 1",
+      "Opus",
+      "Independent review of WJ1, WL1, WL2, WL3",
+      "running",
+      ""
+    ],
+    [
+      "w4 diff review #750 (4)",
+      "Opus",
+      "Fourth diff review of retronym/scala#750",
+      "running",
+      ""
+    ],
+    [
       "w4 rework #750 (4)",
       "Opus",
       "Fourth pass on retronym/scala#750 with a structural approach",
-      "running",
-      ""
+      "done",
+      "Fourth version pushed as a commit on top: no transformer state; the match wraps its selector when refchecks narrowed its type, and the if wraps only a Nothing branch or a null branch of an array-typed if"
     ],
     [
       "w4 diff review rework 2",
@@ -66,8 +80,8 @@
       "w4c library",
       "Opus",
       "Campaign: library files still unreached, ordinary usage against models",
-      "running",
-      ""
+      "done",
+      "3 rounds, 9.7 million checks, 3 findings: WL1 (snapshot of a read-only TrieMap snapshot throws NullPointerException), WL2 (accumulators accept reads and writes at index == length), WL3 (asJava views of Int- and Long-keyed collections treat null as 0). 18 false alarms, all oracle mistakes fixed before the measured runs. Coverage of 31 library files rose each round. Iterator, LazyList evaluation counts, Sorting, BigInt and BigDecimal against java.math gave no difference."
     ],
     [
       "w4c seeds",
@@ -232,6 +246,10 @@
     ]
   ],
   "log": [
+    [
+      "26 Nov 23:49",
+      "Campaign: the Java-sources and library tracks are done (WJ1, WL1 to WL3) and their findings are with an independent reviewer. Fourth version of #750 pushed and under review."
+    ],
     [
       "26 Nov 23:26",
       "#763 re-read as ok and out of draft. #750 has a new regression in its third version; a fourth pass replaces the stateful scrutinee tracking with a check at the match. w4-int was built with that third version."

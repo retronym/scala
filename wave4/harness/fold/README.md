@@ -40,3 +40,16 @@ python3 fold.py ... --jacoco cov.exec   # attach JaCoCo to the compiler JVM
 ## Known limits
 
 It shells out to `bin/scalac` per batch rather than reusing a JVM. A compiler crash loses the whole batch, so the generator avoids the one crash it found (a match whose scrutinee folds to Nothing).
+
+## Campaign: embedding contexts (`ctx.py`)
+
+`ctx.py` places a `fold.gen` tree, with about 40% of its leaves wrapped in a traced identity (`tI(k, x)` logs `k`), into the hole of one of about 170 context templates in five families: `ctl` (scrutinee, guard, case body, try block/handler/finalizer, while/do, return in closures and try/finally, throw, by-name, synchronized, assignment to var/field/array/setter, compound assignment, local lazy val, pattern definitions), `def` (default and named arguments, constructor and super-constructor arguments, auxiliary constructors, class/object/trait/lazy fields, early definitions, Unit-typed and elidable fields, modules in traits), `lift` (try/match/while/synchronized/return/throw in argument, operand, constructor, super-constructor, default, by-name, interpolator and lambda position), `named` (named arguments with by-name, varargs, super calls, copy, right-associative operators, compound assignment through qualifiers, buffers, maps, structural vars) and `dyn` (structural calls on primitive, array, Unit and generic receivers, Dynamic, interpolators, varargs, arrays, concatenations up to 230 operands with Unit, Null, value-class and mutable-toString operands). Context markers `mk(k)` log `mk`.
+
+Two oracles. Spelling: the hole is filled inline, as `{ val v_ = e; v_ }`, as a call to an `@noinline` method, and as an applied closure, each compiled with and without `-opt:inline:** -opt:local`; all eight value-and-trace lines must agree. Specification: each context has a hand-written expected trace (`EXPECT`), with `E` standing for the trace of the expression evaluated alone; checked whenever the expression alone does not throw.
+
+```
+python3 ctx.py --build w4 --work <dir> --seed 1 --n 150 --budget 420 --families ctl,lift --jacoco r.exec
+python3 cov.py r.exec r.xml      # lines per scope file and the largest unreached methods
+```
+
+About 300 to 500 cases a minute with JaCoCo, each compiled twice in one unit of 150 cases.
