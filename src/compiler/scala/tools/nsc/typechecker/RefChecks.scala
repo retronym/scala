@@ -1902,15 +1902,24 @@ abstract class RefChecks extends Transform {
       tree
     }
 
-    private def transformIf(tree: If): Tree = {
+    // the selector of the match being transformed
+    private var scrutinee: Tree = EmptyTree
+
+    private def transformIf(tree: If, isScrutinee: Boolean): Tree = {
       val If(cond, thenpart, elsepart) = tree
       def unitIfEmpty(t: Tree): Tree =
         if (t == EmptyTree) Literal(Constant(())).setPos(tree.pos).setType(UnitTpe) else t
 
       cond.tpe match {
         case FoldableConstantType(value) =>
-          val res = if (value.booleanValue) thenpart else elsepart
-          unitIfEmpty(res)
+          val res = unitIfEmpty(if (value.booleanValue) thenpart else elsepart)
+          // The branch's type can be narrower than the `if`'s. Keep the `if`'s type where that matters:
+          // a match on the `if` was typed against it, and the back end cannot select on or unbox a `Nothing` operand.
+          val keepType =
+            if (res.tpe.typeSymbol == NothingClass) tree.tpe.typeSymbol != NothingClass
+            else isScrutinee && !(res.tpe.widen =:= tree.tpe)
+          if (keepType) atPos(res.pos)(Typed(res, TypeTree(tree.tpe))).setType(tree.tpe)
+          else res
         case _ => tree
       }
     }
@@ -2108,7 +2117,11 @@ abstract class RefChecks extends Transform {
             res.transform(this)
 
           case x @ If(_, _, _)  =>
-            transformIf(x).transform(this)
+            val isScrutinee = x eq scrutinee
+            scrutinee = EmptyTree
+            val res = transformIf(x, isScrutinee)
+            // the surviving branch of a constant `if` gets the checks of its own node
+            if (res eq x) res.transform(this) else transform(res)
 
           case New(tpt) =>
             enterReference(tree.pos, tpt.tpe.typeSymbol)
@@ -2257,6 +2270,7 @@ abstract class RefChecks extends Transform {
             }
             // check the patterns for unfriendly shadowing, patvars bearing PatShadowAttachment
             if (settings.warnPatternShadow) for (cdef <- cases) checkPattern(cdef.pat)
+            scrutinee = selector
             tree.transform(this)
 
           // skip refchecks in patterns....

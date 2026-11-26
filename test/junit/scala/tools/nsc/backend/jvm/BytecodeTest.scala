@@ -1143,4 +1143,37 @@ class BytecodeTest extends BytecodeTesting {
     check("mixed", jumps = 1, calls = 1)
     check("assign", jumps = 0, calls = 1)
   }
+
+  @Test
+  def constantIfCompilesToItsBranch(): Unit = {
+    // each `r` method reduces an `if` with a constant condition; its `d` twin is the surviving branch written directly
+    val code =
+      """class C {
+        |  final val T = true
+        |  final val F = false
+        |  def byName(x: => Any): Any = x
+        |
+        |  def r1(s: String, t: String) = (if (T) null else s) == t
+        |  def d1(s: String, t: String) = null == t
+        |  def r2(t: String) = (if (T) "x" else t) == t
+        |  def d2(t: String) = "x" == t
+        |  def r3(s: String) = (if (T) "a" else s) match { case "a" => 1; case "b" => 2; case _ => 3 }
+        |  def d3(s: String) = "a" match { case "a" => 1; case "b" => 2; case _ => 3 }
+        |  def r4(): Unit = { if (T) 1 else "s"; () }
+        |  def d4(): Unit = { 1; () }
+        |  def r5: Int = if (F) 1 else ???
+        |  def d5: Int = ???
+        |  def r6(s: String): String = if (F) s else throw new RuntimeException(s)
+        |  def d6(s: String): String = throw new RuntimeException(s)
+        |  def r7 = byName(if (T) 1 else "s")
+        |  def r8(s: String) = if (F) 0 else (if (T) null else s) match { case "a" => 1; case null => 0; case _ => 2 }
+        |  def d8(s: String) = (if (T) null else s) match { case "a" => 1; case null => 0; case _ => 2 }
+        |}
+        |""".stripMargin
+    val c = compileClass(code, allowMessage = _ => true)
+    def ins(name: String) = getMethod(c, name).instructions.dropNonOp
+    assertEquals("methods whose code differs from the branch's", Nil, ((1 to 6) :+ 8).filter(i => ins(s"r$i") != ins(s"d$i")).toList)
+    // the by-name argument stays a specialized `() => Int`
+    assertEquals("()I", c.methods.asScala.find(_.name == "$anonfun$r7$1").get.desc)
+  }
 }
