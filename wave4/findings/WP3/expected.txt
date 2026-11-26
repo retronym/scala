@@ -1,0 +1,4 @@
+-- scalac 
+List(V0(3.0), V0(0.5), V0(3.0), V0(3.0))
+-- scalac -opt:local
+List(V0(3.0), V0(0.5), V0(3.0), V0(3.0))

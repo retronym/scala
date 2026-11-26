@@ -1,0 +1,22 @@
+{
+ "id": "WP3",
+ "theme": "generated",
+ "track": "programs",
+ "area": "transform/UnCurry (try lifting) and Erasure (value class boxing)",
+ "area_code": "VCL",
+ "title": "A try in a guarded match that is the body of a partial function with a value class result fails verification (VerifyError; AnalyzerException under -opt:local)",
+ "kind": "miscompile",
+ "oracle": "-opt:local against the reference (crash); the reference itself fails verification when the method runs",
+ "generator": "wave4/harness/programs/Gen.scala, round-4 grammar: partial function literal of a value class type, Int switch with a constant guard and a try/catch arm",
+ "signature": "opt-local|ok/crash|CRASH scala.tools.asm.tree.analysis.AnalyzerException: While processing N$$anonfun$N$N.applyOrElse",
+ "seed": "100419",
+ "measure": "n/a",
+ "detail": "({ case x => x match { case 100 if false => V0(1.0); case 3 => try V0(0.5) catch { case _: Exception => V0(0.6) }; case _ => V0(3.0) } }: PartialFunction[Int, V0]).applyOrElse(i, ...) with V0 a value class compiles, but the anonymous function class fails verification when it is loaded (Inconsistent stackmap frames), and with -opt:local the compiler crashes with AnalyzerException 'Incompatible stack heights' in the call-graph type analysis of applyOrElse. UnCurry leaves the try in place because, as a case body, it is evaluated on an empty operand stack. applyOrElse returns the erased result type Object, so erasure boxes the value class around the whole translated match: the posterasure tree is matchEnd3(new V0({ ...case7(){ if (3 == x1) matchEnd5(try 0.5 catch ...) ... } })), and the try now runs with the NEW and DUP of the box on the stack, which a handler entry clears. Without the constant-false guard, without the value class (Double), or outside a partial function (a generic method with the same body), it works. It is the CF3 family (a try that a later phase puts behind a non-empty stack); retronym/scala#605 handles receivers rewritten by erasure, not value-class boxing. Ordinary code reaches it rarely: it needs a partial function (collect, applyOrElse, recover) producing a value class, and a match that patmat does not turn into a switch.",
+ "fix_sketch": "Box a value class result arm by arm (push the box into the match end label's argument) rather than around the whole block, or have UnCurry lift a try whose enclosing expression has a value-class type in a position erasure will box. No binary compatibility cost.",
+ "on_integration": "present",
+ "on_base": "same",
+ "on_2_13_18": "same",
+ "scala3": "absent (3.7.4 prints the expected list)",
+ "prior": "CF3 / retronym/scala#605 (same family, different trigger); scala/bug#9390 for try lifting in constructors; none found for value-class boxing",
+ "confidence": "confirmed"
+}

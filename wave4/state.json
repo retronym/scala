@@ -28,11 +28,32 @@
   ],
   "agents": [
     [
+      "w4c programs2",
+      "Opus",
+      "Campaign 2: generated programs, constructs combining, up to six rounds",
+      "running",
+      ""
+    ],
+    [
+      "w4 review campaign 2",
+      "Opus",
+      "Independent review of WX1, WP1, WP2, WP3",
+      "running",
+      ""
+    ],
+    [
+      "w4 diff review library 2",
+      "Opus",
+      "Independent read of #770 and #771",
+      "running",
+      ""
+    ],
+    [
       "w4 fix library 2",
       "Opus",
       "Fixes for WL1, WL2, WL3",
-      "running",
-      ""
+      "done",
+      "WL1 fixed (retronym/scala#770: mutators on a read-only TrieMap snapshot throw UnsupportedOperationException, snapshot copies), WL2 fixed (#771: bounds checks in the four accumulators, cost not benchmarked), WL3 test only as a design question (#772). The two fixes are drafts until read"
     ],
     [
       "w4 fix java annotations",
@@ -80,8 +101,8 @@
       "w4c programs",
       "Opus",
       "Campaign: generated Scala programs at volume, shared driver first",
-      "running",
-      ""
+      "done",
+      "Shared in-process driver built (about 100 programs a minute, from 6). 4 rounds, 1,250 programs, compile rate 99% or more. 3 findings: WP3 (VerifyError for a partial function returning a value class with a try in a match arm; the compiler crashes with -opt:local), WP1 and WP2 (-Ycheck complaints on correct programs). Every added construct gave a new signature in its first round. In 68 programs 2.13.18 fails and the integration build is right."
     ],
     [
       "w4c fold",
@@ -260,6 +281,10 @@
     ]
   ],
   "log": [
+    [
+      "27 Nov 00:11",
+      "Programs track done with three findings including a miscompile (WP3); a second programs campaign started because every new construct paid. retronym/scala#770 to #772 opened for WL1 to WL3."
+    ],
     [
       "27 Nov 00:01",
       "Review of the first campaign findings: WJ1 and WL1 to WL3 all real. Two fix workers started."
@@ -590,6 +615,27 @@
       ],
       "state": "fixed",
       "note": "Fix: covered by the GE3 pull request, whose test includes this shape."
+    },
+    "WL1": {
+      "prs": [
+        770
+      ],
+      "state": "fixed",
+      "note": "Fix: readOnlySnapshot returns this on a read-only map, snapshot copies the root into a new writable map without a root swap, and inserthc/insertifhc/removehc/clear throw UnsupportedOperationException on a read-only map."
+    },
+    "WL2": {
+      "prs": [
+        771
+      ],
+      "state": "fixed",
+      "note": "Fix: apply(Long) and update(Long, _) in the four accumulators check 0 <= ix < totalSize through a private checkIndex."
+    },
+    "WL3": {
+      "prs": [
+        772
+      ],
+      "state": "fixed",
+      "note": "Test only, no fix yet: Test-only. The wrapper cannot tell a primitive element type from one that holds null; options in the body are a null-only iteration fallback (correct for all collections, O(n) for null probes) or type tests for the known Int/Long keyed collections."
     }
   }
 }

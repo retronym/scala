@@ -1,0 +1,1 @@
+Check the index in accumulator apply and update

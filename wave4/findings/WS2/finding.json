@@ -1,0 +1,22 @@
+{
+  "id": "WS2",
+  "theme": "generated",
+  "track": "seeds",
+  "area": "scala.tools.nsc.typechecker.TreeCheckers / scala.reflect.internal.Scopes",
+  "title": "-Ycheck:typer does not terminate on if (b) LazyList.empty else Nil, the lub of LazyList and List",
+  "kind": "non-termination",
+  "oracle": "the program compiles in 3 s without -Ycheck; the existing test run/t498 compiles with -Ycheck:all in 2 s on the base and takes more than 100 s (killed) on the integration build",
+  "generator": "wave4/harness/seeds (Driver.scala, configuration ycheck): run/t498 with -Ycheck:all timed out at 60 s",
+  "signature": "ycheck|ok/timeout-compile",
+  "seed": "run/t498, round 4",
+  "measure": "n/a",
+  "detail": "def f(b: Boolean) = if (b) LazyList.empty else Nil has the inferred result type of the lub of LazyList[Nothing] and Nil.type, a refinement over the common parents with all their members. With -Ycheck:typer (and later phases) scalac stays in a loop that a thread dump shows in Scope.addString calling Symbol.defString for each member of that refined type, with isStructuralRefinement and allOverriddenSymbols repeating for each member; the run was killed after 30 s and 100 s with no output. Vector(1) in place of LazyList.empty finishes in 3 s. No error is printed, so the cost is in rendering or checking the type, not in a reported mismatch. The same happens on the unfixed base and on 2.13.18 for this program, so it is not a regression from the draft fixes; run/t498 only finishes on the base because its lub is computed with an expected type. Only -Ycheck, a debug option, is affected.",
+  "fix_sketch": "Find the quadratic or exponential step in the check (likely a type or scope that is printed or compared once per member of a lub refinement) and cache it; not diagnosed past the thread dump.",
+  "on_integration": "present (w3-int and w4-int)",
+  "on_base": "same for the program in repro; run/t498 itself passes on the base",
+  "on_2_13_18": "same",
+  "scala3": "n/a",
+  "prior": "none found",
+  "confidence": "needs a second look: the loop is not shown to be infinite (killed at 100 s), and the cause is read from one thread dump",
+  "area_code": "T"
+}

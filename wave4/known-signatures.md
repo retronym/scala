@@ -21,3 +21,4 @@ Exclude these narrowly in a harness so they do not mask what is behind them.
 | WL2 | `IntAccumulator`, `LongAccumulator`, `DoubleAccumulator`, `AnyAccumulator` | `apply(i)` / `update(i, x)` with `i == size` (or anywhere in the current chunk's spare capacity) return 0/null or write nothing instead of throwing |
 | WL3 | `asJava` views of `BitSet`, `TreeSet[Int]`, `mutable.LongMap`, `IntMap`, `TreeMap[Int, V]` | `contains(null)`, `get(null)`, `remove(null)` act on key 0 |
 | WP2 | `-Ycheck:all` on a structural call in a method of a generic value class | `Tree has erroneous type: s.get(...)` at pickler; the program is correct |
+| WP3 | a try arm in a non-switch match that is the body of a partial function with a value class result | `VerifyError: Inconsistent stackmap frames` in `$anonfun...applyOrElse`; `-opt:local`: `AnalyzerException ... Incompatible stack heights` |

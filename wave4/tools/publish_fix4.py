@@ -53,7 +53,8 @@ def labels_for(i, lv, testonly, override):
     rvp = os.path.join(W, "reviews", i + ".json"); rv = json.load(open(rvp)) if os.path.exists(rvp) else {}
     l = override.get(i, lv.get(i, "low"))
     out = ["code-review-2026-11-19", "performance" if l == "performance" else "severity:" + l]
-    out.append(AREA_LABEL.get(i) or AREA_LABEL[re.sub(r"\d+$", "", i)])
+    area = AREA_LABEL.get(i) or AREA_LABEL.get(re.sub(r"\d+$", "", i))  # campaign findings get theirs from sync_labels.py afterwards
+    if area: out.append(area)
     if testonly: out.append("no-fix")
     s3 = (str(f.get("scala3", "")) + " | " + str(rv.get("scala3", ""))).lower()
     if re.sub(r"\d+$", "", i) not in LIB and re.search(r"(^|\| )(same|present)", s3): out.append("port-to-scala3")

@@ -1,0 +1,2 @@
+scalac : exit 0 after 2s (124 means killed by the 30 s timeout)
+scalac -Ycheck:typer: exit 0 after 3s (124 means killed by the 30 s timeout)

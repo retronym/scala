@@ -121,5 +121,46 @@
   ],
   "next": "Add Byte, Short, Char and Float operands, ##, getClass and isInstanceOf on boxed primitives, aimed at maxValueType, preEraseApply and string concatenation of mixed primitives.",
   "notes": "New: WP2, a structural type in a generic value class method keeps the class's type parameter after extmethods (-Ycheck). Two JVMs: 77.7 and 27.9 (JaCoCo) programs/min."
+ },
+ {
+  "round": 4,
+  "change": "Added Byte, Short, Char and Float operands, ##, getClass and isInstanceOf on boxed primitives, and mixed string concatenation; fixed generic value class erasure in the overload generator; excluded WP2.",
+  "cases": 555,
+  "seconds": 220,
+  "compile_rate": "99.8% (554 of 555; one anonymous class inside a value class)",
+  "signatures_new": 1,
+  "signatures_known": 5,
+  "false_alarms": "0; 5 v18 signatures (2.13.18 throws ClassCastException or VerifyError in 64 programs, the integration build is correct) also fail on the base, so are fixed by earlier waves; 2 new -Ycheck signatures not triaged; WP1 19 and WP2 3 hits",
+  "coverage": {
+   "transform": [
+    3916,
+    5328
+   ],
+   "transform/patmat": [
+    1566,
+    2186
+   ],
+   "backend/jvm": [
+    2792,
+    3905
+   ],
+   "backend/jvm/opt": [
+    2422,
+    2955
+   ],
+   "typechecker": [
+    7291,
+    13867
+   ]
+  },
+  "largest_unreached": [
+   "PlainSkelBuilder.appendToStaticCtor (30)",
+   "CleanUp.transformApplyDynamic (26 of 47)",
+   "PlainBodyBuilder.genStringConcat lambda (26)",
+   "BCJGenSigGen.getGenericSignature (25 of 36)",
+   "CleanUp.transformApply (24 of 66)"
+  ],
+  "next": "Stop here (budget). Next: triage the two -Ycheck signatures; Java-facing members (generic signatures, @varargs called from Java) and symbol/array literals for CleanUp.transformApply.",
+  "notes": "New: WP3, a try arm in a partial function with a value class result fails verification (crash under -opt:local). Two JVMs: 120.7 and 29.9 (JaCoCo) programs/min."
  }
 ]

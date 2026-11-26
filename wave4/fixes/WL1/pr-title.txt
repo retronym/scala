@@ -1,0 +1,1 @@
+Make a read-only TrieMap snapshot read-only in fact

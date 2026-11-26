@@ -1,0 +1,1 @@
+Test that asJava views do not read a null key as 0
