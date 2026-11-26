@@ -69,8 +69,10 @@ for d in sorted(glob.glob(W4 + "/findings/*/"), key=lambda p: natkey(os.path.bas
     related[fid] = {"verdict": "none found" if re.match(r"none", pr, re.I) else "see note", "refs": [], "note": "" if re.match(r"none", pr, re.I) else pr}
     if vd.startswith("real, known"): related[fid]["verdict"] = "known"; related[fid]["note"] = str(rv.get("verdict", "")) + (" | " + related[fid]["note"] if related[fid]["note"] else "")
     elif vd.startswith(("duplicate", "by design", "doubtful", "wrong")): related[fid]["verdict"] = str(rv.get("verdict", ""))[:90]
+    # "Regression since 2.13.18" comes from the independent review once there is one: a different symptom on 2.13.18
+    # (the hunter's on_2_13_18) is not by itself a regression.
     o18 = str(f.get("on_2_13_18", "")).lower()
-    if o18.startswith(("different", "absent")) or "regression" in str(f.get("kind", "")).lower(): regress[fid] = str(f.get("on_2_13_18", ""))
+    if not rv and (o18.startswith(("different", "absent")) or "regression" in str(f.get("kind", "")).lower()): regress[fid] = str(f.get("on_2_13_18", ""))
 regress.update(st.get("regress", {}))
 # campaign tracks append one object per round to rounds/<track>.json; show the rounds in the track's agent row ("w4c <track>")
 agents = [list(r) for r in st.get("agents", [])]
