@@ -227,5 +227,61 @@
   ],
   "next": "Bridges and covariant overrides across generic hierarchies (local generic abstract class implemented at a concrete type and called through the generic view and by reflection), Enumeration with custom Val subclasses, implicit value classes, and string concatenation of 200 to 280 parts for genStringConcat's chunking.",
   "notes": "JVMs: 11.8 (JaCoCo) and 64.6 programs/min."
+ },
+ {
+  "round": 15,
+  "change": "Bridges and covariant overrides: a local generic abstract class implemented at the expression's type and called through the generic view, prelude hierarchies with covariant result overrides, contravariant parameters and bridges reached by reflection, Enumeration with named, numbered and custom Val values matched by value, implicit value classes with a polymorphic method, and string concatenation of 200 to 280 parts.",
+  "cases": 509,
+  "seconds": 230,
+  "compile_rate": "99.8% (508 of 509; the generator fault seen in round 14, not traced)",
+  "signatures_new": 0,
+  "signatures_known": 5,
+  "false_alarms": "0",
+  "oracle_disagreements": {
+   "opt-local": "1/317 (WP5)",
+   "delambdafy-inline": "10/509 (all dl-ser)",
+   "separate": "0/509",
+   "v18": "159/509 (158 fixed by earlier waves, 1 WP5)",
+   "ycheck": "15/25"
+  },
+  "known_hits": {
+   "v18-wavefix": 158,
+   "dl-ser": 10,
+   "WP6": 9,
+   "WP9": 6,
+   "WP5": 2
+  },
+  "coverage": {
+   "transform": [
+    4129,
+    5328
+   ],
+   "transform/patmat": [
+    1674,
+    2186
+   ],
+   "backend/jvm": [
+    2757,
+    3905
+   ],
+   "backend/jvm/opt": [
+    1796,
+    2955
+   ],
+   "typechecker": [
+    7381,
+    13867
+   ]
+  },
+  "coverage_union": "union over all three campaigns: transform 4175 -> 4177, patmat 1765 -> 1776 (Logic 11: enumeration value matches), backend/jvm 2866 -> 2867; genStringConcat's chunking lambda is still unreached",
+  "largest_unreached": [
+   "BCodeSkelBuilder.appendToStaticCtor (30)",
+   "CleanUp.transformApplyDynamic (26 of 47)",
+   "PlainBodyBuilder.genStringConcat lambda (26)",
+   "BCJGenSigGen.getGenericSignature (25 of 36)",
+   "MatchAnalysis.VariableAssignment.toCounterExample (23)"
+  ],
+  "next": "Stop (five rounds, the budget). Rounds 12 to 15 found nothing new; rounds 14 and 15 added 17 and 14 union lines. Next targets: appendToStaticCtor (needs a static field initialiser: @static-like members are not available in 2.13 sources), MatchAnalysis counterexamples (needs warnings on, the harness compiles with -nowarn), Java sources calling the generated Java-facing members.",
+  "notes": "JVMs: 17.1 (JaCoCo) and 115.5 programs/min."
  }
 ]

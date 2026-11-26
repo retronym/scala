@@ -22,11 +22,18 @@
     ],
     [
       "Wave four: steered campaign",
-      "running",
-      "Five tracks with three coverage-steered rounds each, generators producing ordinary usage: Java sources against javac (new constructs), generated Scala programs at volume on a shared in-process driver, expressions in new embedding contexts, library files still unreached, and the existing run tests as seeds under meaning-preserving rewrites. Each track writes its rounds to wave4/rounds; a track with two flat rounds stops. New findings go through the same review, fix and diff-review steps"
+      "done",
+      "Seven campaigns on five tracks: Java sources against javac, three rounds of generated Scala programs on a shared in-process driver, expressions in new embedding contexts, library files still unreached, and existing run tests as seeds. 17 findings (WJ1, WL1 to WL3, WX1, WP1 to WP10, WS1, WS2), each reviewed independently; the last programs campaign found one compile error and no miscompile in 1,692 programs. Coverage per round is in wave4/rounds and the treemaps in wave4/reports"
     ]
   ],
   "agents": [
+    [
+      "w4 verify WP10",
+      "Sonnet",
+      "Check WP10 against #750 and add its test",
+      "running",
+      ""
+    ],
     [
       "w4 diff review #785",
       "Opus",
@@ -73,8 +80,8 @@
       "w4c programs3",
       "Opus",
       "Campaign 3: generated programs, wrong-result and crash oracles, up to five rounds",
-      "running",
-      ""
+      "done",
+      "5 rounds, 1,692 programs, about 21,000 compilations, compile rate 97% or more. 1 finding (WP10: a sequence argument in the surviving branch of a constant if is rejected; the current version of retronym/scala#750 is believed to fix it). No miscompile, no new crash, no new VerifyError or linkage error. 2.13.18 differs on 534 programs, 533 of them fixed by earlier waves. The hunter recommends no further campaign on this generator."
     ],
     [
       "w4 review campaign 4",
@@ -400,6 +407,10 @@
     ]
   ],
   "log": [
+    [
+      "27 Nov 01:48",
+      "Third programs campaign done: one finding (WP10) in 1,692 programs. The campaign phase is complete; what remains is the diff reviews of #784 and #785 and the write-up."
+    ],
     [
       "27 Nov 01:46",
       "retronym/scala#785 opened as a draft for WP7. Every reviewed wave-four finding now has a pull request."
