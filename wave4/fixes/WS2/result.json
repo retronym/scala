@@ -1,0 +1,14 @@
+{
+  "id": "WS2",
+  "outcome": "FIXED",
+  "branch": "review/w4-ws2-ycheck-bound-type-params",
+  "commit": "ffe2eaf851",
+  "stacked_on": "retronym/scala#459 (review/ycheck-nondestructive-stacked, head 3445312412)",
+  "workspace": "/Users/jzaugg-virtus/code/.worktrees/scala/w4-fix-n",
+  "files": "src/compiler/scala/tools/nsc/typechecker/TreeCheckers.scala, test/files/pos/ycheck-lub-type-params.scala",
+  "failing_before": "On the PR 459 head through sbt: pos/ycheck-lub-type-params [compilation failed with 1 errors]: 74 'Out of scope symbol reference' warnings (22 at typer, 52 at uncurry), e.g. 'ref to AbstractTypeSymbol _ (<deferred> <param>) in type CC -> trait StrictOptimizedSeqOps -> package immutable'. Hand runs of the PR 459 head's quick classes: finding T.scala -Ycheck:typer killed at 60 s after 21 warnings; t498 -Ycheck:all killed at 60 s after 48 warnings.",
+  "ran_after": "Through sbt in the workspace (JDK 21.0.12 tem): partest of the new test, 1 passed; partest --grep Ycheck, 18 passed. Hand runs with `java -cp build/quick/classes/{library,reflect,compiler}:scala-asm.jar scala.tools.nsc.Main`: finding T.scala -Ycheck:typer 6 s, 0 warnings (4 s without -Ycheck); t498 -Ycheck:all 5 s, 0 warnings; the new test under -Ycheck:all 3 s, 0 warnings. `git merge-tree` of the branch with retronym/scala#509's head is clean.",
+  "prior_work": "scala/bug#10908 (the large lub). retronym/scala#459 (stack base; existential quantifiers as bound), #509/#460 above it (no conflict), #419, #390. No other fork PR changes this check.",
+  "unsure": "The message for a genuine out-of-scope reference now lists all references of a tree in one block; that path was not exercised after the change (no genuine report in the tests). The signature is still rendered in full before truncation; the review's 'truncate while printing' is not done (the printer has no length bound), so a genuine report on a huge type stays slow, once per tree.",
+  "note": "referencesInType now treats PolyType type parameters in the checked info as bound (with a Set instead of List.contains), and the per-reference messages for a tree are merged into one, so the tree and signature are rendered once per tree."
+}

@@ -1,0 +1,4 @@
+      2         during phase: superaccessors
+      1 Caught java.lang.AssertionError: assertion failed: 
+      4 Caught java.lang.AssertionError: assertion failed: Tree has erroneous type: (head: Int, next: List[Int]): scala.collection.immutable.::[Int]((a @ _), (tl @ _))
+0

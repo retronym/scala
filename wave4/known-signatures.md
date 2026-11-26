@@ -27,3 +27,4 @@ Exclude these narrowly in a harness so they do not mask what is behind them.
 | WP6 | `-Ycheck:all` on a `return` inside a partial function literal | `Tree has erroneous type: <the return expression>` at typer to patmat; the program is correct |
 | WP7 | an if or match whose branches construct a value class, one from a literal, used as a receiver | `FatalError: mergePrefixAndArgs(List(ErasedValueType(class V, Int), ErasedValueType(class V, Int(7))) ...): unsupported tps` in erasure |
 | WP8 | `-Ycheck:all` on a non-local return in a method whose result type mentions its own type parameter | `Tree has erroneous type: ex.value()` at fields; the program is correct |
+| WP9 | `-Ycheck:all` on a constructor pattern matched against `List[T]()` | `Tree has erroneous type: (head: T, next: List[T]): scala.collection.immutable.::[T](...)` at typer to patmat; the program is correct |

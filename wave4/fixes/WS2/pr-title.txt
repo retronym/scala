@@ -1,0 +1,1 @@
+Treat type parameters bound in a checked type as in scope

@@ -28,11 +28,18 @@
   ],
   "agents": [
     [
+      "w4 diff review campaign 3",
+      "Opus",
+      "Independent read of #778 and #779",
+      "running",
+      ""
+    ],
+    [
       "w4 diff review #777",
       "Opus",
       "Independent read of the WP3 fix in erasure",
-      "running",
-      ""
+      "done",
+      "ok, low risk. About 70 shapes (field and lazy val initialisers, constructor and by-name arguments, guards, captures, labels, nested boxes) run correctly with the fix under default flags, -opt:local, the inliner, -Ydelambdafy:inline and -Xcheckinit, and each fails on the base. The standard library and 286 tests mentioning AnyVal or try are byte-identical. One neighbour stays open on both compilers: a try as a string-concatenation operand (scala/bug#12993). Merging with #526 needs localOwner in two more places"
     ],
     [
       "w4 diff review campaign 2",
@@ -45,8 +52,8 @@
       "w4 fix campaign 3",
       "Opus",
       "Fixes for WS1, WS2",
-      "running",
-      ""
+      "done",
+      "WS1 fixed (retronym/scala#778: the anonymous function class takes its type arguments from the function type, as 2.11 did; a lambda with a constant body extends the specialized AbstractFunction0$mcI$sp again, which changes one existing check file). WS2 fixed (#779, stacked on #459: type parameters bound in the checked type count as bound; the finding's program checks in 6 s). Both drafts until read"
     ],
     [
       "w4 rework #773",
@@ -337,6 +344,14 @@
     ]
   ],
   "log": [
+    [
+      "27 Nov 01:10",
+      "retronym/scala#778 and #779 opened as drafts for WS1 and WS2. Every reviewed wave-four finding now has a pull request."
+    ],
+    [
+      "27 Nov 01:08",
+      "#777, the fix for the critical WP3, passed its diff review and is out of draft."
+    ],
     [
       "27 Nov 00:56",
       "retronym/scala#777 opened as a draft for WP3, the critical finding; an independent reviewer is trying to break the erasure change."
@@ -759,7 +774,21 @@
         777
       ],
       "state": "fixed",
-      "note": "Fix: Erasure's box of a derived value class now stores an argument containing an un-lifted try/catch in a fresh local before `new C(local)` (for a Unit-underlying class, the expression is evaluated as a statement first); every other box is unchanged."
+      "note": "Fix (judged ok by an independent diff review): Erasure's box of a derived value class now stores an argument containing an un-lifted try/catch in a fresh local before `new C(local)` (for a Unit-underlying class, the expression is evaluated as a statement first); every other box is unchanged."
+    },
+    "WS1": {
+      "prs": [
+        778
+      ],
+      "state": "fixed",
+      "note": "Fix: expandFunction now takes the AbstractFunctionN type arguments from fun.tpe (dealiased), which typer builds from the parameter symbols and the packed body type, and which the generated apply method already used for its result type. The constant-type leak into the parent came with literal types and is fixed by the same change."
+    },
+    "WS2": {
+      "prs": [
+        779
+      ],
+      "state": "fixed",
+      "note": "Fix (stacked on retronym/scala#459; draft until read): referencesInType now treats PolyType type parameters in the checked info as bound (with a Set instead of List.contains), and the per-reference messages for a tree are merged into one, so the tree and signature are rendered once per tree."
     }
   }
 }

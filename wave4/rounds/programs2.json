@@ -217,5 +217,116 @@
     13867
    ]
   }
+ },
+ {
+  "round": 5,
+  "change": "Value classes as match scrutinee, closure capture, local lazy val, by-name argument, array and Seq element; default arguments depending on earlier parameters with named arguments out of order (traced); varargs passed as List, Vector, Seq and Array sequences.",
+  "cases": 124,
+  "seconds": 240,
+  "compile_rate": "99.2% (123 of 124; the failure is a WP5 backend crash)",
+  "signatures_new": 0,
+  "signatures_known": 4,
+  "false_alarms": "0; one reference crash reported 'Error while emitting T1: null' in the in-process driver and ArrayIndexOutOfBoundsException standalone; it shrinks to WP5 (two returns in a try/finally, one in an argument) and is counted there",
+  "oracle_disagreements": {
+   "opt-local": "1/103",
+   "delambdafy-inline": "0/124",
+   "separate": "0/124",
+   "v18": "16/124 (15 fixed by earlier waves, 1 the WP5 program)",
+   "ycheck": "8/13"
+  },
+  "known_hits": {
+   "v18-wavefix": 15,
+   "WP6": 7,
+   "WP5": 2,
+   "WP1": 1
+  },
+  "largest_unreached": [
+   "PlainSkelBuilder.appendToStaticCtor (30)",
+   "CleanUp.transformApplyDynamic (26 of 47)",
+   "PlainBodyBuilder.genStringConcat lambda (26)",
+   "BCJGenSigGen.getGenericSignature (25 of 36)",
+   "CleanUp.transformApply (23 of 66)"
+  ],
+  "next": "Dynamic (selectDynamic, applyDynamic, applyDynamicNamed, updateDynamic), standard and user-defined string interpolators including pattern interpolators, and for comprehensions with pattern generators and filters over Map, List of Option, Vector, Set and Iterator.",
+  "notes": "One JVM under JaCoCo, 30.5 programs/min; the other slot triaged round 4 (WP9). backend/jvm 2744 -> 2770; transform and patmat within sampling noise of round 4.",
+  "coverage": {
+   "backend/jvm": [
+    2770,
+    3905
+   ],
+   "backend/jvm/opt": [
+    1798,
+    2955
+   ],
+   "transform": [
+    4019,
+    5328
+   ],
+   "transform/patmat": [
+    1628,
+    2186
+   ],
+   "typechecker": [
+    7366,
+    13867
+   ]
+  }
+ },
+ {
+  "round": 6,
+  "change": "Dynamic (selectDynamic, applyDynamic, applyDynamicNamed, updateDynamic), f, raw, s and user-defined interpolators including s and user-defined pattern interpolators, and for comprehensions with tuple and Some pattern generators and filters over Map, List of Option, Vector, Set and Iterator with ranges.",
+  "cases": 635,
+  "seconds": 240,
+  "compile_rate": "99.5% (632 of 635; 3 generator faults: Bn.twice's type argument inferred as AnyVal around a return, fixed after the round by passing it explicitly)",
+  "signatures_new": 0,
+  "signatures_known": 7,
+  "false_alarms": "0",
+  "oracle_disagreements": {
+   "opt-local": "2/500",
+   "delambdafy-inline": "0/635",
+   "separate": "0/635",
+   "v18": "64/635 (62 fixed by earlier waves, 2 upstream)",
+   "ycheck": "48/64"
+  },
+  "known_hits": {
+   "v18-wavefix": 62,
+   "v18-upstream": 2,
+   "WP6": 26,
+   "WP9": 15,
+   "WP1": 6,
+   "WP5": 2,
+   "WP8": 1
+  },
+  "largest_unreached": [
+   "PlainSkelBuilder.appendToStaticCtor (30)",
+   "CleanUp.transformApplyDynamic (26 of 47)",
+   "PlainBodyBuilder.genStringConcat lambda (26)",
+   "BCJGenSigGen.getGenericSignature (25 of 36)",
+   "CleanUp.transformApply (23 of 66)"
+  ],
+  "next": "Stop (six rounds). Next: Java-facing members (generic signatures, static forwarders, appendToStaticCtor), symbol and array literals for CleanUp.transformApply, string concatenation of many parts; a -Ycheck-free sample now that the checker reports dominate its disagreements.",
+  "notes": "One JVM under JaCoCo (26.6 programs/min, 110 programs) and, after it, two without (68.4 and 78.7 programs/min, 525 programs). transform 4024 -> 4061. Two rounds without a new signature (5 and 6), but each gained coverage, so the stop rule was not met; the campaign stopped at six rounds.",
+  "coverage": {
+   "backend/jvm": [
+    2738,
+    3905
+   ],
+   "backend/jvm/opt": [
+    1798,
+    2955
+   ],
+   "transform": [
+    4061,
+    5328
+   ],
+   "transform/patmat": [
+    1628,
+    2186
+   ],
+   "typechecker": [
+    7165,
+    13867
+   ]
+  }
  }
 ]

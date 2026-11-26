@@ -31,6 +31,7 @@ object Hunt {
   val known = List("GE6" -> "LimitExceededException: Too many allocated bytes|^opt-local\\|ok/timeout-compile".r, "GE4" -> "found: x\\d*\\.type".r,
                    "WP1" -> "^ycheck\\|log\\|.*Tree has erroneous type: (N\\(\\)$|scala\\.[A-Za-z]+\\.box\\()".r,
                    "WP8" -> "^ycheck\\|log\\|.*Tree has erroneous type: ex\\.value\\(\\)$".r,
+                   "WP9" -> "^ycheck\\|log\\|.*Tree has erroneous type: \\(head: [^,]*, next: List\\[".r,
                    "WP4" -> "^ycheck\\|log\\|.*Tree has erroneous type: N\\.this\\.N\\(\\)$".r, "WP2" -> "^ycheck\\|log\\|.*Tree has erroneous type: s\\.get\\(".r)
   def knownId(sig: String): Option[String] = known.collectFirst { case (id, rx) if rx.findFirstIn(sig).nonEmpty => id }
   val prePhases = Set("typer", "superaccessors", "extmethods", "pickler", "refchecks", "patmat")
@@ -165,7 +166,7 @@ object Hunt {
         if (signature(base, c, o).nonEmpty) oracleDiffs(c.name) = oracleDiffs.getOrElse(c.name, 0) + 1 } }
       def countKnown(id: String) = knownHits.synchronized(knownHits(id) = knownHits.getOrElse(id, 0) + 1)
       val refKnown =
-        if (base.kind == "compile-error" && base.text.contains("Index 0 out of bounds for length 0")) Some("WP5")
+        if (base.kind == "compile-error" && (base.text.contains("Index 0 out of bounds for length 0") || base.text.startsWith("0: Error while emitting") && src.contains("return ") && src.contains("finally"))) Some("WP5")
         else if (base.kind == "crash" && base.text.contains("mergePrefixAndArgs(List(ErasedValueType")) Some("WP7")
         else None
       refKnown.foreach(countKnown)
