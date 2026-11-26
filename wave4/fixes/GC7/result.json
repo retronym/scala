@@ -11,5 +11,5 @@
  "stacked_on": "",
  "unsure": "(1) Owner decision stated as options in the body, not decided: copy-first (snapshot) against fail-fast ConcurrentModificationException. (2) Builders: ArrayDeque.from now fills directly, but Queue.from/Stack.from (empty ++= source) and GrowableBuilder.addAll on a deque builder copy a view or iterator once; not measured. (3) #534/#548 insertAll checks are not aligned with this rule (they trust LazyList/Stream and not Option); whoever lands them last should align. (4) The rule is repeated inline at each site (no helper without a MiMa-visible member); Stream needs @nowarn. (5) Self-append d ++= d now copies (it did not before) for the sake of one rule. (6) Allocation bounds hard-coded with sizeFor(classic, compact) from JDK 21 / JDK 25 compact; CI runs JDK 8, assumed equal to JDK 21 classic.",
  "note": "ArrayDeque.addAll, IndexedBuffer.patchInPlace and Shrinkable.subtractAll on a Buffer use one rule: a source is read as it is only when it is an Option, an immutable collection other than LazyList/Stream, a mutable.ArraySeq, or an ArrayBuffer/ArrayDeque/ListBuffer/UnrolledBuffer/mutable.HashSet/mutable.LinkedHashSet other than the receiver; anything else is copied into an ArrayBuffer first, whatever the receiver's size.",
- "sweep": "review-fix"
+ "sweep": "body-only"
 }

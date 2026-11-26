@@ -16,6 +16,8 @@ def natkey(s):
 # Wave four uses the page's existing areas, so the fork's area:* labels stay meaningful; the Wave filter says how a finding was found.
 # Keys are id prefixes or, for an exception, a full id.
 AREA4 = dict(GA="M", GC="M", GJ="J", GF="C", GE="SPZ", GE6="O")
+AREA4.update(WJ="J", WP="X", WX="X", WL="M", WS="X")  # campaign prefixes; a finding's own area_code overrides
+CODES = set("M K J JI C T Y F B O SPZ VCL ER EV OVR L AS R X".split())
 OLD_AREAS4 = 'GENLIB: "generated: library calls", GENJAVA: "generated: Java sources", GENEXPR: "generated: expressions", GENPROG: "generated: programs", '
 st = json.load(open(os.path.join(W4, "state.json"))) if os.path.exists(os.path.join(W4, "state.json")) else {}
 def level4(f):
@@ -62,6 +64,7 @@ for d in sorted(glob.glob(W4 + "/findings/*/"), key=lambda p: natkey(os.path.bas
     rg = str(rv.get("regression", "")).strip()
     if rg.lower().startswith("in unreleased"): regress[fid] = rg
     scala3[fid] = str(f.get("scala3", "not run")); ids.append(fid)
+    if str(f.get("area_code", "")) in CODES: AREA4[fid] = str(f["area_code"])
     pr = str(f.get("prior", "none found"))
     related[fid] = {"verdict": "none found" if re.match(r"none", pr, re.I) else "see note", "refs": [], "note": "" if re.match(r"none", pr, re.I) else pr}
     if vd.startswith("real, known"): related[fid]["verdict"] = "known"; related[fid]["note"] = str(rv.get("verdict", "")) + (" | " + related[fid]["note"] if related[fid]["note"] else "")
@@ -69,12 +72,25 @@ for d in sorted(glob.glob(W4 + "/findings/*/"), key=lambda p: natkey(os.path.bas
     o18 = str(f.get("on_2_13_18", "")).lower()
     if o18.startswith(("different", "absent")) or "regression" in str(f.get("kind", "")).lower(): regress[fid] = str(f.get("on_2_13_18", ""))
 regress.update(st.get("regress", {}))
+# campaign tracks append one object per round to rounds/<track>.json; show the rounds in the track's agent row ("w4c <track>")
+agents = [list(r) for r in st.get("agents", [])]
+for r in agents:
+    m = re.match(r"w4c (\S+)", r[0])
+    rp = os.path.join(W4, "rounds", m.group(1) + ".json") if m else None
+    if rp and os.path.exists(rp):
+        try:
+            rounds = json.load(open(rp)); out = []
+            for x in rounds:
+                cov = "; ".join("%s %s/%s" % (k, v.get("covered", v.get("lines_covered", "?")), v.get("total", v.get("lines_total", "?"))) if isinstance(v, dict) else "%s %s" % (k, v) for k, v in (x.get("coverage") or {}).items())
+                out.append("Round %s: %s. %s cases, %s new and %s known signatures%s%s" % (x.get("round", "?"), str(x.get("change", "")).rstrip("."), x.get("cases", "?"), x.get("signatures_new", "?"), x.get("signatures_known", "?"), ("; coverage " + cov) if cov else "", ("; next: " + str(x.get("next"))) if x.get("next") else ""))
+            if out: r[4] = (r[4] + " " if r[4] else "") + " | ".join(out)
+        except Exception as ex: print("bad rounds file", rp, ex)
 DR = {}
 for fp in sorted(glob.glob(os.path.join(DASH, "diffreview-w4-*.json")), key=lambda p: p.endswith("-rework.json")):  # a rework file is applied last
     try: DR.update(json.load(open(fp)))
     except Exception as ex: print("bad diff review", fp, ex)
 W4D = {"diffreview": DR, "findings": rows, "level": level, "scala3": scala3, "related": related, "area": AREA4, "ids": ids, "regress": regress,
-       "phases": st.get("phases", []), "meta": st.get("meta", []), "agents": st.get("agents", []), "log": st.get("log", [])}
+       "phases": st.get("phases", []), "meta": st.get("meta", []), "agents": agents, "log": st.get("log", [])}
 js = "const WAVE4 = " + json.dumps(W4D, ensure_ascii=False).replace("</", "<\\/") + ";\n" \
     "WAVE2.w4 = new Set(WAVE4.ids); WAVE4.ids.forEach(i => WAVE2.ids.add(i)); Object.assign(WAVE2.level, WAVE4.level); Object.assign(WAVE2.area, WAVE4.area);\n" \
     "DATA.findings.push(...WAVE4.findings); DATA.phases.push(...WAVE4.phases); DATA.meta.push(...WAVE4.meta); DATA.agents.unshift(...WAVE4.agents); DATA.log.unshift(...WAVE4.log);\n" \

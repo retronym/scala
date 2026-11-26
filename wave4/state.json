@@ -17,11 +17,60 @@
     ],
     [
       "Wave four: steered campaign",
-      "pending",
-      "Longer sessions for the tracks whose spike produced a signature or whose coverage is still rising, with one generator change per round, a shared compile-and-run driver, and a table of known signatures so unfixed earlier findings stop masking new ones"
+      "running",
+      "Five tracks with three coverage-steered rounds each, generators producing ordinary usage: Java sources against javac (new constructs), generated Scala programs at volume on a shared in-process driver, expressions in new embedding contexts, library files still unreached, and the existing run tests as seeds under meaning-preserving rewrites. Each track writes its rounds to wave4/rounds; a track with two flat rounds stops. New findings go through the same review, fix and diff-review steps"
     ]
   ],
   "agents": [
+    [
+      "w4c javaparser",
+      "Opus",
+      "Campaign: Java sources against javac, constructs not yet generated",
+      "running",
+      ""
+    ],
+    [
+      "w4c programs",
+      "Opus",
+      "Campaign: generated Scala programs at volume, shared driver first",
+      "running",
+      ""
+    ],
+    [
+      "w4c fold",
+      "Opus",
+      "Campaign: expressions and statements in new embedding contexts",
+      "running",
+      ""
+    ],
+    [
+      "w4c library",
+      "Opus",
+      "Campaign: library files still unreached, ordinary usage against models",
+      "running",
+      ""
+    ],
+    [
+      "w4c seeds",
+      "Sonnet",
+      "Campaign: existing run tests as seeds under rewrites",
+      "running",
+      ""
+    ],
+    [
+      "w4 integration",
+      "Opus",
+      "Integration build with the wave-four fixes merged (w4-int)",
+      "running",
+      ""
+    ],
+    [
+      "w4 ci triage",
+      "Sonnet",
+      "Fork CI results for retronym/scala#747 to #768",
+      "running",
+      ""
+    ],
     [
       "w4 rework #750",
       "Opus",
@@ -33,8 +82,8 @@
       "w4 rework specialization",
       "Opus",
       "Rework of retronym/scala#763 after diff review",
-      "running",
-      ""
+      "done",
+      "#763 now picks the specialized variant of a super call by symbol, with tests for overloads differing in arity and in parameter type under trait and class parents. The same commit also fixes a separate crash on the base for overloads that differ only in an unspecialized parameter type, which could be split out"
     ],
     [
       "w4 diff review rework",
@@ -164,6 +213,14 @@
     ]
   ],
   "log": [
+    [
+      "26 Nov 23:12",
+      "Owner approved the overnight plan: close out the 22 pull requests (reworks, fork CI, an integration build with the wave-four fixes), then a steered campaign of five tracks, mostly on Opus and Sonnet. Decisions that are the owner's are parked, not made."
+    ],
+    [
+      "26 Nov 23:06",
+      "Reworked #763 pushed over its pull request; it stays a draft until it is re-read."
+    ],
     [
       "26 Nov 23:06",
       "Second read of the reworked pull requests: #756 and #760 ok and ready; #750 back to draft for a nested case; #758 and #759 stay drafts on an owner decision. Wave-four pull requests relabelled with the area of the compiler or library they touch (collections, java-sources, typechecker, specialization, optimizer). scala/scala#11427 was opened from #753 by another session."
@@ -419,7 +476,7 @@
         763
       ],
       "state": "fixed",
-      "note": "Fix: In the TypeApply case, a Super qualifier of a class with new parents is rebuilt and the variant selected by name and retyped, so the call binds to the specialized trait's implementation instead of the generic forwarder."
+      "note": "Fix (reworked after independent diff review; the reworked version has not been re-read): The TypeApply case retypes the Super against the new parents and selects the member matching the variant by symbol (Symbol.matchingSymbol), so overloaded variant names resolve; specSym breaks ties between overloaded variants with the called method's own specialized overload. Body now states the super-from-another-method behaviour change."
     },
     "GE3": {
       "prs": [
