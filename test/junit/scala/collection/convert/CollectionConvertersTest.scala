@@ -22,9 +22,10 @@ import java.util.concurrent.{
   ConcurrentHashMap => JCMap,
 }
 
-import org.junit.Assert.{assertEquals, assertNull, assertTrue}
+import org.junit.Assert.{assertEquals, assertFalse, assertNull, assertTrue}
 import org.junit.Test
 
+import scala.collection.{immutable, mutable}
 import scala.jdk.CollectionConverters._
 import scala.tools.testkit.AssertUtil.assertThrows
 
@@ -76,5 +77,33 @@ class CollectionConvertersTest {
     val sut = new JCMap[String, String].asScala
     assertTrue(sut.isInstanceOf[JavaCollectionWrappers.JConcurrentMapWrapper[_, _]])
     assertThrows[NullPointerException](sut.put("any", null))
+  }
+
+  // A null key is not key 0: java.util allows a null probe to answer false or null, or to throw NullPointerException.
+  @Test def `asJava of an Int or Long keyed collection does not read a null key as 0`(): Unit = {
+    def absent(answer: => Any, none: Any): Unit =
+      try assertEquals(none, answer) catch { case _: NullPointerException => }
+    def unchanged[C](coll: C)(op: C => Any): Unit = {
+      val before = coll.toString
+      try op(coll) catch { case _: NullPointerException => }
+      assertEquals(before, coll.toString)
+    }
+    absent(mutable.BitSet(0, 5).asJava.contains(null), false)
+    absent(immutable.BitSet(0, 5).asJava.contains(null), false)
+    absent(immutable.TreeSet[Int](0, 5).asJava.contains(null), false)
+    absent(mutable.TreeSet[Int](0, 5).asJava.contains(null), false)
+    absent(mutable.LongMap(0L -> "a").asJava.get(null), null)
+    absent(mutable.LongMap(0L -> "a").asJava.containsKey(null), false)
+    absent(immutable.IntMap(0 -> "a").asJava.get(null), null)
+    absent(immutable.TreeMap[Int, String](0 -> "a").asJava.get(null), null)
+    absent(immutable.TreeMap[Long, String](0L -> "a").asJava.get(null), null)
+    unchanged(mutable.BitSet(0, 5))(_.asJava.remove(null))
+    unchanged(mutable.BitSet(5))(_.asJava.asInstanceOf[java.util.Set[Any]].add(null))
+    unchanged(mutable.LongMap(0L -> "a"))(_.asJava.remove(null))
+    unchanged(mutable.LongMap(0L -> "a"))(_.asJava.asInstanceOf[java.util.Map[Any, String]].put(null, "b"))
+    // collections that can hold null must keep answering for it
+    assertTrue(Set[String]("a", null).asJava.contains(null))
+    assertFalse(Set[String]("a").asJava.contains(null))
+    assertEquals(1, mutable.HashMap[String, Int]((null: String) -> 1).asJava.get(null))
   }
 }
