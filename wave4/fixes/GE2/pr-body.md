@@ -11,6 +11,6 @@ Specialization moves the body of `C.m` into `C.m$mcI$sp` and changes `C`'s paren
 
 When the qualifier is a `Super` whose class has new parents, the `TypeApply` case now selects the variant by name on a fresh `Super` and retypes it, so the call binds to `T0$mcI$sp.m$mcI$sp`, the specialized trait's implementation. This is what the case for `super.m(args)` without type arguments does, retyping against the new parents.
 
-Not a regression: 2.12.20 and 2.13.18 loop the same way. The same family is addressed for calls without type arguments in retronym/scala#354, which handles `super.m(args)` but not `super.m[X](args)`; its test covers a specialized method type parameter only with a class parent. This branch is independent of retronym/scala#354 and merges with it without conflict; with both, every row of both tests passes. retronym/scala#433 adds an override lookup in `transformSelect` for a related shape.
+Not a regression: 2.12.20 and 2.13.18 loop the same way. The same family is addressed for calls without type arguments in retronym/scala#354, which handles `super.m(args)` but not `super.m[X](args)`; its test covers a specialized method type parameter only with a class parent. This change is independent of retronym/scala#354 and composes with it. retronym/scala#433 adds an override lookup in `transformSelect` for a related shape.
 
 Found in the fourth wave of the coordinated code review of 2.13.x (finding GE2). Prepared with Claude.

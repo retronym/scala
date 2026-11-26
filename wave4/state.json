@@ -23,18 +23,32 @@
   ],
   "agents": [
     [
+      "w4 diff review rework",
+      "Opus",
+      "Second read of the reworked #750, #756, #758, #759, #760",
+      "running",
+      ""
+    ],
+    [
+      "w4 diff review specialization",
+      "Opus",
+      "Independent read of #762, #763, #764, #766, #768",
+      "running",
+      ""
+    ],
+    [
       "w4 rework compiler",
       "Opus",
       "Rework of retronym/scala#750 and #756 after diff review",
-      "running",
-      ""
+      "done",
+      "#756 now accepts unary operators on literals, with a pos test over every constant-expression form of SLS 6.24. #750 wraps only a Nothing branch or a match scrutinee whose type differs by more than a literal type; a bytecode test and javap comparison show ordinary constant ifs compile as before. Left open in #750: an if inside a block used as a scrutinee keeps the old narrowing"
     ],
     [
       "w4 rework self-aliasing",
       "Opus",
       "Rework of retronym/scala#758, #759 and #760 after diff review",
-      "running",
-      ""
+      "done",
+      "#758, #759 and #760 reworked to one rule that no longer trusts Stream, has no empty-receiver shortcut, and leaves Option, List and other strict disjoint sources uncopied (asserted with AllocationTest). Copy first against fail fast, and the type test in Growable.addAll, are stated as options for the owner"
     ],
     [
       "w4 diff review compiler",
@@ -61,8 +75,8 @@
       "w4 fix programs",
       "Opus",
       "Fixes for GE1 to GE8: specialization and the inliner's frame limit",
-      "running",
-      ""
+      "done",
+      "GE1, GE2, GE3 with GE8, GE5 and GE7 fixed; GE6 and GE4 test only. GE3 makes a by-name parameter count in neither view of specialization, since counting it would add variants old binaries lack; GE7 is a one-line change of owner for copied constructor statements and covers scala/bug#7574 and #10096; GE6 sets out three options for the ASM frame limit. Only the new tests and the specialization partests were run"
     ],
     [
       "w4 fix ranges",
@@ -136,6 +150,18 @@
     ]
   ],
   "log": [
+    [
+      "26 Nov 22:56",
+      "Reworked self-aliasing fixes pushed over #758, #759 and #760. A second reviewer is reading all five reworked pull requests, and another the five specialization fixes."
+    ],
+    [
+      "26 Nov 22:54",
+      "Reworked #750 and #756 pushed over their pull requests after diff review; neither rework has been re-read by a reviewer."
+    ],
+    [
+      "26 Nov 22:40",
+      "Every wave-four finding now links to a pull request (retronym/scala#747 to #768). The five specialization fixes are drafts until an independent reviewer has read them."
+    ],
     [
       "26 Nov 22:35",
       "Diff reviews of the first twelve fix pull requests: seven ok, one concern (#750), four defects (#756, #758, #759, #760). The four are converted to drafts and two rework workers are on all five."
@@ -283,7 +309,7 @@
         750
       ],
       "state": "fixed",
-      "note": "Fix: RefChecks.transformIf wraps the surviving branch in Typed(branch, TypeTree(if.tpe)) when the types differ, so the pattern matcher (after refchecks since 2.13.0) sees the scrutinee type the cases were typed against."
+      "note": "Fix (reworked after independent diff review; the reworked version has not been re-read): The Typed wrap now applies only to a Nothing branch and to a match scrutinee whose branch type differs from the if's by more than a literal type; all other reduced ifs are unchanged, so their bytecode is as on the base."
     },
     "GJ2": {
       "prs": [
@@ -332,7 +358,7 @@
         756
       ],
       "state": "fixed",
-      "note": "Fix: tryConst now also checks that the argument's original tree is a constant expression in the sense of SLS 6.24; blocks and calls of literal-typed methods are reported with the existing 'annotation argument needs to be a constant' error."
+      "note": "Fix (reworked after independent diff review; the reworked version has not been re-read): isPrimitiveOrString now accepts a Literal receiver by its constant tag, so unary operators applied directly to a literal are constant expressions again; a pos test covers every form SLS 6.24 allows in an annotation argument."
     },
     "GJ3": {
       "prs": [
@@ -349,7 +375,7 @@
         761
       ],
       "state": "fixed",
-      "note": "Fix, in four pull requests by collection class: retronym/scala#758 buffers (ArrayDeque addAll, patchInPlace, subtractAll), #759 UnrolledBuffer (stacked on #538), #760 ArrayBuffer.flatMapInPlace, #761 sets and maps as failing tests with the options (snapshot, fail fast, document). One rule throughout: a source is read before the first write unless it is an immutable collection other than LazyList, a mutable.ArraySeq, or an ArrayBuffer or ArrayDeque other than the receiver."
+      "note": "Fix, reworked after independent diff review (second read in progress), in four pull requests by collection class: retronym/scala#758 buffers (ArrayDeque addAll, patchInPlace, subtractAll), #759 UnrolledBuffer (stacked on #538), #760 ArrayBuffer.flatMapInPlace, #761 sets and maps as failing tests with the options. One rule: a source is used as it is only if it is an Option, an immutable collection other than LazyList or Stream, a mutable.ArraySeq, or an ArrayBuffer, ArrayDeque, ListBuffer, UnrolledBuffer, mutable.HashSet or LinkedHashSet other than the receiver; anything else is copied first. Stated cost on JDK 21: deque ++= iterator 32 to 208 bytes per call, ++= view 88 to 248."
     },
     "GA1": {
       "prs": [
@@ -358,6 +384,62 @@
       ],
       "state": "fixed",
       "note": "Fix: covered by the GC7 pull requests for ArrayDeque and UnrolledBuffer."
+    },
+    "GE1": {
+      "prs": [
+        762
+      ],
+      "state": "fixed",
+      "note": "Fix: normalizeMember skips super accessors, as specializeMember already does, so the bodiless accessor gets no specialized variants."
+    },
+    "GE2": {
+      "prs": [
+        763
+      ],
+      "state": "fixed",
+      "note": "Fix: In the TypeApply case, a Super qualifier of a class with new parents is rebuilt and the variant selected by name and retyped, so the call binds to the specialized trait's implementation instead of the generic forwarder."
+    },
+    "GE3": {
+      "prs": [
+        764
+      ],
+      "state": "fixed",
+      "note": "Fix: A by-name parameter no longer counts in specializedTypeVars after uncurry, so the names of variants and the decisions to create special overrides agree. Covers GE8."
+    },
+    "GE4": {
+      "prs": [
+        765
+      ],
+      "state": "fixed",
+      "note": "Test only, no fix yet: Known since 2.11 (scala/bug#8633); test-only as the brief directs unless the fix is plainly small."
+    },
+    "GE5": {
+      "prs": [
+        766
+      ],
+      "state": "fixed",
+      "note": "Fix: Duplicators.fixType widens the singleton type of a local lazy accessor to its underlying type, so the duplicated lifted lambda's declared result type matches the retyped call."
+    },
+    "GE6": {
+      "prs": [
+        767
+      ],
+      "state": "fixed",
+      "note": "Test only, no fix yet: Regression in unreleased 2.13.19 from ASM 9.11.1's allocation counter; design question how to bound the analysis. Branch holds a DirectTest with a generated 200-handler method; options in the PR body."
+    },
+    "GE7": {
+      "prs": [
+        768
+      ],
+      "state": "fixed",
+      "note": "Fix: mergeConstructors retypes copied constructor statements in a context owned by the specialized subclass's primary constructor, so their locals no longer become class members."
+    },
+    "GE8": {
+      "prs": [
+        764
+      ],
+      "state": "fixed",
+      "note": "Fix: covered by the GE3 pull request, whose test includes this shape."
     }
   }
 }

@@ -1,1 +1,1 @@
-Test a lambda over a local lazy val in a specialized body
+Widen a local lazy val's singleton type when duplicating a body

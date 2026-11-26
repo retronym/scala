@@ -1,0 +1,13 @@
+{
+ "id": "GE5",
+ "outcome": "FIXED",
+ "branch": "review/w4-ge5-specialize-local-lazy-val",
+ "commit": "cc5ca8940c",
+ "workspace": "/Users/jzaugg-virtus/code/.worktrees/scala/w4-fix-d",
+ "files": "src/compiler/scala/tools/nsc/typechecker/Duplicators.scala, test/files/run/specialized-local-lazy-val.scala, test/files/run/specialized-local-lazy-val.check",
+ "failing_before": "Base build: 'error: type mismatch; found: Int, required: x.type' at the lambda reading the lazy val, for the method in class C, the method of class D[@specialized(Int) B] and the local def in E (each checked alone).",
+ "ran_after": "sbt (workspace): 'partest test/files/run/specialized-local-lazy-val.scala' passed; 'partest --grep specializ' 191 passed, 0 failed. Hand run with the workspace's build/quick/classes on an explicit java -cp: the test compiles and prints the check; -Xprint:specialize shows the Int variant's lifted lambda declared ': Int' (the generic one keeps ': x.type'). -Ycheck:all is not usable on this test: on the base build too it aborts at tailcalls with 'Tree has erroneous type: x()', before specialize runs. git merge-tree against the heads of the 31 open fork PRs touching SpecializeTypes, Duplicators, Constructors or the optimizer: no conflicts.",
+ "prior_work": "No ticket found; scala/bug#8473 and #8122 are open Duplicators tickets with other triggers. Open fork PRs touching Duplicators (retronym/scala#741, #742, #577, #467, #466, #463, #458, #432, #431, #430, #416): no textual overlap.",
+ "unsure": "The tree checker failing at tailcalls on the base build ('Tree has erroneous type: x()') suggests the real defect is upstream: after fields, trees still carry the singleton type of what is now a method (x.type with x a lazy accessor), and any retyping fails on it. A fix in fields that widens those types when it turns a local lazy val into an accessor would be more principled and would also satisfy the checker; this change fixes only the retyping in Duplicators, which is where users hit it. The widening applies to SingleType(_, sym) with sym lazy, a method and local to a block, which after fields is exactly a local lazy accessor.",
+ "note": "Duplicators.fixType widens the singleton type of a local lazy accessor to its underlying type, so the duplicated lifted lambda's declared result type matches the retyped call."
+}
