@@ -97,7 +97,35 @@ js = "const WAVE4 = " + json.dumps(W4D, ensure_ascii=False).replace("</", "<\\/"
     "WAVE2.w4 = new Set(WAVE4.ids); WAVE4.ids.forEach(i => WAVE2.ids.add(i)); Object.assign(WAVE2.level, WAVE4.level); Object.assign(WAVE2.area, WAVE4.area);\n" \
     "DATA.findings.push(...WAVE4.findings); DATA.phases.push(...WAVE4.phases); DATA.meta.push(...WAVE4.meta); DATA.agents.unshift(...WAVE4.agents); DATA.log.unshift(...WAVE4.log);\n" \
     'for (const k of ["related", "scala3", "regress", "diffreview"]) DATA[k] = Object.assign(DATA[k] || {}, WAVE4[k]);\n' \
-    'DATA.base += " · wave four (26 November: generated inputs and oracles) on the integration build of draft fixes";\n'
+    'DATA.base += " · wave four (26 November: generated inputs and oracles) on the integration build of draft fixes";\n' \
+    r'''// Anchor links: every panel (a family, a meta-finding, a phase card) and every section heading gets an id from its
+// title and a "#" link that copies a shareable URL. Runs after the page has rendered; idempotent.
+const PAGE_URL = "https://claude.ai/artifact/TnFx6zWQH3byJErfZE2uYg";
+const slugOf = t => t.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80);
+function addAnchors() {
+  if (!document.getElementById("anchor-style")) { const st = document.createElement("style"); st.id = "anchor-style";
+    st.textContent = "a.anchor{margin-left:6px;opacity:.35;text-decoration:none;font-weight:400;font-size:.9em}a.anchor:hover,a.anchor:focus-visible{opacity:1}.anchor-hit{outline:2px solid var(--info);outline-offset:3px}";
+    document.head.appendChild(st); }
+  const used = new Set();
+  const heads = [...document.querySelectorAll("main section > h2, .meta-g > h3, .phase > b")];
+  for (const h of heads) {
+    if (h.querySelector("a.anchor")) { used.add((h.closest(".meta-g, .phase") || h.parentElement).id); continue; }
+    const title = [...h.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join(" ").trim() || h.textContent.trim();
+    let id = slugOf(title) || "panel", k = 2; while (used.has(id) || (document.getElementById(id) && document.getElementById(id) !== h)) id = slugOf(title) + "-" + k++;
+    used.add(id);
+    const box = h.closest(".meta-g, .phase") || h.parentElement; box.id = id;
+    const a = document.createElement("a"); a.className = "anchor"; a.href = "#" + id; a.textContent = "#"; a.title = "Copy a link to this panel"; a.setAttribute("aria-label", "Link to " + title);
+    a.addEventListener("click", () => { try { navigator.clipboard.writeText(PAGE_URL + "#" + id); } catch (e) {} });
+    h.appendChild(a);
+  }
+}
+function goToHash() { let id = ""; try { id = decodeURIComponent((location.hash || "").slice(1)); } catch (e) {}
+  const el = id && document.getElementById(id); if (!el) return;
+  el.scrollIntoView({ block: "start" }); el.classList.add("anchor-hit"); setTimeout(() => el.classList.remove("anchor-hit"), 2500); }
+const anchorsReady = () => { addAnchors(); goToHash(); };
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", anchorsReady); else setTimeout(anchorsReady, 0);
+window.addEventListener("load", anchorsReady); window.addEventListener("hashchange", goToHash);
+'''
 s = open(P).read()
 assert "// wave3-end\n" in s and "// wave2-end\n" in s, "run merge_wave2.py and merge_extra.py first"
 s = re.sub(r"// wave4-begin.*?// wave4-end\n", "", s, flags=re.S)
