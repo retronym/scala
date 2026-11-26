@@ -769,6 +769,13 @@ abstract class SymbolTable extends macros.Universe
     /** The current indentation string for traces */
     var indent: String = ""
     var toStringRecursions: Int = 0
+    /** The number of type parameters whose bounds a pattern has narrowed for the case being typed on this
+     *  thread (see `Infer#instantiateTypeVar`). It is per thread, not per frame: a completion run within the
+     *  case sees the narrowed infos too.
+     */
+    var narrowedTypeBounds: Int = 0
+    /** The bounds epoch of this thread, which changes whenever its bounds are narrowed or restored. */
+    var boundsEpoch: Int = 0
 
     // Reusable instances of helpers with mutable state, one per level of reentrance. A concurrent
     // universe makes a fresh one each time instead: a helper keeps the types and symbols of its last

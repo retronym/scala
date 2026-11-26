@@ -1647,9 +1647,12 @@ trait Types
       baseClassesPeriod = NoPeriod
     }
 
+    /** The period that stamps the base type caches of this type, see `nonClassBaseTypesPeriod`. */
+    private[Types] def baseTypesPeriod: Period = currentPeriod
+
     override def baseTypeSeq: BaseTypeSeq = {
       val cached = baseTypeSeqCache
-      if (baseTypeSeqPeriod == currentPeriod && cached != null && cached != undetBaseTypeSeq)
+      if (baseTypeSeqPeriod == baseTypesPeriod && cached != null && cached != undetBaseTypeSeq)
         cached
       else {
         defineBaseTypeSeqOfCompoundType(this)
@@ -1664,7 +1667,7 @@ trait Types
 
     override def baseClasses: List[Symbol] = {
       val cached = baseClassesCache
-      if (baseClassesPeriod == currentPeriod && cached != null) cached
+      if (baseClassesPeriod == baseTypesPeriod && cached != null) cached
       else {
         defineBaseClassesOfCompoundType(this)
         if (baseClassesCache eq null)
@@ -1746,9 +1749,10 @@ trait Types
 
   protected def defineBaseTypeSeqOfCompoundType(tpe: CompoundType) = {
     val period = tpe.baseTypeSeqPeriod
-    if (period != currentPeriod) {
-      tpe.baseTypeSeqPeriod = currentPeriod
-      if (!isValidForBaseClasses(period)) {
+    val stamp = tpe.baseTypesPeriod
+    if (period != stamp) {
+      tpe.baseTypeSeqPeriod = stamp
+      if (!isValidForBaseTypes(period, stamp)) {
         // If the BTS contains TypeVars, replace those with typerefs to the original type params before taking BTS,
         // after BTS, map them back.
         // TODO: rework BTS to deal with TypeVars in the same way on the fly
@@ -1807,9 +1811,10 @@ trait Types
 
   protected def defineBaseClassesOfCompoundType(tpe: CompoundType): Unit = {
     val period = tpe.baseClassesPeriod
-    if (period != currentPeriod) {
-      tpe.baseClassesPeriod = currentPeriod
-      if (!isValidForBaseClasses(period)) {
+    val stamp = tpe.baseTypesPeriod
+    if (period != stamp) {
+      tpe.baseClassesPeriod = stamp
+      if (!isValidForBaseTypes(period, stamp)) {
         val start = if (settings.areStatisticsEnabled) statistics.pushTimer(typeOpsStack, baseClassesNanos) else null
         try {
           tpe.baseClassesCache = null
@@ -1831,6 +1836,8 @@ trait Types
    */
   case class RefinedType(override val parents: List[Type],
                          override val decls: Scope) extends CompoundType with RefinedTypeApi {
+    override private[Types] def baseTypesPeriod: Period = nonClassBaseTypesPeriod
+
     override def isHigherKinded = (
       !parents.isEmpty &&
       (parents.forall(_.isHigherKinded)) &&
@@ -2606,7 +2613,7 @@ trait Types
 
     override def parents: List[Type] = {
       val cache = parentsCache
-      if (parentsPeriod == currentPeriod && cache != null) cache
+      if (parentsPeriod == baseTypesPeriod && cache != null) cache
       else {
         defineParentsOfTypeRef(this)
         parentsCache
@@ -2614,6 +2621,10 @@ trait Types
     }
 
     protected[Types] def parentsImpl: List[Type] = sym.info.parents map relativize
+
+    /** The period that stamps the base type caches of this type, see `nonClassBaseTypesPeriod`. */
+    private[Types] def baseTypesPeriod: Period =
+      if (sym.isClass) currentPeriod else nonClassBaseTypesPeriod
 
     // Since type parameters cannot occur in super types, no need to relativize before looking at base *classes*.
     // Similarly, our prefix can occur in super class types, but it cannot influence which classes those types resolve to.
@@ -2636,7 +2647,7 @@ trait Types
 
     override def baseTypeSeq: BaseTypeSeq = {
       val cache = baseTypeSeqCache
-      if (baseTypeSeqPeriod == currentPeriod && cache != null && cache != undetBaseTypeSeq)
+      if (baseTypeSeqPeriod == baseTypesPeriod && cache != null && cache != undetBaseTypeSeq)
         cache
       else {
         defineBaseTypeSeqOfTypeRef(this)
@@ -2787,9 +2798,10 @@ trait Types
 
   protected def defineParentsOfTypeRef(tpe: TypeRef) = {
     val period = tpe.parentsPeriod
-    if (period != currentPeriod) {
-      tpe.parentsPeriod = currentPeriod
-      if (!isValidForBaseClasses(period)) {
+    val stamp = tpe.baseTypesPeriod
+    if (period != stamp) {
+      tpe.parentsPeriod = stamp
+      if (!isValidForBaseTypes(period, stamp)) {
         tpe.parentsCache = tpe.parentsImpl
       } else if (tpe.parentsCache == null) { // seems this can happen if things are corrupted enough, see #2641
         tpe.parentsCache = List(AnyTpe)
@@ -2799,9 +2811,10 @@ trait Types
 
   protected def defineBaseTypeSeqOfTypeRef(tpe: TypeRef) = {
     val period = tpe.baseTypeSeqPeriod
-    if (period != currentPeriod) {
-      tpe.baseTypeSeqPeriod = currentPeriod
-      if (!isValidForBaseClasses(period)) {
+    val stamp = tpe.baseTypesPeriod
+    if (period != stamp) {
+      tpe.baseTypeSeqPeriod = stamp
+      if (!isValidForBaseTypes(period, stamp)) {
         if (settings.areStatisticsEnabled) statistics.incCounter(typerefBaseTypeSeqCount)
         val start = if (settings.areStatisticsEnabled) statistics.pushTimer(typeOpsStack, baseTypeSeqNanos) else null
         try {
@@ -5316,6 +5329,40 @@ trait Types
   /** Members which can be imported into other scopes.
    */
   def importableMembers(pre: Type): Scope = pre.members filter isImportable
+
+  /** The bounds epochs, see `Scratch.boundsEpoch`: shared, so that no two threads stamp with the same one. */
+  private[this] val boundsEpochs = util.IdCounter(isConcurrentUniverse)
+  perRunCaches.recordCache(new mutable.Clearable { def clear(): Unit = scratch.narrowedTypeBounds = 0 })
+
+  /** To be called after the info of `tparam` is replaced by the bounds that a pattern implies. */
+  def typeBoundsNarrowed(tparam: Symbol): Unit = {
+    val s = scratch
+    s.narrowedTypeBounds += 1
+    s.boundsEpoch = boundsEpochs.next()
+  }
+
+  /** To be called after the infos of `tparams` are set back to what they were before `typeBoundsNarrowed`. */
+  def typeBoundsRestored(tparams: List[Symbol]): Unit = if (tparams.nonEmpty) {
+    val s = scratch
+    s.narrowedTypeBounds = math.max(0, s.narrowedTypeBounds - tparams.length)
+    s.boundsEpoch = boundsEpochs.next()
+  }
+
+  /** The period that stamps the parents, base type sequence and base classes cached for a type other than a class
+   *  type. While this thread has bounds narrowed, the base types of abstract types, aliases and refinements may be
+   *  derived from them, so the stamp is a negative number unique to the bounds epoch and phase: it is never current
+   *  and never valid for base classes, so the caches hold until the bounds change again, in either direction.
+   *  A class has no type parameter among its base types, so class types keep the current period.
+   */
+  private def nonClassBaseTypesPeriod: Period = {
+    val s = scratch
+    if (s.narrowedTypeBounds > 0) -1 - (((s.boundsEpoch & 0x7FFFFF) << 8) | phase.id)
+    else currentPeriod
+  }
+
+  /** Whether base types cached in `period` still hold in the period `stamp`. */
+  private def isValidForBaseTypes(period: Period, stamp: Period): Boolean =
+    stamp == currentPeriod && isValidForBaseClasses(period)
 
   def invalidateTreeTpeCaches(tree: Tree, updatedSyms: collection.Set[Symbol]) = if (!updatedSyms.isEmpty) {
     val invldtr = new InvalidateTypeCaches(updatedSyms)
