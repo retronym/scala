@@ -1145,7 +1145,9 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
           }
         }
       }
-      parseEnumConsts()
+      // `enum E { , }` and `enum E { ,; ... }` declare no constants (JLS 8.9.1)
+      if (in.token == COMMA && (in.lookaheadToken == RBRACE || in.lookaheadToken == SEMI)) in.nextToken()
+      else parseEnumConsts()
       val consts = buf.toList
       val (statics, body) =
         if (in.token == SEMI) {
