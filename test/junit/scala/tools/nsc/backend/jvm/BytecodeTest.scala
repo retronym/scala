@@ -1157,7 +1157,7 @@ class BytecodeTest extends BytecodeTesting {
     val c = compileClass(code)
     // a return with an empty stack jumps to the cleanup as before
     def summary(name: String) = getMethod(c, name).instructions.summary.filterNot(_ == -1)
-    assertEquals(List(
+    assertEquals(List[Any](
       ILOAD, IFEQ, ICONST_1, ISTORE, GOTO, ALOAD, ICONST_2, "f", GOTO,
       ASTORE, ALOAD, "fin", ALOAD, ATHROW,
       ALOAD, "fin", ILOAD, IRETURN,
