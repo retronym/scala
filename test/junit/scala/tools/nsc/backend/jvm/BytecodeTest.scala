@@ -420,6 +420,28 @@ class BytecodeTest extends BytecodeTesting {
     assertInvoke(getMethod(cAnon, "<init>"), "scala/runtime/Statics", "releaseFence")
   }
 
+  @Test
+  def fenceInSpecializedCopyOfLocalClass(): Unit = {
+    val code =
+      """class C[@specialized(Int) T] {
+        |  def inMethod[@specialized(Int) U](u: U) = {
+        |    trait TT { val v: Int = 8 }
+        |    class Local extends TT
+        |    (new TT {}).v + (new Local).v
+        |  }
+        |  def inClass(t: T) = {
+        |    trait TT { val v: Int = 8 }
+        |    class Local extends TT
+        |    (new TT {}).v + (new Local).v
+        |  }
+        |}""".stripMargin
+    val implementations = compileClasses(code).filter(c => c.name.contains("anon") || c.name.contains("Local"))
+    // in C: inMethod, its variant and inClass; in C$mcI$sp: inClass
+    assertEquals(implementations.map(_.name).toString, 8, implementations.size)
+    for (c <- implementations)
+      assertInvoke(getMethod(c, "<init>"), "scala/runtime/Statics", "releaseFence")
+  }
+
     @Test
     def t12881(): Unit = {
       val code =

@@ -242,11 +242,16 @@ abstract class Duplicators extends AbstractAnalyzer {
             case getter: DefDef if getter.symbol.isGetter && getter.symbol.asTerm.referenced.isSetter =>
               (getter, getter.symbol.asTerm.referenced)
           }
+          // Likewise for a constructor that must end with a fence, as a field of the class is assigned outside of it.
+          val fencedConstructors = stats.collect {
+            case constructor: DefDef if constructor.symbol.hasAttachment[ConstructorNeedsFence.type] => constructor
+          }
           invalidateAll(stats, tree.symbol)
           val result = super.typed(tree.clearType(), mode, pt)
           traitSetters.foreach { case (getter, setter) =>
             if (getter.symbol.isGetter) getter.symbol.asTerm.referenced = updateSym(setter)
           }
+          fencedConstructors.foreach(_.symbol.updateAttachment(ConstructorNeedsFence))
           result
 
         case ddef @ DefDef(_, _, _, _, tpt, rhs) =>
