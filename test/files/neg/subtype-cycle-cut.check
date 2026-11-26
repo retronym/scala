@@ -1,0 +1,57 @@
+subtype-cycle-cut.scala:18: error: type mismatch;
+ found   : E
+ required: H.NE
+    (which expands to)  N[E]
+  def e1(e: E): H.NE = e
+                       ^
+subtype-cycle-cut.scala:19: error: type mismatch;
+ found   : (D, E)
+ required: (H.NDY, H.NE)
+    (which expands to)  (N[D with Y], N[E])
+  def e2(p: (D, E)): (H.NDY, H.NE) = p
+                                     ^
+subtype-cycle-cut.scala:20: error: type mismatch;
+ found   : (E, D)
+ required: (H.NE, H.NDY)
+    (which expands to)  (N[E], N[D with Y])
+  def e3(p: (E, D)): (H.NE, H.NDY) = p
+                                     ^
+subtype-cycle-cut.scala:21: error: type mismatch;
+ found   : (D, E, D)
+ required: (H.NDY, H.NE, H.NDY)
+    (which expands to)  (N[D with Y], N[E], N[D with Y])
+  def e4(p: (D, E, D)): (H.NDY, H.NE, H.NDY) = p
+                                               ^
+subtype-cycle-cut.scala:22: error: type mismatch;
+ found   : H.NDY => E
+    (which expands to)  N[D with Y] => E
+ required: D => H.NE
+    (which expands to)  D => N[E]
+  def e5(f: H.NDY => E): D => H.NE = f
+                                     ^
+subtype-cycle-cut.scala:23: error: type mismatch;
+ found   : (D, F1, D)
+ required: (H.NDY, H.NF, H.NDY)
+    (which expands to)  (N[D with Y], N[F1 with F2], N[D with Y])
+  def f1(p: (D, F1, D)): (H.NDY, H.NF, H.NDY) = p
+                                                ^
+subtype-cycle-cut.scala:24: error: type mismatch;
+ found   : (F2, D, F1)
+ required: (H.NF, H.NDY, H.NF)
+    (which expands to)  (N[F1 with F2], N[D with Y], N[F1 with F2])
+  def f2(p: (F2, D, F1)): (H.NF, H.NDY, H.NF) = p
+                                                ^
+subtype-cycle-cut.scala:25: error: type mismatch;
+ found   : (D, H.NDY)
+    (which expands to)  (D, N[D with Y])
+ required: (H.NDY, D)
+    (which expands to)  (N[D with Y], D)
+  def d1(p: (D, H.NDY)): (H.NDY, D) = p
+                                      ^
+subtype-cycle-cut.scala:26: error: type mismatch;
+ found   : D => D
+ required: H.NDY => H.NDY
+    (which expands to)  N[D with Y] => N[D with Y]
+  def d2(f: D => D): H.NDY => H.NDY = f
+                                      ^
+9 errors

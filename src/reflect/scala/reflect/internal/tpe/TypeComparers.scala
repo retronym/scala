@@ -18,7 +18,6 @@ package tpe
 import scala.annotation.tailrec
 import scala.collection.mutable
 import util.{StringContextStripMarginOps, TriState}
-import java.util.IdentityHashMap
 
 trait TypeComparers {
   self: SymbolTable =>
@@ -28,18 +27,48 @@ trait TypeComparers {
 
   private final val LogPendingSubTypesThreshold = TypeConstants.DefaultLogThreshhold
 
-  private[this] val _pendingSubTypes = new mutable.HashSet[SubTypePair]
-  def pendingSubTypes = _pendingSubTypes
+  /** What a subtype check knows about its cycles.
+   *
+   *  From `LogPendingSubTypesThreshold` recursions, `isSubType` keeps the pairs it is working on, and answers
+   *  `false` for one that is already there. That `false` says only that the pair can't be derived from itself.
+   *  The pair may hold for another reason, and so may a pair whose check failed because of it.
+   *
+   *  A check that has cut off a pair is known to loop, and needs more help (scala/bug#13119). Pairs are then kept
+   *  at every depth, so that a loop is noticed after one turn, and until the outermost check returns it remembers
+   *   - a `true`: no rule of `isSubType` has the failure of another check as a premise, so a derivation in which
+   *     some questions were answered `false` too early is still a derivation;
+   *   - a `false` that did not wait for an answer from outside: no pair cut off below it was pending above it.
+   *  Both need the answer to be a function of the pair alone, so neither is remembered if a type variable was
+   *  consulted on the way.
+   */
+  final class SubTypeCycles {
+    /** The pairs being checked, with the value of `subsametypeRecursions` in their check. */
+    val pending = new mutable.HashMap[SubTypePair, Int]
 
-  private[this] val _knownFalseSubTypes = new IdentityHashMap[Type, List[Type]]
-  def knownFalseSubTypes = _knownFalseSubTypes
+    /** Has the outermost check in progress cut off a pair? */
+    var cutOff: Boolean = false
 
-  // Called on every top-level `isSubType` / `isSameType`, but the map is only populated for pathological recursive
-  // subtype checks. Guard the `clear()`, as `IdentityHashMap.clear` zeroes the entire table even when empty.
-  private def clearKnownFalseSubTypes(): Unit = {
-    val m = knownFalseSubTypes
-    if (!m.isEmpty) m.clear()
+    /** The answers remembered since then. */
+    var answers = new mutable.HashMap[SubTypePair, java.lang.Boolean]
+
+    /** The outermost pending pair that a failed check below the one in progress was cut off at, as its value in
+     *  `pending`. Such a failure waits for the answer of that pair.
+     */
+    var lowestCut: Int = Int.MaxValue
+
+    /** Incremented whenever the state of a type variable is read or changed. */
+    var typeVarUses: Int = 0
+
+    // Called when a top-level `isSubType` / `isSameType` returns, normally or not.
+    def reset(): Unit = if (cutOff || lowestCut != Int.MaxValue) {
+      cutOff = false
+      answers = new mutable.HashMap[SubTypePair, java.lang.Boolean]
+      lowestCut = Int.MaxValue
+    }
   }
+
+  private[this] val _subTypeCycles = new SubTypeCycles
+  def subTypeCycles: SubTypeCycles = _subTypeCycles
 
   final case class SubTypePair(tp1: Type, tp2: Type) {
     // scala/bug#8146 we used to implement equality here in terms of pairwise =:=.
@@ -103,7 +132,7 @@ trait TypeComparers {
   } finally {
     subsametypeRecursions -= 1
     if (subsametypeRecursions == 0) {
-      clearKnownFalseSubTypes()
+      subTypeCycles.reset()
       // undoLog.clear() // too eager, breaks #3281, #3866
     }
   }
@@ -141,7 +170,7 @@ trait TypeComparers {
   finally {
     subsametypeRecursions -= 1
     if (subsametypeRecursions == 0) {
-      clearKnownFalseSubTypes()
+      subTypeCycles.reset()
       // undoLog.clear() // too eager, breaks #3281, #3866
     }
   }
@@ -287,57 +316,53 @@ trait TypeComparers {
   def isSubType(tp1: Type, tp2: Type, depth: Depth = Depth.AnyDepth): Boolean = try {
     subsametypeRecursions += 1
 
-    //OPT cutdown on Function0 allocation
-    //was:
-    //    undoLog undoUnless { // if subtype test fails, it should not affect constraints on typevars
-    //      if (subsametypeRecursions >= LogPendingSubTypesThreshold) {
-    //        val p = new SubTypePair(tp1, tp2)
-    //        if (pendingSubTypes(p))
-    //          false
-    //        else
-    //          try {
-    //            pendingSubTypes += p
-    //            isSubType2(tp1, tp2, depth)
-    //          } finally {
-    //            pendingSubTypes -= p
-    //          }
-    //      } else {
-    //        isSubType2(tp1, tp2, depth)
-    //      }
-    //    }
-
+    //OPT cutdown on Function0 allocation, was: undoLog undoUnless { ... }
     val before = undoLog.log
     var result = false
 
     try result = { // if subtype test fails, it should not affect constraints on typevars
-      if (subsametypeRecursions >= LogPendingSubTypesThreshold) {
-        val p = SubTypePair(tp1, tp2)
-        if (pendingSubTypes(p)) {
-          val ts = knownFalseSubTypes.get(tp1)
-          val cur = if (ts != null) ts else Nil
-          knownFalseSubTypes.put(tp1, tp2 :: cur) // see scala/bug#13119
-          false // see neg/t8146-no-finitary*
-        } else
-          try {
-            pendingSubTypes += p
-            isSubType1(tp1, tp2, depth)
-          } finally {
-            pendingSubTypes -= p
-          }
-      } else if (!knownFalseSubTypes.isEmpty && { val ts = knownFalseSubTypes.get(tp1); ts != null && ts.contains(tp2) }) {
-        // redundant `isEmpty` check is probably premature optimization, but isSubType is perf sensitive
-        false
-      } else {
-        isSubType1(tp1, tp2, depth)
-      }
+      val cycles = subTypeCycles
+      if (cycles.cutOff || subsametypeRecursions >= LogPendingSubTypesThreshold) isPendingSubType(tp1, tp2, depth, cycles)
+      else isSubType1(tp1, tp2, depth)
     } finally if (!result) undoLog.undoTo(before)
 
     result
   } finally {
     subsametypeRecursions -= 1
     if (subsametypeRecursions == 0) {
-      clearKnownFalseSubTypes()
+      subTypeCycles.reset()
       // undoLog.clear() // too eager, breaks #3281, #3866
+    }
+  }
+
+  private def isPendingSubType(tp1: Type, tp2: Type, depth: Depth, cycles: SubTypeCycles): Boolean = {
+    val p = SubTypePair(tp1, tp2)
+    val answer = if (cycles.cutOff) cycles.answers.getOrElse(p, null) else null
+    if (answer ne null) answer.booleanValue
+    else {
+      val pendingAt = cycles.pending.getOrElse(p, 0)
+      if (pendingAt > 0) {
+        cycles.cutOff = true
+        if (pendingAt < cycles.lowestCut) cycles.lowestCut = pendingAt
+        false // see neg/t8146-no-finitary*
+      } else {
+        val at = subsametypeRecursions
+        val typeVarUses = cycles.typeVarUses
+        val outerLowestCut = cycles.lowestCut
+        cycles.lowestCut = Int.MaxValue
+        var lowestCut = 0 // unknown if the check throws
+        try {
+          cycles.pending(p) = at
+          val result = isSubType1(tp1, tp2, depth)
+          lowestCut = if (result) Int.MaxValue else cycles.lowestCut
+          if (cycles.cutOff && lowestCut >= at && cycles.typeVarUses == typeVarUses)
+            cycles.answers(p) = java.lang.Boolean.valueOf(result)
+          result
+        } finally {
+          cycles.pending -= p
+          cycles.lowestCut = if (lowestCut < at) math.min(lowestCut, outerLowestCut) else outerLowestCut
+        }
+      }
     }
   }
 

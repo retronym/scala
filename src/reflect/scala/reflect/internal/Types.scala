@@ -3492,9 +3492,12 @@ trait Types
      *  in operations that are exposed from types. Hence, no syncing of `constr`
      *  or `encounteredHigherLevel` or `suspended` accesses should be necessary.
      */
-    def instValid = constr.instValid
-    def inst = constr.inst
-    def instWithinBounds = constr.instWithinBounds
+    def instValid = { used(); constr.instValid }
+    def inst = { used(); constr.inst }
+    def instWithinBounds = { used(); constr.instWithinBounds }
+
+    // A subtype check that reads or changes the state of a type variable has an answer that can't be reused.
+    private def used(): Unit = subTypeCycles.typeVarUses += 1
     override def isGround = instValid && inst.isGround
 
     /** The variable's skolemization level */
@@ -3541,6 +3544,7 @@ trait Types
     // (undoLog is used to reset constraints to avoid piling up unrelated ones)
     def setInst(tp: Type): this.type =
       if (tp ne this) {
+        used()
         undoLog record this
         constr.inst = TypeVar.trace("setInst", s"In $originLocation, $originName=$tp")(
           tp
@@ -3554,6 +3558,7 @@ trait Types
     def addLoBound(tp: Type, isNumericBound: Boolean = false): Unit = {
       assert(tp != this, tp) // implies there is a cycle somewhere (?)
       //println("addLoBound: "+(safeToString, typeDebugging.debugString(tp))) //DEBUG
+      used()
       if (!sharesConstraints(tp)) {
         undoLog record this
         constr.addLoBound(tp, isNumericBound)
@@ -3563,6 +3568,7 @@ trait Types
     def addHiBound(tp: Type, isNumericBound: Boolean = false): Unit = {
       // assert(tp != this)
       //println("addHiBound: "+(safeToString, typeDebugging.debugString(tp))) //DEBUG
+      used()
       if (!sharesConstraints(tp)) {
         undoLog record this
         constr.addHiBound(tp, isNumericBound)
@@ -3574,10 +3580,13 @@ trait Types
     // OPT: This could be Either[TypeVar, Boolean], but this encoding was chosen instead to save allocations.
     private[this] var _suspended: Type = ConstantFalse
     @tailrec
-    private[Types] final def suspended: Boolean = (_suspended: @unchecked) match {
-      case ConstantFalse => false
-      case ConstantTrue  => true
-      case tv: TypeVar   => tv.suspended
+    private[Types] final def suspended: Boolean = {
+      used()
+      (_suspended: @unchecked) match {
+        case ConstantFalse => false
+        case ConstantTrue  => true
+        case tv: TypeVar   => tv.suspended
+      }
     }
 
     /** `AppliedTypeVar`s share the same `TypeConstraint` with the `HKTypeVar` that it was spawned from.
@@ -3853,7 +3862,7 @@ trait Types
     }
 
     override def mapOver(map: TypeMap): Type =
-      if (constr.instValid) {
+      if (instValid) {
         // ideally TypeVar.inst should handle this,
         // but it would have to be disentangled from TypeVar.constr.inst
         map(appliedType(constr.inst, typeArgs))
@@ -3865,7 +3874,7 @@ trait Types
       }
 
     override def foldOver(folder: TypeFolder): Unit =
-      if (constr.instValid) folder(constr.inst)
+      if (instValid) folder(constr.inst)
       else this.typeArgs.foreach(folder)
   }
 
