@@ -1902,10 +1902,9 @@ abstract class RefChecks extends Transform {
       tree
     }
 
-    // the selector of the match being transformed
-    private var scrutinee: Tree = EmptyTree
+    private def keepType(tree: Tree, tpe: Type): Tree = atPos(tree.pos)(Typed(tree, TypeTree(tpe))).setType(tpe)
 
-    private def transformIf(tree: If, isScrutinee: Boolean): Tree = {
+    private def transformIf(tree: If): Tree = {
       val If(cond, thenpart, elsepart) = tree
       def unitIfEmpty(t: Tree): Tree =
         if (t == EmptyTree) Literal(Constant(())).setPos(tree.pos).setType(UnitTpe) else t
@@ -1913,13 +1912,14 @@ abstract class RefChecks extends Transform {
       cond.tpe match {
         case FoldableConstantType(value) =>
           val res = unitIfEmpty(if (value.booleanValue) thenpart else elsepart)
-          // The branch's type can be narrower than the `if`'s. Keep the `if`'s type where that matters:
-          // a match on the `if` was typed against it, and the back end cannot select on or unbox a `Nothing` operand.
-          val keepType =
-            if (res.tpe.typeSymbol == NothingClass) tree.tpe.typeSymbol != NothingClass
-            else isScrutinee && !(res.tpe.widen =:= tree.tpe)
-          if (keepType) atPos(res.pos)(Typed(res, TypeTree(tree.tpe))).setType(tree.tpe)
-          else res
+          // The back end cannot select on or unbox an operand of type `Nothing`, nor apply an array operation to one
+          // of type `Null`. A narrower match selector is handled in `Match`.
+          val keep = res.tpe.typeSymbol match {
+            case NothingClass => tree.tpe.typeSymbol != NothingClass
+            case NullClass    => tree.tpe.typeSymbol == ArrayClass
+            case _            => false
+          }
+          if (keep) keepType(res, tree.tpe) else res
         case _ => tree
       }
     }
@@ -2117,9 +2117,7 @@ abstract class RefChecks extends Transform {
             res.transform(this)
 
           case x @ If(_, _, _)  =>
-            val isScrutinee = x eq scrutinee
-            scrutinee = EmptyTree
-            val res = transformIf(x, isScrutinee)
+            val res = transformIf(x)
             // the surviving branch of a constant `if` gets the checks of its own node
             if (res eq x) res.transform(this) else transform(res)
 
@@ -2270,8 +2268,14 @@ abstract class RefChecks extends Transform {
             }
             // check the patterns for unfriendly shadowing, patvars bearing PatShadowAttachment
             if (settings.warnPatternShadow) for (cdef <- cases) checkPattern(cdef.pat)
-            scrutinee = selector
-            tree.transform(this)
+            // The pattern matcher takes the scrutinee type from the selector, which must stay the type the cases were
+            // typed against: reducing a constant `if` can narrow it to a branch's type.
+            val selectorTpe = selector.tpe
+            val selector1 = transform(selector) match {
+              case sel1 if sel1.tpe.widen =:= selectorTpe.widen => sel1
+              case sel1 => keepType(sel1, selectorTpe)
+            }
+            treeCopy.Match(tree, selector1, transformCaseDefs(cases))
 
           // skip refchecks in patterns....
           case CaseDef(pat, guard, body) =>

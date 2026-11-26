@@ -111,9 +111,73 @@ object Test {
     case _ => 2
   }
 
+  // else-if chains, each position surviving
+  def chain(x: Any): String = x match {
+    case 1    => "one"
+    case "s"  => "s"
+    case 2.0  => "two"
+    case null => "null"
+    case _    => "other"
+  }
+  def chain1: String = (if (Config.Quiet) 1 else if (Config.Enabled) "s" else if (Config.Enabled) 2.0 else null) match {
+    case 1 => chain(1); case "s" => chain("s"); case 2.0 => chain(2.0); case null => chain(null); case _ => "other"
+  }
+  def chain2: String = (if (Config.Enabled) 1 else if (Config.Quiet) "s" else if (Config.Enabled) 2.0 else null) match {
+    case 1 => chain(1); case "s" => chain("s"); case 2.0 => chain(2.0); case null => chain(null); case _ => "other"
+  }
+  def chain3: String = (if (Config.Enabled) 1 else if (Config.Enabled) "s" else if (Config.Quiet) 2.0 else null) match {
+    case 1 => chain(1); case "s" => chain("s"); case 2.0 => chain(2.0); case null => chain(null); case _ => "other"
+  }
+  def chain4: String = (if (Config.Enabled) 1 else if (Config.Enabled) "s" else if (Config.Enabled) 2.0 else null) match {
+    case 1 => chain(1); case "s" => chain("s"); case 2.0 => chain(2.0); case null => chain(null); case _ => "other"
+  }
+  def thenChain: String = (if (Config.Quiet) (if (Config.Enabled) 1 else (if (Config.Quiet) "s" else 2.0)) else null) match {
+    case 1 => "one"; case "s" => "s"; case _ => "other"
+  }
+  def elseIf: String = (if (Config.Enabled) 1 else if (Config.Quiet) "s" else 2.0) match {
+    case 1   => "one"
+    case "s" => "s"
+    case _   => "other"
+  }
+  def elseIfNull(s: String): Int = (if (Config.Enabled) s else if (Config.Quiet) null else s) match {
+    case "a"  => 1
+    case null => 0
+    case _    => 2
+  }
+
+  // other shapes of scrutinee
+  def ascribed: Int = (if (Config.Enabled) 1 else "s": Any) match {
+    case "s" => 0
+    case 1   => 1
+    case _   => 2
+  }
+  def unchecked: Int = ((if (Config.Enabled) 1 else "s"): @unchecked) match {
+    case "s" => 0
+    case 1   => 1
+    case _   => 2
+  }
+  def branchIsMatch(s: String): Int = (if (Config.Quiet) (s match { case "a" => "x"; case _ => "y" }) else 1) match {
+    case "x" => 0
+    case 1   => 1
+    case _   => 2
+  }
+  def reducedInCase(s: String): Int = s match {
+    case "b" => (if (Config.Quiet) null else s) match {
+      case "a"  => 1
+      case null => 0
+      case _    => 2
+    }
+    case _ => 3
+  }
+
   // a selection on, and a match on a value class of, a `Nothing` branch failed verification
   def length: Int = (if (Config.Enabled) "s" else sys.error("length")).length
   def valueClass: Int = (if (Config.Enabled) new V(1) else sys.error("value class")) match { case v => v.x }
+  // an array operation on a `null` branch did not compile
+  def arrayLength(a: Array[Int]): Int = (if (Config.Quiet) null else a).length
+  def arrayApply(a: Array[String]): String = (if (Config.Quiet) null else a)(0)
+  def arrayUpdate(a: Array[Int]): Unit = (if (Config.Quiet) null else a)(0) = 1
+  def genericArrayLength[A](a: Array[A]): Int = (if (Config.Quiet) null else a).length
 
   def main(args: Array[String]): Unit = {
     def run(f: => Any) = println(try f catch { case e: RuntimeException => e.getMessage })
@@ -123,7 +187,14 @@ object Test {
     println(nullScrutinee("b"))
     run(length)
     run(valueClass)
+    def npe(f: => Any) = println(try f catch { case _: NullPointerException => "NPE" })
+    npe(arrayLength(Array(1)))
+    npe(arrayApply(Array("a")))
+    npe(arrayUpdate(Array(1)))
+    npe(genericArrayLength(Array(1)))
     println(List(nullScrutineeInBranch("b"), narrowerInScrutinee, threeLevels("b"), threeLevelsInScrutinee, underNonConstant(false, "b"),
       inLambda("b"), inLambdaScrutinee(1), inByName("b"), inTry("b"), inGuard("b")))
+    println(List(chain1, chain2, chain3, chain4, thenChain, elseIf, elseIfNull("b")))
+    println(List(ascribed, unchecked, branchIsMatch("a"), reducedInCase("b")))
   }
 }

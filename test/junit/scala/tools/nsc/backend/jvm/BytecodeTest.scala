@@ -1168,11 +1168,15 @@ class BytecodeTest extends BytecodeTesting {
         |  def r7 = byName(if (T) 1 else "s")
         |  def r8(s: String) = if (F) 0 else (if (T) null else s) match { case "a" => 1; case null => 0; case _ => 2 }
         |  def d8(s: String) = (if (T) null else s) match { case "a" => 1; case null => 0; case _ => 2 }
+        |  def r9 = if (F) 1 else if (T) 2 else 3
+        |  def d9 = 2
+        |  def r10(s: String, t: String) = (if (T) s else t) match { case "a" => 1; case _ => 2 }
+        |  def d10(s: String, t: String) = s match { case "a" => 1; case _ => 2 }
         |}
         |""".stripMargin
     val c = compileClass(code, allowMessage = _ => true)
     def ins(name: String) = getMethod(c, name).instructions.dropNonOp
-    assertEquals("methods whose code differs from the branch's", Nil, ((1 to 6) :+ 8).filter(i => ins(s"r$i") != ins(s"d$i")).toList)
+    assertEquals("methods whose code differs from the branch's", Nil, ((1 to 6) ++ (8 to 10)).filter(i => ins(s"r$i") != ins(s"d$i")).toList)
     // the by-name argument stays a specialized `() => Int`
     assertEquals("()I", c.methods.asScala.find(_.name == "$anonfun$r7$1").get.desc)
   }
