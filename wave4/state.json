@@ -31,8 +31,8 @@
       "w4 verify WP10",
       "Sonnet",
       "Check WP10 against #750 and add its test",
-      "running",
-      ""
+      "done",
+      "#750 fixes WP10: with its RefChecks over the base build the program compiles and prints the expected output. A run test for a sequence argument in the surviving branch was added to #750 as a commit on top"
     ],
     [
       "w4 diff review #785",
@@ -407,6 +407,10 @@
     ]
   ],
   "log": [
+    [
+      "27 Nov 01:49",
+      "WP10 is covered by #750, which now has a test for it. All 39 wave-four findings link to a pull request."
+    ],
     [
       "27 Nov 01:48",
       "Third programs campaign done: one finding (WP10) in 1,692 programs. The campaign phase is complete; what remains is the diff reviews of #784 and #785 and the write-up."
@@ -926,6 +930,13 @@
       ],
       "state": "fixed",
       "note": "Fix (draft until read): Type the InjectDerivedValue tree with ErasedValueType(cls, erasedValueClassArg(tref)) instead of the argument's type, so injections agree with each other and with other values of the class and the lub taken when erasure retypes a conditional receiver succeeds. Regression in 2.11.0 from scala/scala#3082."
+    },
+    "WP10": {
+      "prs": [
+        750
+      ],
+      "state": "fixed",
+      "note": "Fix: covered by retronym/scala#750 (GF1), which now carries a test for this shape. Checked with that pull request's RefChecks over the base build: the program compiles and prints the expected output."
     }
   }
 }

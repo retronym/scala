@@ -161,20 +161,47 @@ GA1, GE1 to GE6, GF1, GF2 and three of the four GJ findings were re-run by the c
 - **Throughput differs by three orders of magnitude.** Library calls run at tens of thousands a second; whole programs with five recompilations at ten a minute. The program track needs the shared in-process driver and a cheaper oracle mix before a campaign, and its general grammar is close to untested.
 - **Coverage steering worked where it was tried.** Given the list of unreached library files, one agent took `ArrayOps` from 96 to 484 of 618 lines and `StringParsers` from none to all in two rounds. No compiler track got as far as aiming a round at its own coverage gaps; the gaps are recorded (`CleanUp`, `UnCurry`, the switch emitter, `JavaConstantFolder`, structural calls).
 
-## Plan for the wave
+## Campaign
 
-**Shape.** One coordinator, six to eight track agents in parallel, two passes. The first pass is the spikes: about 45 minutes each, three rounds at most, to learn which generators compile, which oracles are quiet, and what throughput is. The second pass gives the tracks that produced a signature, or whose coverage is still rising, a longer session with the steering loop above, and drops the rest.
+After the spikes, each track ran as a campaign of coverage-steered rounds under `CAMPAIGN-BRIEF.md`, on an integration build that also holds the wave-four fixes (`INTEGRATION.md`). Every finding was then re-run and judged by a reviewer that did not write it (`REVIEW.md`, `reviews/`), turned into a fix or a failing test on its own branch (`FIXBRIEF.md`, `fixes/`), and each fix was read by a second independent reviewer before its pull request left draft. Round records are in `rounds/`, reports and treemaps in `reports/`.
 
-**Shared pieces to build once, before the second pass.**
+| Track | Rounds | Volume | Findings |
+|---|---|---|---|
+| Java sources against javac | 4 | 700 generated cases | WJ1 |
+| Library files still unreached | 3 | 9.7 million checked calls | WL1, WL2, WL3 |
+| Expressions in embedding contexts | 3 | 8,100 cases over 170 contexts | WX1 |
+| Generated Scala programs, three campaigns | 15 | 4,650 programs, about 55,000 compilations | WP1 to WP10 |
+| Existing run tests as seeds | 4 | 944 tests under seven rewrites | WS1, WS2 |
 
-- A compile-and-run driver for program tracks: one JVM, a fresh `Global` and class loader per program, a timeout, the several configurations of a case compiled side by side, output and exception class captured. Wave three's brief already prescribes this shape; make it a file the tracks copy.
-- Round bookkeeping: per round the seed, cases run, signatures (new and repeated), oracle discards, the JaCoCo execution file, and the one change made. The treemap script reads the execution files.
-- The known-signature table and the integration build, refreshed to the current heads of the draft fixes.
-- A fixed set of seeds per track that is rerun after each generator change.
+The findings that matter most:
 
-**What the coordinator does between rounds.** Reads each track's new signatures and coverage delta, moves budget toward tracks with rising coverage or new signatures, and has a second agent reproduce each claimed finding from its files alone before it counts. That second read is the false-positive control Ephyra's authors did by hand.
+- **WP3** (retronym/scala#777): `xs.collect { case x => x match { case d: Double => Meters(d); case s: String => try Meters(s.toDouble) catch { ... } } }` compiles and then fails bytecode verification. A regression in 2.13.9 and 2.12.17: erasure boxes a value class around a `try` that uncurry did not lift.
+- **WP7** (retronym/scala#785): `(if (ok) Meters(d) else Meters(0)).value` crashes erasure, since 2.11.0. A value-class construction was typed with its argument's own type, so two branches could not be merged.
+- **WP5** (retronym/scala#784): a `return` in operand position under `try`/`finally` gives a VerifyError or a back-end crash; scala/bug#10183, open since 2017.
+- **WS1** (retronym/scala#778): a lambda whose body type is an existential over local classes is rejected whenever it is expanded into a class, which is always under `-Ydelambdafy:inline` (set by mdoc and Scastie) and for lambdas in super-constructor arguments. A regression from 2.12.0.
+- **WL1** (retronym/scala#770): every mutator on a read-only `TrieMap` snapshot throws NullPointerException or spins forever.
+- **WJ1** with GJ3 and wave-one J5 (retronym/scala#773): Java annotations with class-literal or constant-expression arguments are dropped from source.
+- **WX1** (retronym/scala#774): a structural call to a `Unit` method seen at `Any` returns `null`.
+- **WL2**, **WL3**, **WP1**, **WP2**, **WP4**, **WP6**, **WP8**, **WP9**, **WP10**, **WS2**: bounds checks in accumulators, a null key read as 0 through `asJava`, six tree-checker reports, a sequence argument rejected in the branch of a constant `if` (fixed by retronym/scala#750), and a tree-checker cost.
 
-**What comes out.** Finding directories in the wave-three format with seed and signature added; one fork pull request per root cause under the existing labels, or a comment-ready note on the existing pull request when the finding is a new cell of a fixed family; the harnesses themselves, which unlike a hand-written repro can be rerun on every later integration build; and candidates for `test/scalacheck` where a model is small enough to live in the tree.
+What the campaign added to what the spikes showed:
+
+- **Constructs meeting is where the compiler findings were.** WP3, WP5, WP7 and WP10 each came from families added in different rounds occurring in one program, none from the family a round had just added. A generator that weights such meetings is worth more than one that adds a family and tests it alone.
+- **The programs track paid until it did not.** Its first ten rounds gave nine findings; the last five gave one compile error and no miscompile, verification failure or crash in 1,692 programs, with coverage still rising slowly. That is the point to stop a generator and change the oracle.
+- **Independent review changed the picture of most findings.** It found WP3 needs no partial function and is a regression, that WL1 hangs where the hunter saw only an exception, that WS1 fails without the flag, that two hunters' mechanisms were wrong, and it rejected two hunters' fix sketches. A finding went to a fix worker only with its review.
+- **Diff review caught defects in a third of the fixes.** Of the 26 fix pull requests read so far, 8 came back with a defect or a concern at their first read, among them every first version of the self-aliasing fixes and the constant-`if` fix, whose first three versions each failed review and which ended as a different design. None of those defects showed in the authors' own test runs. The reviewers' most useful habit was compiling the changed sources over a built compiler and comparing class files of the standard library and a few hundred tests against the base.
+- **The integration build earns its keep in both directions.** In 1,691 programs of the last campaign, 2.13.18 behaved differently from the integration build in 534; 533 of those were defects fixed by earlier waves, which is evidence for those fixes from inputs nobody chose.
+- **Clean results at volume.** Ordinary use of the specialised maps, priority queues, steppers and streams, iterators, `LazyList` evaluation counts, sorting and `BigInt`/`BigDecimal` against `java.math`; evaluation order of an expression in 170 contexts; `-Ydelambdafy:inline` and separate compilation against the default over 4,650 programs; and every existing single-file run test under the optimizer, both delambdafy modes and separate compilation.
+
+Coverage reached by the generated inputs alone, in lines: `scala/tools/nsc/transform` 4,177 of 5,328, the pattern matcher 1,776 of 2,186, `backend/jvm` 2,867 of 3,905; the 31 library files of the library track 5,660 of 7,713; `JavaParsers` 712 of 768.
+
+### What a further pass would do
+
+- A Java-source oracle for Java-facing members of generated Scala programs (the generated program's own reflection dump found nothing; javac compiling a client against the output would be the stricter judge).
+- Invalid Java inputs with a both-compilers-reject oracle, which is all that is left unreached in the Java parser and scanner.
+- Warnings as an oracle, to reach the pattern matcher's exhaustivity and reachability analysis: the same program with a case removed must warn, and a complete match must not.
+- `-Xasync` and the tests that need partest or JUnit classes as seeds.
+- Refresh the integration build after each batch of fixes; the last campaign rediscovered one defect only because the build carried an older version of a fix.
 
 ## Cost and risks
 
@@ -186,6 +213,25 @@ GA1, GE1 to GE6, GF1, GF2 and three of the four GJ findings were re-run by the c
 - **Machine.** Eighteen cores and about 47 GB of free disk are shared; two JVMs per track at 2 GB, no sbt in track agents, scratch capped per track. Compiler coverage runs with JaCoCo on the compiler jars slow compilation noticeably; do them once per round, not continuously.
 - **Money.** Ephyra's only figure is about $66 and eight machine-hours per target for the closed loop. A track here is one agent session of 45 to 90 minutes plus a verifying read, the same order as a wave-three hunter.
 
+## Decisions for the owner
+
+Each is stated in the body of its pull request; none was made on his behalf.
+
+- retronym/scala#758, #759 (drafts): a buffer given a view or iterator of itself. Copy the source first, as these do, or fail fast as `ArrayBuffer`'s views already do. Copying first makes a source whose termination depends on the receiver growing run forever. #759 also puts a type test for `UnrolledBuffer` in `Growable.addAll` to stay binary compatible.
+- retronym/scala#761: the same question for sets and maps, tied to scala/bug#12121; failing tests and three options.
+- retronym/scala#749: `updateWith` whose function modifies the map: re-find the entry, or reject as `java.util.HashMap.compute` does.
+- retronym/scala#772: a null key through `asJava` on Int- and Long-keyed collections: answer by iterating, or type-test the known collections.
+- retronym/scala#756: non-constant annotation arguments (a block, a call of a literal-typed method) are accepted by 2.13.0 to 2.13.18 and rejected by this fix, as by 2.12 and Scala 3; a warning is the alternative.
+- retronym/scala#767: the ASM 9.11.1 frame limit that crashes the optimizer on a method with about 190 exception handlers (a regression in unreleased 2.13.19): catch and skip, count handlers in the size estimate, or widen ASM's counter.
+- retronym/scala#784: the back-end fix for scala/bug#10183 runs an analysis after emitting each method that returns under a finalizer; the alternatives are tracking stack height during code generation or lifting earlier. With it, retronym/scala#618 is not needed for correctness.
+- retronym/scala#773 replaces the approach of retronym/scala#288 and includes the test of retronym/scala#757; those two would be closed in its favour.
+- retronym/scala#763 also fixes a separate crash for overloads that differ only in an unspecialized parameter type; it could be split out.
+- retronym/scala#774 makes Scala 2 return `()` where Scala 3 still returns `null`; it is labelled for porting.
+- retronym/scala#764 adds an on-by-default warning for `def m[@specialized X](q: => X)`, which can fail a `-Werror` build.
+- retronym/scala#775 is partial: a primitive-typed match in statement position with one arm that erases to `Object` still fails the tree checker.
+- retronym/scala#779: nested binders are not scoped to their own binder, the same limit retronym/scala#459 has for existentials.
+- The four `area:generated:*` labels on the fork are unused and can be deleted.
+
 ## Not verified
 
 - The treemap and the 37 rounds in the announcement were not reproduced; the round semantics are inferred from the harness notes and the paper's figure.
@@ -194,6 +240,7 @@ GA1, GE1 to GE6, GF1, GF2 and three of the four GJ findings were re-run by the c
 - The last quarter of the paper's appendix and the second half of the Datadog post reached this session only as summaries.
 - Maintenance state of Thalia, Hephaestus, CrossLangFuzzer, JQF; the Java JIT fuzzers are from memory.
 - The scalacheck coverage figure comes from an older commit than the spike's build.
-- GE7 and GE8 are unshrunk and their causes unknown; GJ4 and GC1 to GC7 were re-run only by the agents that found them, as were all runs on the unfixed base and 2.13.18 other than GA1 and GJ1.
-- No wave-four finding has had an independent review, and root causes in the finding files are the hunters' reading, not debugged.
-- The compiler tracks did not run a coverage-aimed round, and the program track's general grammar ran 17 programs.
+- Reviewers and diff reviewers ran fixed code by compiling the changed sources over a built compiler, not from a full build of each branch; the fix authors ran the tests of the area and some partest categories, never the whole suite. The fork's CI on JDK 8 is the first full run of each branch.
+- The allocation bounds asserted in retronym/scala#758 to #760 were measured on JDK 21 and 25, not JDK 8.
+- The compile-time cost of the analysis in retronym/scala#784 and of the copy in the self-aliasing fixes on real code was not measured.
+- The integration build was smoke-tested and checked against the findings only; it carries the third version of retronym/scala#750, not the final one.

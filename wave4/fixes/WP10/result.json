@@ -1,0 +1,13 @@
+{
+ "id": "WP10",
+ "outcome": "COVERED",
+ "branch": "sweep4/w4-gf1-constant-if-nothing-scrutinee",
+ "commit": "9fddd2955cf4b67f92548dd81b963d8b910f8524",
+ "workspace": "/Users/jzaugg-virtus/code/.worktrees/scala/w4-fix-s",
+ "files": ["test/files/run/constant-if-varargs-branch.scala", "test/files/run/constant-if-varargs-branch.check"],
+ "failing_before": "Test.scala:4: error: Sequence argument type annotation `: _*` cannot be used here: such annotations are only allowed in arguments to *-parameters (also at line 5); 2 errors (w3-base scalac)",
+ "ran_after": "java -cp overlay:w3-base/build/pack/lib/* scala.tools.nsc.Main -usejavacp -d out-fixed repro/Test.scala (overlay = RefChecks from PR head 2f586e7fb2 compiled with the base compiler) compiled with no errors; java -cp out-fixed:scala-library.jar Test printed: 6 4-5 (matches expected.txt)",
+ "prior_work": "retronym/scala#750",
+ "unsure": "Checked with a RefChecks-only overlay on the base compiler, not a full build of the pull request; the new test was run the same way, not through partest.",
+ "note": "The current head of retronym/scala#750 fixes WP10. Added a run test on top of it as a local commit on sweep4/w4-gf1-constant-if-nothing-scrutinee, not pushed."
+}
