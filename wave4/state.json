@@ -28,11 +28,18 @@
   ],
   "agents": [
     [
+      "w4 diff review #784",
+      "Opus",
+      "Independent read of the WP5 fix in the back end",
+      "running",
+      ""
+    ],
+    [
       "w4 rework #779",
       "Opus",
       "Rework of retronym/scala#779 after diff review",
-      "running",
-      ""
+      "done",
+      "Only binders nested inside the checked type count as bound; a definition's own type parameters go through the owner check again. A new JUnit test shows a shared type-parameter symbol is still reported. Left as options for the owner: nested binders are not scoped to their binder (the same limit #459 has for existentials)"
     ],
     [
       "w4 fix WP7",
@@ -45,8 +52,8 @@
       "w4 fix WP5",
       "Opus",
       "WP5 (scala/bug#10183): a return in operand position under try/finally",
-      "running",
-      ""
+      "done",
+      "WP5 (scala/bug#10183) fixed in the back end (retronym/scala#784, draft): each return that jumps to a cleanup is recorded, an analysis after the method is emitted finds the operand stack there, and pops are inserted. The standard library compiles byte-identical. It composes with #618 and makes #618 unnecessary for correctness. Compile-time cost of the per-method analysis not measured"
     ],
     [
       "w4 tests WP4 WP6 WP8 WP9",
@@ -386,6 +393,14 @@
     ]
   ],
   "log": [
+    [
+      "27 Nov 01:42",
+      "retronym/scala#784 opened as a draft: a back-end fix for WP5, the 2017 ticket scala/bug#10183; with an independent reviewer. #779 out of draft after its rework."
+    ],
+    [
+      "27 Nov 01:38",
+      "#779 narrowed as its reviewer asked and out of draft."
+    ],
     [
       "27 Nov 01:26",
       "retronym/scala#780 to #783 opened: failing tests for the four -Ycheck findings WP4, WP6, WP8, WP9."
@@ -846,7 +861,7 @@
         779
       ],
       "state": "fixed",
-      "note": "Fix (stacked on retronym/scala#459; draft until read): referencesInType now treats PolyType type parameters in the checked info as bound (with a Set instead of List.contains), and the per-reference messages for a tree are merged into one, so the tree and signature are rendered once per tree."
+      "note": "Fix (stacked on retronym/scala#459; narrowed after independent diff review as the reviewer suggested, with a test that a genuine report still fires): Only PolyTypes nested inside the checked info bind their type parameters; the info's own outermost PolyType parameters go through the owner check, so a method whose info reuses another method's type parameters is reported again. New JUnit test mutates a typed tree to show that report and asserts no report for a lub and a refinement with a polymorphic member."
     },
     "WP4": {
       "prs": [
@@ -875,6 +890,13 @@
       ],
       "state": "fixed",
       "note": "Test only, no fix yet: Pos test with `//> using options -Ycheck:all -Werror`; belongs with retronym/scala#509."
+    },
+    "WP5": {
+      "prs": [
+        784
+      ],
+      "state": "fixed",
+      "note": "Fix (draft until read): Back-end fix (option a): after emitting a method, find the stack at each return-to-cleanup jump with an ASM analysis and pop it, so all jumps to a cleanup arrive with an empty stack; empty-stack returns are unchanged (library class files identical)."
     }
   }
 }

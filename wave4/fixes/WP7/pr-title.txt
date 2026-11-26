@@ -1,0 +1,1 @@
+Type a value-class injection with the class's erased underlying type

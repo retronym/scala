@@ -57,5 +57,175 @@
   ],
   "next": "Arrays and symbols: array literals and creation of every element type (Byte, Short, Char, Float, Boolean, Unit, Nothing, Null, value classes, nested), Array.apply varargs and ofDim/fill paths, ClassTag-generic arrays, array patterns, symbol literals, for CleanUp.transformApply and the backend array paths.",
   "notes": "New: WP10 (wrong rejection: `if (false) 1 else f(xs: _*)`; refchecks reduces the constant if and transforms the branch's children only). Same cause as the second half of the current retronym/scala#750 revision, which w4-int predates. Two JVMs: 19.4 (JaCoCo, 75 programs) and 93.7 programs/min (374)."
+ },
+ {
+  "round": 12,
+  "change": "Arrays and symbols: literals and creation of Byte, Short, Char, Float, Boolean, Unit, Nothing, Null, Any, AnyVal, value-class, Option and nested array elements through Array.apply (typed and inferred), new Array, ofDim (1 and 2 dimensions), fill, tabulate, ClassTag-generic helpers, compound updates, :+, map to nested arrays, array patterns with sequence wildcards, type patterns on arrays, varargs from an array, symbol literals and Symbol(...) interning.",
+  "cases": 239,
+  "seconds": 230,
+  "compile_rate": "100% (239 of 239)",
+  "signatures_new": 0,
+  "signatures_known": 6,
+  "false_alarms": "0 (smoke run only: `Array[Char]('a')(0)` passes 0 as the ClassTag argument, correctly rejected; generator now writes .apply(0))",
+  "oracle_disagreements": {
+   "opt-local": "0/163",
+   "delambdafy-inline": "3/239",
+   "separate": "0/239",
+   "v18": "70/239 (all fixed by earlier waves)",
+   "ycheck": "11/12"
+  },
+  "known_hits": {
+   "v18-wavefix": 70,
+   "WP6": 5,
+   "dl-ser": 3,
+   "WP9": 3,
+   "WP1": 2,
+   "WP8": 1
+  },
+  "coverage": {
+   "transform": [
+    4054,
+    5328
+   ],
+   "transform/patmat": [
+    1628,
+    2186
+   ],
+   "backend/jvm": [
+    2743,
+    3905
+   ],
+   "backend/jvm/opt": [
+    1806,
+    2955
+   ],
+   "typechecker": [
+    7234,
+    13867
+   ]
+  },
+  "coverage_union": "union over all three campaigns: transform 4089 -> 4108, backend/jvm 2846 -> 2854 (CleanUp 7, Erasure 7, UnCurry 5 new lines); CleanUp.transformApply left the largest-unreached list",
+  "largest_unreached": [
+   "BCodeSkelBuilder.appendToStaticCtor (30)",
+   "CleanUp.transformApplyDynamic (26 of 47)",
+   "PlainBodyBuilder.genStringConcat lambda (26)",
+   "Constructors.DelayedInitHelper.delayedInitClosure (21)",
+   "MatchAnalysis.VariableAssignment.toCounterExample (23)"
+  ],
+  "next": "Mixin: three or more traits with fields, lazy vals and abstract override mixed into anonymous classes, local objects and classes and a value-class companion; early initialisers; DelayedInit and App (Constructors.DelayedInitHelper is unreached).",
+  "notes": "Throughput fell to 11.6 (JaCoCo) and 48.8 programs/min with 2 programs in flight per JVM."
+ },
+ {
+  "round": 13,
+  "change": "Mixin: one to four of four stackable traits (fields, lazy vals, a var, abstract override, a generic trait with an abstract member) mixed into anonymous classes, local objects and local classes over a base class, a value-class companion extending the traits, an anonymous class overriding a trait val, early initialisers, App (DI.main then its fields) and a DelayedInit class hierarchy.",
+  "cases": 200,
+  "seconds": 230,
+  "compile_rate": "97.0% (194 of 200; all 6 generator faults: a return in a trait member's body inside a local object, and in an early initialiser, both fixed after the round)",
+  "signatures_new": 0,
+  "signatures_known": 5,
+  "false_alarms": "0",
+  "oracle_disagreements": {
+   "opt-local": "1/136 (WP5)",
+   "delambdafy-inline": "1/200",
+   "separate": "0/200",
+   "v18": "71/200 (all fixed by earlier waves)",
+   "ycheck": "7/10"
+  },
+  "known_hits": {
+   "v18-wavefix": 71,
+   "WP6": 5,
+   "WP9": 2,
+   "dl-ser": 1,
+   "WP5": 1
+  },
+  "coverage": {
+   "transform": [
+    4119,
+    5328
+   ],
+   "transform/patmat": [
+    1652,
+    2186
+   ],
+   "backend/jvm": [
+    2750,
+    3905
+   ],
+   "backend/jvm/opt": [
+    1800,
+    2955
+   ],
+   "typechecker": [
+    7357,
+    13867
+   ]
+  },
+  "coverage_union": "union over all three campaigns: transform 4108 -> 4174 (Constructors 52 new lines: DelayedInit), patmat 1730 -> 1754, backend/jvm 2854 -> 2861; the round-14 prelude classes (inner case classes matched in their outer class) were already compiled in this round and account for the MatchTreeMaking and ExplicitOuter lines",
+  "largest_unreached": [
+   "BCodeSkelBuilder.appendToStaticCtor (30)",
+   "CleanUp.transformApplyDynamic (26 of 47)",
+   "PlainBodyBuilder.genStringConcat lambda (26)",
+   "BCJGenSigGen.getGenericSignature (25 of 36)",
+   "MatchAnalysis.VariableAssignment.toCounterExample (23)"
+  ],
+  "next": "Classes nested three deep with outer references, inner case classes of two instances matched through the other (outer tests), lambdas in constructors, super-constructor arguments and default arguments (explicitouter, lambdalift, constructors).",
+  "notes": "Return inside an early initialiser is rejected with 'value <local q> has return statement; needs result type' and inside an anonymous class's val with 'return outside method definition'; the specification puts such a return outside any method, so neither is reported. JVMs: 11.8 (JaCoCo) and 40.1 programs/min."
+ },
+ {
+  "round": 14,
+  "change": "Outer references: local classes nested three deep with generated bodies reading all three levels' parameters, inner case classes of two outer instances matched through either instance (outer tests, O1#CI scrutinee), a subclass of an inner case class, path-dependent inner instances, lambdas in constructors and trait initialisers, lambdas as super-constructor arguments capturing constructor parameters, lambdas as default arguments of constructors and methods.",
+  "cases": 295,
+  "seconds": 230,
+  "compile_rate": "99.7% (294 of 295; one generator fault: a return's type in a nested generated body, not traced)",
+  "signatures_new": 0,
+  "signatures_known": 5,
+  "false_alarms": "0",
+  "oracle_disagreements": {
+   "opt-local": "0/186",
+   "delambdafy-inline": "9/295 (all dl-ser)",
+   "separate": "0/295",
+   "v18": "91/295 (all fixed by earlier waves)",
+   "ycheck": "12/14"
+  },
+  "known_hits": {
+   "v18-wavefix": 91,
+   "dl-ser": 9,
+   "WP9": 6,
+   "WP6": 4,
+   "WP1": 1,
+   "WP8": 1
+  },
+  "coverage": {
+   "transform": [
+    4160,
+    5328
+   ],
+   "transform/patmat": [
+    1663,
+    2186
+   ],
+   "backend/jvm": [
+    2749,
+    3905
+   ],
+   "backend/jvm/opt": [
+    1797,
+    2955
+   ],
+   "typechecker": [
+    7313,
+    13867
+   ]
+  },
+  "coverage_union": "union over all three campaigns: transform 4174 -> 4175, patmat 1754 -> 1765 (MatchTreeMaking 11), backend/jvm 2861 -> 2866",
+  "largest_unreached": [
+   "BCodeSkelBuilder.appendToStaticCtor (30)",
+   "CleanUp.transformApplyDynamic (26 of 47)",
+   "PlainBodyBuilder.genStringConcat lambda (26)",
+   "BCJGenSigGen.getGenericSignature (25 of 36)",
+   "MatchAnalysis.VariableAssignment.toCounterExample (23)"
+  ],
+  "next": "Bridges and covariant overrides across generic hierarchies (local generic abstract class implemented at a concrete type and called through the generic view and by reflection), Enumeration with custom Val subclasses, implicit value classes, and string concatenation of 200 to 280 parts for genStringConcat's chunking.",
+  "notes": "JVMs: 11.8 (JaCoCo) and 64.6 programs/min."
  }
 ]

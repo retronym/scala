@@ -42,7 +42,7 @@ class Gen(seed: Long, opts: GenOpts = GenOpts()) {
   def chance(p: Double): Boolean = r.nextDouble() < p
   /** Construct families by the round that added them; each program favours two of those switched on, so that
    *  constructs of different rounds meet in one program. */
-  val families = List(2 -> "switch", 3 -> "struct", 4 -> "narrow", 5 -> "return", 6 -> "patmat", 7 -> "nested", 8 -> "linear", 9 -> "vcmix", 10 -> "dyn", 11 -> "jface", 12 -> "arr")
+  val families = List(2 -> "switch", 3 -> "struct", 4 -> "narrow", 5 -> "return", 6 -> "patmat", 7 -> "nested", 8 -> "linear", 9 -> "vcmix", 10 -> "dyn", 11 -> "jface", 12 -> "arr", 13 -> "mixin", 14 -> "outer", 15 -> "bridge")
   val focus: Set[String] = r.shuffle(families.filter(_._1 <= Gen.round).map(_._2)).take(2).toSet
   def weight(f: String): Int = if (focus(f)) 4 else 1
 
@@ -263,6 +263,51 @@ class Gen(seed: Long, opts: GenOpts = GenOpts()) {
       nodes += (() => { val x = fresh("x"); s"({ case $x if $x > 1 => ${gen(t, w(Var(x, TInt)), d - 1)} }: PartialFunction[Int, ${show(t)}]).applyOrElse(${g(TInt)}, (($x: Int) => ${g(t)}))" })
       env.vars.filter(_.mutable).foreach(v => nodes += (() => s"({ ${v.name} = ${g(v.ty)}; ${g(t)} })"))
       def addF(f: String)(th: () => String): Unit = for (_ <- 0 until weight(f)) nodes += th
+      if (Gen.round >= 15) { // bridges and covariant overrides across generic hierarchies, Enumeration, implicit value classes, string concatenation of many parts
+        def b(t2: Ty, vs: Var*) = gen(t2, w(vs: _*), d - 2)
+        if (t == TStr) addF("bridge")(() => pick(List(s"(new By: Bx[Int, Any]).ap(${g(TInt)}).toString + (new By).self.ap(1)", s"String.valueOf(classOf[Bx[_, _]].getMethod(\"ap\", classOf[Object]).invoke(new By, Int.box(${g(TInt)})))",
+          s"((new FnS: Fn[String, Any]).apply(${g(TStr)}).toString + (new FnS: Fn[Int, String])(${g(TInt)}))", s"Refl.desc(classOf[By]) + Refl.desc(classOf[CovI])", s"(new CovI(${g(TInt)}): Cov[Any]).pair.toString",
+          s"En.values.toList.mkString(\",\") + En.withName(\"bl\").id + En(${g(TInt)} % 2)", s"(En(Math.abs(${g(TInt)}) % 2) match { case En.Red => \"r\"; case En.Green => \"g\"; case _ => \"o\" })",
+          s"Wk.values.toList.map { case p: Wk.Pv => p.twice; case _ => 0 }.mkString", s"${g(TInt)}.xx((i: Int) => ${g(TStr)} + i) + ${g(TStr)}.qq",
+          s"(new GOv[String]).id(${g(TStr)}) + (new GOv[String]: GId[String]).id(${g(TStr)}) + (new GOv2: GId[String]).id(\"x\")", s"new Cv2().me.name + (new Cv2(): Cv1).me.name",
+          { val parts = List.fill(200 + r.nextInt(80))(pick(List(g(TInt), "'c'", g(TStr), "1.5f", "null", "2L", "true"))); "(\"\" + " + parts.mkString(" + ") + ")" })))
+        if (t == TInt) addF("bridge")(() => pick(List(s"(new By).ap(${g(TInt)}).length", s"En.maxId + En.Blue.id + Wk.B1.twice", s"${g(TInt)}.xx(_ + 1)", s"(new Sq[Int](${g(TInt)}): Sq0[Any]).len", s"(new GOv2).twice(${g(TInt)})")))
+        if (!env.inVC) addF("bridge")(() => { val (c, x) = (fresh("Ov"), fresh("x")); val tt = show(t)
+          s"{ abstract class ${c}A[A] { def f($x: A): A; def g: AnyRef }; class $c extends ${c}A[$tt] { def f($x: $tt): $tt = ${gen(t, w(Var(x, t)).copy(ret = Some(t)), d - 2)}; def g: String = \"g\" }; val o: ${c}A[$tt] = new $c; Tr.t(o.g.toString.length, o.f(${g(t)})) }" })
+      }
+      if (Gen.round >= 14 && !env.inVC) { // classes nested three deep with outer references, path-dependent inner case classes matched through other instances (outer tests), lambdas in constructors, super-constructor arguments and defaults
+        def b(t2: Ty, vs: Var*) = gen(t2, w(vs: _*), d - 2)
+        addF("outer")(() => { val (a, bb, c, x, y, z) = (fresh("A"), fresh("B"), fresh("C"), fresh("a"), fresh("b"), fresh("c"))
+          s"{ class $a(val $x: Int) { class $bb(val $y: Int) { class $c(val $z: Int) { def f: ${show(t)} = ${gen(t, w(Var(x, TInt), Var(y, TInt), Var(z, TInt)).copy(ret = Some(t)), d - 2)}; def up: $a = $a.this }; def mk(n: Int) = new $c(n) } }; val o1 = new $a(${g(TInt)}); val o2 = new o1.$bb(${g(TInt)}); val o3 = o2.mk(${g(TInt)}); Tr.t(o3.up.$x, o3.f) }" })
+        addF("outer")(() => { val (p, q, x) = (fresh("p"), fresh("q"), fresh("x"))
+          s"{ val $p = new O1(${g(TInt)}); val $q = new O1(${g(TInt)}); ((if (${g(TBool)}) $p.CI(${g(TInt)}) else $q.CI(${g(TInt)})): O1#CI) match { case $p.CI($x) if $x > 2 => ${b(t, Var(x, TInt))}; case $q.CI($x) => ${b(t, Var(x, TInt))}; case _ => ${gen(t, env, d - 2)} } }" })
+        if (t == TInt) addF("outer")(() => { val (p, q) = (fresh("p"), fresh("q")); pick(List(
+          s"{ val $p = new O1(${g(TInt)}); val $q = new O1(2); $p.isMine($q.CI(3)) * 10 + $p.isMine($p.CI(${g(TInt)})) + $q.isMine(new $q.Sub(1)) }",
+          s"{ val $p = new O1(${g(TInt)}); val i = $p.mk(${g(TInt)}); val j = new i.J1(${g(TInt)}); j.sum + j.outerI.i + j.oo.o }",
+          s"{ val $p = new O1(1); (($p.CI(${g(TInt)}): Any) match { case c: O1#CI => c.x; case _ => -1 }) + (($p.CI(2): Any) match { case $p.CI(k) => k; case _ => 0 }) }",
+          s"new LC(${g(TInt)}).g() + new LS(${g(TInt)}).gx(${g(TInt)}) + new LS2(${g(TInt)}).h", s"new DL(${g(TInt)}).f(${g(TInt)}) + DL.dfl() + DL.dfl(_ * 3)",
+          s"(new TLI(${g(TInt)}).tf(${g(TInt)}) + new LS3(${g(TInt)}).h2)")) })
+        addF("outer")(() => { val (l, n, x, y) = (fresh("L"), fresh("n"), fresh("x"), fresh("y"))
+          s"{ class $l(val $n: Int) extends Gx[Int => ${show(t)}](($x: Int) => ${gen(t, w(Var(x, TInt), Var(n, TInt)).copy(ret = None), d - 2)}) { val f2: Int => ${show(t)} = ($y: Int) => gx($y + $n + ma) }; new $l(${g(TInt)}).f2(${g(TInt)}) }" })
+        addF("outer")(() => { val (l, n, x) = (fresh("L"), fresh("n"), fresh("x"))
+          s"{ class $l(val $n: Int, val k: Int => ${show(t)} = ($x: Int) => ${gen(t, w(Var(x, TInt)).copy(ret = None), d - 2)}) { val v: ${show(t)} = k($n); val th: () => ${show(t)} = () => k($n + 1) }; val o = new $l(${g(TInt)}); Tr.t(${fresh("")}, o.th()); o.v }" })
+      }
+      if (Gen.round >= 13 && !env.inVC) { // trait mixin into objects, anonymous and local classes; abstract override over 3+ traits; super accessors; early initialisers; DelayedInit and App
+        def b(t2: Ty, vs: Var*) = gen(t2, w(vs: _*), d - 2)
+        def traits(): String = r.shuffle(List("MB", "MC", s"MD[${show(TInt)}]", "ME")).take(1 + r.nextInt(4)).mkString(" with ")
+        def mdBody = "def dt: Int = " + gen(TInt, env.copy(ret = Some(TInt)), d - 2)
+        addF("mixin")(() => { val o = fresh("mo"); val ts = traits(); val body = if (ts.contains("MD")) mdBody else ""
+          pick(List(s"{ val $o = new MBase with $ts { $body }; Tr.t(${fresh("")}, $o.mf(${g(TInt)})); ${b(t, Var(o + ".ma", TInt))} }",
+                    s"{ object $o extends MBase with $ts { $body; lazy val lz: ${show(t)} = ${gen(t, env.copy(ret = None), d - 2)} }; Tr.t($o.mf(${g(TInt)}), $o.lz) }",
+                    s"{ class $o(val k: Int) extends MBase with $ts { $body; override def mf(x: Int): Int = super.mf(x + k) }; Tr.t(new $o(${g(TInt)}).mf(1), ${g(t)}) }")) })
+        if (t == TInt) addF("mixin")(() => { val ts = traits(); val body = if (ts.contains("MD")) mdBody else ""
+          pick(List(s"(new MBase with $ts { $body }).mf(${g(TInt)})", s"{ val q = new MBase with $ts { $body }; q.mla.length + q.ma + q.mf(${g(TInt)}) }",
+                    s"(new Gx[Int](${g(TInt)}) with MB { override val mb: Int = Tr.t(${fresh("")}, 9) }).mf(${g(TInt)})",
+                    s"{ val q = new { val early: Int = Tr.t(${fresh("")}, ${gen(TInt, env.copy(ret = None), d - 1)}) } with MA { val late: Int = early + ma }; q.late }", "new EI().after",
+                    s"{ val d = new DIC2(${g(TInt)}); d.q2 + d.log.length }", "{ DI.main(Array[String]()); DI.dv }", s"MV.mk(${g(TInt)}).k + MV.mf(1)")) })
+        if (t == TStr) addF("mixin")(() => pick(List(s"{ val d = new DIC2(${g(TInt)}); d.log + d.q2 }", "{ DI.main(Array[String]()); DI.dw }", s"(new MBase with ME with MC).mvb + (new MBase with MB).mla",
+          s"{ val q = new MBase with MB with MC; q.mvb = ${g(TStr)}; q.mvb + q.mlc }")))
+      }
       if (Gen.round >= 12) { // arrays of every element type: literals, Array.apply, ofDim/fill/tabulate, ClassTag-generic creation, nesting, array patterns; symbols
         def b(t2: Ty, vs: Var*) = gen(t2, w(vs: _*), d - 2)
         def vt(): TVC = { val dd = pick(vcs); TVC(dd.name, dd.tparam.toList.map(_ => pick(List(TInt, TLong, TStr, TDouble)))) }
@@ -662,7 +707,7 @@ class Gen(seed: Long, opts: GenOpts = GenOpts()) {
   def program(): List[List[String]] = {
     val units = ArrayBuffer[List[String]]()
     val imp0 = "import scala.reflect.ClassTag"
-    val imp = "import scala.reflect.ClassTag; import Imp._" + (if (Gen.round >= 3) "; import scala.language.reflectiveCalls" else "") + (if (Gen.round >= 10) "; import scala.language.dynamics; import Ipx._" else "")
+    val imp = "import scala.reflect.ClassTag; import Imp._" + (if (Gen.round >= 3) "; import scala.language.reflectiveCalls" else "") + (if (Gen.round >= 10) "; import scala.language.dynamics; import Ipx._" else "") + (if (Gen.round >= 15) "; import Xv._" else "")
     units += List(imp0, "trait U0[A] extends Any { def uu: A; def uc(x: Int): (A, Int) = (uu, x) }")
     units += List(imp0, s"trait Sam0[${specAnn()}A, ${specAnn()}B] { def ap(a: A): B${if (chance(0.3)) "; def twice(a: A): (B, B) = (ap(a), ap(a))" else ""} }")
     units += List(imp0,
@@ -699,6 +744,22 @@ class Gen(seed: Long, opts: GenOpts = GenOpts()) {
       "  def statics(c: Class[_]): String = c.getDeclaredMethods.toList.filter(m => m.getParameterCount == 0 && Modifier.isStatic(m.getModifiers) && Modifier.isPublic(m.getModifiers) && !m.getName.contains(\"$\")).sortBy(m => (m.getName, m.getReturnType.getName)).map(inv(_, null)).mkString(\" \")",
       "  def ser[T](x: T): T = { val bo = new java.io.ByteArrayOutputStream; val oo = new java.io.ObjectOutputStream(bo); oo.writeObject(x); oo.close(); val l = Refl.getClass.getClassLoader; new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bo.toByteArray)) { override def resolveClass(d: java.io.ObjectStreamClass): Class[_] = try Class.forName(d.getName, false, l) catch { case _: ClassNotFoundException => super.resolveClass(d) } }.readObject().asInstanceOf[T] } }",
       "object Arr { def two[T: ClassTag](a: T, b: T): Array[T] = Array(a, b); def ofDim[T: ClassTag](n: Int): Array[T] = new Array[T](n); def gen[T: ClassTag](xs: Array[T], x: T): Array[T] = xs :+ x; val sym = 'arrSym }",
+      "trait MA { val ma: Int = Tr.t(940, 1); lazy val mla: String = Tr.t(941, \"mla\" + ma); def mf(x: Int): Int = x + ma }; class MBase extends MA { override def mf(x: Int): Int = super.mf(x) * 10 }",
+      "trait MB extends MA { override def mf(x: Int): Int = super.mf(x) * 2 + mb; val mb: Int = Tr.t(942, ma + 1); var mvb: String = \"b\" }; trait MC extends MA { abstract override def mf(x: Int): Int = super.mf(x + 1) - 1; @volatile lazy val mlc: Int = Tr.t(943, mla.length) }",
+      "trait MD[T] extends MA { def dt: T; lazy val ld: List[T] = List(dt, dt); override def mf(x: Int): Int = super.mf(x) + ld.length }; trait ME extends MB { abstract override def mf(x: Int): Int = super.mf(x) + mvb.length; mvb = mvb + \"e\" }",
+      "abstract class Gx[T](val gx: T) extends MA { def g: T = gx }; class EI extends { val early: Int = Tr.t(944, 5) } with MA { val after: Int = early + ma }",
+      "object DI extends App { Tr.t(945, 0); val dv: Int = 3; var dw: String = \"w\" + dv }; class DIC(val p: Int) extends DelayedInit { var log = \"\"; def delayedInit(body: => Unit): Unit = { log += \"<\"; body; log += \">\" }; val q: Int = Tr.t(946, p) }; class DIC2(pp: Int) extends DIC(pp + 1) { val q2: Int = q + pp; log += \"2\" }",
+      "case class MV(k: Int) extends AnyVal; object MV extends MBase with MB with MC { def mk(i: Int): MV = MV(mf(i)) }",
+      "class O1(val o: Int) { class I1(val i: Int) { class J1(val j: Int) { def sum = o + i + j; def outerI: I1 = I1.this; def oo: O1 = O1.this }; def mk(j: Int) = new J1(j) }; def mk(i: Int) = new I1(i); case class CI(x: Int); class Sub(x: Int) extends CI(x); def isMine(a: Any): Int = a match { case CI(x) => x; case _ => -1 } }",
+      "class LC(val n: Int) { val f: Int => Int = x => x + n; val g: () => Int = () => f(n) * 2 }; class LS(n: Int) extends Gx[Int => Int]((x: Int) => x + n); class LS2(n: Int) extends Gx[() => Int](() => n * 2) { def h: Int = gx() + n }",
+      "class LS3(n: Int) extends LS2(n + 1) { val h2: Int = Option(n).map(k => k + h + gx()).get }; class DL(val a: Int, val f: Int => Int = (x: Int) => x + 1) { def this(a: Int, b: Int) = this(a, (x: Int) => x * b + a) }; object DL { def dfl(f: Int => Int = _ + 1, g: () => String = () => \"d\"): Int = f(2) + g().length }",
+      "trait TL { def tl: Int; val tf: Int => Int = x => x + tl }; class TLI(val tl: Int) extends TL",
+      "abstract class Bx[A, +R] { def ap(a: A): R; def self: Bx[A, R] = this; def get: AnyRef }; class By extends Bx[Int, String] { def ap(a: Int): String = \"y\" + a; override def self: By = this; def get: String = \"s\" }",
+      "trait Cov[+A] { def head: A; def pair: (A, A) = (head, head) }; class CovI(val h: Int) extends Cov[Int] { def head: Int = h; override def pair: (Int, Int) = (h, -h) }; trait Fn[-A, +B] { def apply(a: A): B }; class FnS extends Fn[Any, String] { def apply(a: Any): String = \"f\" + a }",
+      "object En extends Enumeration { val Red, Green = Value; val Blue = Value(7, \"bl\") }; object Wk extends Enumeration { case class Pv(i: Int) extends super.Val { def twice: Int = i * 2 }; val A1 = Pv(1); val B1 = Pv(3) }",
+      "trait GId[T] { def id(t: T): T }; class GOv[T] extends GId[T] { def id(t: T): T = t }; class GOv2 extends GOv[String] { override def id(t: String): String = t + t; def twice(i: Int): Int = i * 2 }",
+      "trait Sq0[+A] { def len: Int }; class Sq[A](a: A) extends Sq0[A] { def len: Int = a.toString.length }; class Cv1 { def me: Cv1 = this; def name = \"1\" }; class Cv2 extends Cv1 { override def me: Cv2 = this; override def name = \"2\" }",
+      "object Xv { implicit class Xi(private val i: Int) extends AnyVal { def xx[T](f: Int => T): T = f(i) }; implicit class Qs(val s: String) extends AnyVal { def qq: String = s.reverse } }",
       "object Ipx { implicit class Ip(private val sc: StringContext) extends AnyVal { def ip(args: Any*): String = sc.parts.zipAll(args, \"\", \"\").map { case (p, a) => p + \"[\" + a + \"]\" }.mkString; def ip: IpPat = new IpPat(sc) } }",
       "class IpPat(sc: StringContext) { def unapplySeq(s: String): Option[Seq[String]] = if (sc.parts.length == 2 && s.startsWith(sc.parts(0)) && s.endsWith(sc.parts(1)) && s.length >= sc.parts(0).length + sc.parts(1).length) Some(Seq(s.substring(sc.parts(0).length, s.length - sc.parts(1).length))) else None }",
       "object Digits { def unapplySeq(s: String): Option[Seq[Int]] = if (s.forall(_.isLetter)) Some(s.map(_.toInt).toSeq) else None }",

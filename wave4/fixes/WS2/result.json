@@ -1,14 +1,15 @@
 {
   "id": "WS2",
   "outcome": "FIXED",
-  "branch": "review/w4-ws2-ycheck-bound-type-params",
-  "commit": "ffe2eaf851",
+  "branch": "sweep/w4-ws2-ycheck-bound-type-params",
+  "commit": "02a7eded8a",
   "stacked_on": "retronym/scala#459 (review/ycheck-nondestructive-stacked, head 3445312412)",
-  "workspace": "/Users/jzaugg-virtus/code/.worktrees/scala/w4-fix-n",
-  "files": "src/compiler/scala/tools/nsc/typechecker/TreeCheckers.scala, test/files/pos/ycheck-lub-type-params.scala",
-  "failing_before": "On the PR 459 head through sbt: pos/ycheck-lub-type-params [compilation failed with 1 errors]: 74 'Out of scope symbol reference' warnings (22 at typer, 52 at uncurry), e.g. 'ref to AbstractTypeSymbol _ (<deferred> <param>) in type CC -> trait StrictOptimizedSeqOps -> package immutable'. Hand runs of the PR 459 head's quick classes: finding T.scala -Ycheck:typer killed at 60 s after 21 warnings; t498 -Ycheck:all killed at 60 s after 48 warnings.",
-  "ran_after": "Through sbt in the workspace (JDK 21.0.12 tem): partest of the new test, 1 passed; partest --grep Ycheck, 18 passed. Hand runs with `java -cp build/quick/classes/{library,reflect,compiler}:scala-asm.jar scala.tools.nsc.Main`: finding T.scala -Ycheck:typer 6 s, 0 warnings (4 s without -Ycheck); t498 -Ycheck:all 5 s, 0 warnings; the new test under -Ycheck:all 3 s, 0 warnings. `git merge-tree` of the branch with retronym/scala#509's head is clean.",
+  "workspace": "/Users/jzaugg-virtus/code/.worktrees/scala/w4-fix-r",
+  "files": "src/compiler/scala/tools/nsc/typechecker/TreeCheckers.scala, test/junit/scala/tools/nsc/typechecker/TreeCheckersTest.scala (new; plus the earlier commit's test/files/pos/ycheck-lub-type-params.scala)",
+  "failing_before": "On the PR 779 head (ffe2eaf851) through sbt: TreeCheckersTest.sharedTypeParamsAreOutOfScope failed: expected:<1> but was:<0> (g.setInfo(f.info) after typer gives no out-of-scope report); boundTypeParamsAreInScope passed.",
+  "ran_after": "Through sbt in the workspace (JDK 21.0.12 tem): junit/testOnly TreeCheckersTest 2 passed; partest --grep ycheck 19 passed. Hand runs with `java -cp build/quick/classes/{library,reflect,compiler}:scala-asm-9.9.0 scala.tools.nsc.Main -usejavacp -Ystop-before:jvm` (version string shows the workspace build; stop-before:jvm because the cached asm jar is older than the build's): finding T.scala -Ycheck:typer 11 s, 0 scope reports; t498 -Ycheck:all 11 s, 0; pos/ycheck-lub-type-params -Ycheck:all 4 s, 0. -Ycheck:all over 137 pos tests (first 133 plus t0625, t2712-6, t11406, t10238): per-test count of 'Out of scope' reports identical between the PR 779 head checker and this commit (27 tests with reports, e.g. t0625 5, t11406 11, t2712-6 3, t10238 0).",
   "prior_work": "scala/bug#10908 (the large lub). retronym/scala#459 (stack base; existential quantifiers as bound), #509/#460 above it (no conflict), #419, #390. No other fork PR changes this check.",
-  "unsure": "The message for a genuine out-of-scope reference now lists all references of a tree in one block; that path was not exercised after the change (no genuine report in the tests). The signature is still rendered in full before truncation; the review's 'truncate while printing' is not done (the printer has no length bound), so a genuine report on a huge type stays slow, once per tree.",
-  "note": "referencesInType now treats PolyType type parameters in the checked info as bound (with a Set instead of List.contains), and the per-reference messages for a tree are merged into one, so the tree and signature are rendered once per tree."
+  "unsure": "Binders nested inside the info are still collected for the whole type rather than scoped to their binder, so a nested type parameter or existential used outside its own binder elsewhere in the same info is still hidden (the same imprecision retronym/scala#459 has for existentials). The outermost type parameters go through the existing owner check, which accepts parameters owned by any enclosing definition, not only by the symbol itself. A genuine report on a huge type still renders the signature in full before truncating, once per tree.",
+  "note": "Only PolyTypes nested inside the checked info bind their type parameters; the info's own outermost PolyType parameters go through the owner check, so a method whose info reuses another method's type parameters is reported again. New JUnit test mutates a typed tree to show that report and asserts no report for a lub and a refinement with a polymorphic member.",
+  "sweep": "review-fix"
 }
