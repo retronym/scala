@@ -7,7 +7,7 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import scala.jdk.CollectionConverters._
 
 /** What one configuration did with one program. kind: ok, compile-error, crash, timeout-compile, timeout-run, run-throw. */
-case class Outcome(kind: String, text: String) {
+case class Outcome(kind: String, text: String, log: String = "") {
   def compiled: Boolean = kind == "ok" || kind == "run-throw" || kind == "timeout-run"
 }
 
@@ -19,13 +19,13 @@ class Compiler(val name: String, jars: Seq[String], bridgeDir: String, val libJa
   private val m = loader.loadClass("scala.tools.nsc.W4Bridge").getMethod("compile",
     classOf[Array[String]], classOf[Array[String]], classOf[Array[String]], classOf[String], classOf[java.util.Map[_, _]])
   val libLoader = new URLClassLoader(Array(url(libJar)), ClassLoader.getPlatformClassLoader)
-  /** Left(errors) or Right(class files by path). */
-  def compile(units: Seq[(String, String)], flags: Seq[String], prior: java.util.Map[String, Array[Byte]]): Either[String, java.util.Map[String, Array[Byte]]] = {
+  /** (Left(errors) or Right(class files by path), console output). */
+  def compile(units: Seq[(String, String)], flags: Seq[String], prior: java.util.Map[String, Array[Byte]]): (Either[String, java.util.Map[String, Array[Byte]]], String) = {
     val t = Thread.currentThread; val old = t.getContextClassLoader
     t.setContextClassLoader(loader)
     try {
       val r = m.invoke(null, units.map(_._1).toArray, units.map(_._2).toArray, flags.toArray, libJar, prior).asInstanceOf[Array[AnyRef]]
-      if (r(0) != null) Left(r(0).asInstanceOf[String]) else Right(r(1).asInstanceOf[java.util.Map[String, Array[Byte]]])
+      (if (r(0) != null) Left(r(0).asInstanceOf[String]) else Right(r(1).asInstanceOf[java.util.Map[String, Array[Byte]]]), r(2).asInstanceOf[String])
     } finally t.setContextClassLoader(old)
   }
 }
@@ -80,20 +80,23 @@ class Driver(val pool: Pool, compileSecs: Int = 60, runSecs: Int = 20, entry: St
     try eval0(units.map(c.rewrite), c) finally times.merge(c.name, (System.nanoTime - t0) / 1000000, (a, b) => a + b)
   }
   private def eval0(us: List[String], c: Config): Outcome = {
+    val log = new StringBuilder
     val res = pool.timed(compileSecs) {
-      if (!c.separate) { compiles.incrementAndGet(); c.compiler.compile(List("p.scala" -> us.mkString("\n")), c.flags, java.util.Collections.emptyMap()) }
+      if (!c.separate) { compiles.incrementAndGet(); val (r, l) = c.compiler.compile(List("p.scala" -> us.mkString("\n")), c.flags, java.util.Collections.emptyMap()); log ++= l; r }
       else us.zipWithIndex.foldLeft[Either[String, java.util.Map[String, Array[Byte]]]](Right(new java.util.HashMap)) {
         case (Right(acc), (u, i)) =>
           compiles.incrementAndGet()
-          c.compiler.compile(List(s"u$i.scala" -> u), c.flags, acc).map { m => val all = new java.util.HashMap(acc); all.putAll(m); all }
+          val (r, l) = c.compiler.compile(List(s"u$i.scala" -> u), c.flags, acc); log ++= l
+          r.map { m => val all = new java.util.HashMap(acc); all.putAll(m); all }
         case (left, _) => left
       }
     }
-    res match {
+    val o = res match {
       case None => Outcome("timeout-compile", "")
       case Some(Left(e)) => Outcome(if (e.startsWith("CRASH")) "crash" else "compile-error", e)
       case Some(Right(classes)) => run(new MapLoader(classes, c.compiler.libLoader))
     }
+    o.copy(log = log.toString)
   }
   def run(loader: ClassLoader): Outcome = pool.timed(runSecs) {
     try Outcome("ok", loader.loadClass(entry).getMethod(method).invoke(null).asInstanceOf[String])

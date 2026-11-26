@@ -1,0 +1,22 @@
+{
+  "id": "WL3",
+  "theme": "generated",
+  "track": "library",
+  "area": "scala.collection.convert.JavaCollectionWrappers (SetWrapper, MapWrapper)",
+  "area_code": "JI",
+  "title": "asJava views of Int and Long keyed collections treat a null key from Java as 0: contains(null) is true, get(null) returns the value of key 0, remove(null) removes key 0",
+  "kind": "wrong result",
+  "oracle": "java.util.Set / Map contract (contains(null) is false or NullPointerException); java.util.HashSet and TreeMap models",
+  "generator": "wave4/harness/library/Convert.scala JSetFam: the contains probe with null on mutable.BitSet.asJava",
+  "signature": "mutable.BitSet.asJava | contains | val -> val",
+  "seed": "seed=3 case=8 caseSeed=550039120288444364",
+  "measure": "n/a",
+  "detail": "SetWrapper.contains, remove and MapWrapper.get, containsKey, remove cast the Java argument to the element or key type with asInstanceOf and call the Scala collection. When the Scala collection's method takes a primitive Int or Long (BitSet, mutable.LongMap, immutable.IntMap) or compares with Ordering.Int or Ordering.Long (TreeSet[Int], TreeMap[Int, V]), the erased bridge unboxes null to 0. A Java caller holding a java.util.Set<Integer> or Map<Long, V> from Scala then sees contains(null) == true and get(null) == the value of key 0 whenever 0 is present, and remove(null) deletes key 0 and returns its value. Collections that store boxed elements (HashSet[Int], HashMap[Int, V], Vector[Int]) answer false or null, so the result depends on which Scala collection is behind the view. Null queries are legal on java.util collections that permit them and are common in Java code that probes with a possibly-null key; the mutating case loses data.",
+  "fix_sketch": "In the wrappers' contains, get, containsKey and remove, answer false / null (or throw NullPointerException as the contract allows) when the argument is null and the Scala element type may be primitive; simplest is a null check before the cast in SetWrapper, MutableSetWrapper and MapWrapper. No binary compatibility cost; changes results only for null arguments.",
+  "on_integration": "present",
+  "on_base": "same",
+  "on_2_13_18": "same",
+  "scala3": "n/a",
+  "prior": "none found (LM6, LM7, KT5 and the open wrapper pull requests are other causes)",
+  "confidence": "confirmed"
+}

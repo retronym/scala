@@ -29,8 +29,11 @@ object Hunt {
 
   def normErr(e: String): String =
     e.linesIterator.nextOption().getOrElse("").replaceAll("^\\d+: ", "").replaceAll("[A-Za-z]+\\d+", "N").replaceAll("\\d+", "N").take(110)
+  /** First line of what a compilation printed (-Ycheck complaints), without names and numbers. */
+  def normLog(l: String): String = l.linesIterator.map(_.trim).filter(_.nonEmpty).take(2).mkString(" ").replaceAll("[A-Za-z]+\\d+", "N").replaceAll("\\d+", "N").take(110)
   def signature(base: Outcome, c: Config, o: Outcome): Option[String] =
-    if (base == o || (base.kind == "compile-error" && o.kind == "compile-error")) None
+    if (o.log.nonEmpty && base.log.isEmpty && base.compiled) Some(s"${c.name}|log|" + normLog(o.log))
+    else if (base.kind == o.kind && base.text == o.text || (base.kind == "compile-error" && o.kind == "compile-error")) None
     else if (o.kind != "ok" || base.kind != "ok") Some(s"${c.name}|${base.kind}/${o.kind}|" + (if (o.kind == "ok") normErr(base.text) else normErr(o.text)))
     else {
       val (a, b) = (base.text.linesIterator.toList, o.text.linesIterator.toList)

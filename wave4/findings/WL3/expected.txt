@@ -1,0 +1,17 @@
+mutable.BitSet(0, 5).asJava.contains(null): false
+immutable.BitSet(0, 5).asJava.contains(null): false
+mutable.HashSet[Int](0, 5).asJava.contains(null): false
+immutable.TreeSet[Int](0, 5).asJava.contains(null): false
+mutable.TreeSet[Int](0, 5).asJava.contains(null): false
+Set[Int](0, 5).asJava.contains(null): false
+Vector[Int](0, 5).asJava.contains(null): false
+Vector[Int](0, 5).asJava.indexOf(null): -1
+ArrayBuffer[Int](0, 5).asJava.remove(null: Object): (false,ArrayBuffer(0, 5))
+mutable.BitSet(0, 5).asJava.remove(null): (false,BitSet(0, 5))
+mutable.LongMap(0L -> a).asJava.get(null): null
+mutable.LongMap(0L -> a).asJava.containsKey(null): false
+immutable.IntMap(0 -> a).asJava.get(null): null
+Map[Int,String](0 -> a).asJava.get(null): null
+mutable.HashMap[Int,String](0 -> a).asJava.get(null): null
+immutable.TreeMap[Int,String](0 -> a).asJava.get(null): null
+mutable.LongMap(0L -> a).asJava.remove(null): (null,LongMap(0 -> a))

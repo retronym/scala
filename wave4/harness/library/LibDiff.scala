@@ -86,7 +86,7 @@ object LibDiff {
     val fams = if (fam == "all") Families.all else Families.all.filter(f => fam.split(",").contains(f.name))
     val per = if (fam == "all") secs / fams.size max 1 else secs / fams.size max 1
     fams.foreach(f => runFam(f, seed, per))
-    println(s"==== checks=${H.checks} signatures=${sigs.size}")
+    println(s"==== checks=${H.checks} signatures=${sigs.size}"); Excl.counts.foreach { case (k, c) => println(s"excluded $c: $k") }
     sigs.foreach { case (s, (n, ex)) => println(s"$n\t$s\n    $ex") }
   }
 }

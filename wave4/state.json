@@ -16,6 +16,11 @@
       "Each of the 22 findings is re-run and judged by a reviewer that did not write it (wave4/reviews), then gets a branch and a labelled fork pull request with a fix where the fix is clear cut and a failing test with the options where it is a design question"
     ],
     [
+      "Wave four: integration build",
+      "done",
+      "Local branch integration/w4-draft in the worktree w4-int: the wave-three integration build plus the 17 wave-four fix pull requests, no conflicts. The campaign tracks hunt on it from their next round. Details in wave4/INTEGRATION.md"
+    ],
+    [
       "Wave four: steered campaign",
       "running",
       "Five tracks with three coverage-steered rounds each, generators producing ordinary usage: Java sources against javac (new constructs), generated Scala programs at volume on a shared in-process driver, expressions in new embedding contexts, library files still unreached, and the existing run tests as seeds under meaning-preserving rewrites. Each track writes its rounds to wave4/rounds; a track with two flat rounds stops. New findings go through the same review, fix and diff-review steps"
@@ -23,18 +28,25 @@
   ],
   "agents": [
     [
+      "w4 rework #750 (4)",
+      "Opus",
+      "Fourth pass on retronym/scala#750 with a structural approach",
+      "running",
+      ""
+    ],
+    [
       "w4 diff review rework 2",
       "Opus",
       "Re-read of the reworked #750 and #763",
-      "running",
-      ""
+      "done",
+      "#763 ok (the new tie-break cannot change a program that compiled before; standard library and 113 specialization tests byte-identical to the base). #750 defect again: a scrutinee if that reduces to another constant if now fails to expand, a regression from the second version"
     ],
     [
       "w4c javaparser",
       "Opus",
       "Campaign: Java sources against javac, constructs not yet generated",
-      "running",
-      ""
+      "done",
+      "4 rounds, 700 cases, 1 finding (WJ1: a Java annotation read from source is dropped when an argument is a primitive or array class literal; same bail-out as GJ3). Rounds 3 and 4 found nothing new; what remains unreached in the Java parser is error handling, which needs invalid inputs and a both-reject oracle."
     ],
     [
       "w4c programs",
@@ -68,8 +80,8 @@
       "w4 integration",
       "Opus",
       "Integration build with the wave-four fixes merged (w4-int)",
-      "running",
-      ""
+      "done",
+      "w4-int: all 17 wave-four fix pull requests merged onto the wave-three integration build with no conflicts and built first time. Every fixed finding prints its expected output on it except GA1's ArrayBuffer.addAll lines, which still throw ConcurrentModificationException (no wave-four pull request touches ArrayBuffer.addAll). Partest, JUnit and MiMa were not run on the composed build"
     ],
     [
       "w4 ci triage",
@@ -220,6 +232,14 @@
     ]
   ],
   "log": [
+    [
+      "26 Nov 23:26",
+      "#763 re-read as ok and out of draft. #750 has a new regression in its third version; a fourth pass replaces the stateful scrutinee tracking with a check at the match. w4-int was built with that third version."
+    ],
+    [
+      "26 Nov 23:18",
+      "Wave-four integration build ready (w4-int). GA1's ArrayBuffer.addAll of a view of itself still throws ConcurrentModificationException there: failing fast, and outside what #758 changes."
+    ],
     [
       "26 Nov 23:15",
       "Third version of #750 and updated bodies of #758 and #759 pushed. First fork CI results: #747 failed on a deprecation under fatal warnings and has a follow-up commit; no other failure outside deliberately failing tests."
@@ -399,7 +419,7 @@
         750
       ],
       "state": "fixed",
-      "note": "Fix (third version after two diff reviews; being re-read): In addition to the Typed wrap, the If case now calls transform on the reduced branch (not branch.transform(this)), so the branch's own node is handled, including a Match that records its scrutinee; the original If is still transformed child-wise."
+      "note": "Fix under rework for the fourth time: three versions each fixed the previous review's inputs and broke a neighbouring shape, so the tracking of match scrutinees through transformer state is being replaced by a check at the match itself. In addition to the Typed wrap, the If case now calls transform on the reduced branch (not branch.transform(this)), so the branch's own node is handled, including a Match that records its scrutinee; the original If is still transformed child-wise."
     },
     "GJ2": {
       "prs": [
@@ -487,7 +507,7 @@
         763
       ],
       "state": "fixed",
-      "note": "Fix (reworked after independent diff review; the reworked version has not been re-read): The TypeApply case retypes the Super against the new parents and selects the member matching the variant by symbol (Symbol.matchingSymbol), so overloaded variant names resolve; specSym breaks ties between overloaded variants with the called method's own specialized overload. Body now states the super-from-another-method behaviour change."
+      "note": "Fix (reworked after independent diff review; re-read and judged ok): The TypeApply case retypes the Super against the new parents and selects the member matching the variant by symbol (Symbol.matchingSymbol), so overloaded variant names resolve; specSym breaks ties between overloaded variants with the called method's own specialized overload. Body now states the super-from-another-method behaviour change."
     },
     "GE3": {
       "prs": [

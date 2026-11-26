@@ -1,0 +1,43 @@
+[
+ {
+  "round": 1,
+  "change": "New shared in-process driver (concurrent configurations, in-memory output, 2.13.18 in the same JVM, -Ycheck complaints captured); @specialized off, Main split into one method per instance, numeric overloads made unambiguous.",
+  "cases": 130,
+  "seconds": 220,
+  "compile_rate": "100.0%",
+  "signatures_new": 0,
+  "signatures_known": 0,
+  "false_alarms": "0 in the round; 2 kinds fixed in the smoke runs before it (ambiguous numeric overloads in a subclass, 5 of 113 programs; -Ycheck output on a reference that did not compile)",
+  "coverage": {
+   "transform": [
+    3698,
+    5328
+   ],
+   "transform/patmat": [
+    1500,
+    2186
+   ],
+   "backend/jvm": [
+    2641,
+    3905
+   ],
+   "backend/jvm/opt": [
+    1801,
+    2955
+   ],
+   "typechecker": [
+    6530,
+    13867
+   ]
+  },
+  "largest_unreached": [
+   "CleanUp.transformApplyDynamic (47 lines)",
+   "CleanUp.transformStringSwitch",
+   "SwitchMaker.collapseGuardedCases (24)",
+   "UnCurry.addJavaVarargsForwarders (21)",
+   "PlainBodyBuilder.genStringConcat (18 of 38)"
+  ],
+  "next": "Add Int, Char and String literal switches with alternatives, guards and @switch, aimed at the switch emitter and CleanUp's string switch.",
+  "notes": "34 programs/min under JaCoCo (about 100 without); -opt:local took 5x the reference's compile time."
+ }
+]

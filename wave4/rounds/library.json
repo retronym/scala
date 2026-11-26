@@ -1,0 +1,8 @@
+[
+{"round": 1, "change": "New harness wave4/harness/library: programs of 1-30 calls on the specialised maps (mutable LongMap, AnyRefMap, OpenHashMap, CollisionProofHashMap, TrieMap with snapshots; immutable IntMap, LongMap, TreeSeqMap both orders, VectorMap, ListMap), PriorityQueue, mutable Stack/Queue and immutable Queue, against TreeMap / sorted-list / List models, keeping every version and snapshot live.",
+ "cases": 523839, "seconds": 150, "signatures_new": 1, "signatures_known": 0,
+ "false_alarms": {"count": 3, "cause": "harness: IntMap/LongMap firstKey on empty throws IllegalStateException not NoSuchElementException (unspecified); TreeSeqMap companion builder orders by insertion whatever the receiver's ordering (mapFactory has no ordering); PriorityQueue.map returns Iterable"},
+ "coverage": {"scope (31 files + convert/impl)": [2907, 7713], "maps, queues targeted this round": [2653, 3132], "convert + jdk + steppers": [0, 2430]},
+ "largest_unreached": ["convert/JavaCollectionWrappers.scala (325 lines)", "jdk/IntAccumulator, LongAccumulator, DoubleAccumulator, AnyAccumulator (1031 lines)", "convert/StreamExtensions.scala and convert/impl steppers (770 lines)", "immutable/LazyList.scala (443 unreached)", "util/Sorting.scala (139)"],
+ "next": "Add the scala.jdk / convert family: wrappers both ways against java.util models with the same contract, steppers split recursively, Java streams and accumulators; that is the largest unreached block."}
+]

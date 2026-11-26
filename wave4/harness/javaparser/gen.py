@@ -331,6 +331,160 @@ def gen_I(pkg, cs):
     if sig[1]: probe += ['val f: F = %s' % sig[1], 'pr("f", %s)' % sig[2]]
     return files, probe
 
+
+# ---------------------------------------------------------------- Au: uses of an annotation with every element type, from Java and from Scala
+AU_ELEMS = [("int", "i"), ("long", "l"), ("byte", "b"), ("short", "sh"), ("char", "c"), ("float", "f"), ("double", "d"), ("boolean", "z"), ("String", "s"),
+            ("Class<?>", "k"), ("Mode", "e"), ("Nest", "n"), ("int[]", "is"), ("String[]", "ss"), ("Class<?>[]", "ks"), ("Mode[]", "es"), ("Nest[]", "ns"), ("long[]", "ls"), ("char[]", "cs")]
+AU_DEFAULT = {"int": "0", "long": "0L", "byte": "0", "short": "0", "char": "'0'", "float": "0f", "double": "0.0", "boolean": "false", "String": '""', "Class<?>": "Object.class",
+              "Mode": "Mode.X", "Nest": "@Nest", "int[]": "{}", "String[]": "{}", "Class<?>[]": "{}", "Mode[]": "{}", "Nest[]": "{}", "long[]": "{}", "char[]": "{}"}
+def au_java(t, inside):
+    """A Java element value of type t, using only forms that are literals, names or class literals (constant expressions are the known GJ3)."""
+    q = "" if inside and p(0.4) else "U."
+    if t.endswith("[]"):
+        el = t[:-2]
+        k = R.randrange(4)
+        if k == 0: return "{}"
+        if k == 1: return au_java(el, inside)  # single element without braces
+        return "{" + ", ".join(au_java(el, inside) for _ in range(R.randrange(1, 4))) + ch("", ",") + "}"
+    return ch(*{
+        "int": ["1", "0x10", "'a'", "017", "0b11", "2147483647", q + "KI", "Au.CI", "U.KC"],
+        "long": ["1L", "2", "'b'", q + "KL", q + "KI", "0xFFFFFFFFFL"],
+        "byte": ["1", "127", "'a'", q + "KB"],
+        "short": ["1", "32767", "'a'", q + "KB"],
+        "char": ["'x'", "65", "'\\n'", "'\\u0041'", q + "KC"],
+        "float": ["1f", "1", "1.5f", "2L", "'c'", q + "KF", q + "KI"],
+        "double": ["1.0", "1", "1f", "3L", "1e10", q + "KD", q + "KF"],
+        "boolean": ["true", "false", q + "KZ"],
+        "String": ['"s"', '"a,b)"', q + "KS", '"""\n        tb\n        """', "Au.CS"],
+        "Class<?>": ["String.class", "int.class", "int[].class", "String[][].class", "void.class", "U.class", "U.In.class", "java.util.Map.Entry.class", "Au.Mode.class", "boolean.class"],
+        "Mode": ["Au.Mode.X", "Au.Mode.Y", "Mode.Y" if False else "Au.Mode.X"],
+        "Nest": ["@Au.Nest", "@Au.Nest(1)", "@Au.Nest(v = 2)", "@Au.Nest()", "@Au.Nest(v = U.KI)"],
+    }[t])
+
+def au_scala(t):
+    if t.endswith("[]"):
+        el = t[:-2]
+        n = R.randrange(0, 3)
+        ty = {"int": "Int", "String": "String", "Class<?>": "Class[_]", "Mode": "Au.Mode", "Nest": "Au.Nest", "long": "Long", "char": "Char"}[el]
+        return "Array[%s](%s)" % (ty, ", ".join(au_scala(el) for _ in range(n)))
+    return ch(*{
+        "int": ["1", "U.KI", "Au.CI", "'a'"], "long": ["1L", "2", "U.KL", "U.KI"], "byte": ["1", "127"], "short": ["1", "-1"], "char": ["'x'", "U.KC"],
+        "float": ["1f", "1", "U.KF", "2L"], "double": ["1.0", "1", "1f", "U.KD"], "boolean": ["true", "U.KZ"], "String": ['"s"', "U.KS", "Au.CS"],
+        "Class<?>": ["classOf[String]", "classOf[Int]", "classOf[Array[Int]]", "classOf[Unit]", "classOf[U]", "classOf[U.In]"],
+        "Mode": ["Au.Mode.X", "Au.Mode.Y"], "Nest": ["new Au.Nest()", "new Au.Nest(v = 2)", "new Au.Nest(U.KI)"],
+    }[t])
+
+def au_use(inside, java=True):
+    els = R.sample(AU_ELEMS, R.randrange(0, 6))
+    if java:
+        if not els and p(0.3): return "@Au(%s)" % au_java("int", inside)  # value shorthand
+        args = ["%s = %s" % (n, au_java(t, inside)) for t, n in els]
+        return "@Au" + ("(%s)" % ", ".join(args) if args or p(0.5) else "")
+    args = ["%s = %s" % (n, au_scala(t)) for t, n in els]
+    return "@Au(%s)" % ", ".join(args)
+
+def gen_Au(pkg, cs):
+    files, probe = {}, []
+    ret = "RUNTIME"  # CLASS retention: the class file parser skips RuntimeInvisibleAnnotations (documented TODO)
+    elems = "\n  ".join("%s %s() default %s;" % (t, n, AU_DEFAULT[t]) for t, n in AU_ELEMS)
+    files["Au"] = ("@java.lang.annotation.Retention(java.lang.annotation.RetentionPolicy.%s)\npublic @interface Au {\n  int value() default -1;\n  %s\n"
+                   "  int CI = 9; String CS = \"cs\";\n  enum Mode { X, Y }\n  @java.lang.annotation.Retention(java.lang.annotation.RetentionPolicy.RUNTIME) @interface Nest { int v() default 0; int value() default 0; }\n}\n") % (ret, elems)
+    def a(): return au_use(True) + " "
+    consts = ["  public static final int KI = 5; public static final long KL = 7L; public static final byte KB = 3; public static final char KC = 'k';",
+        "  public static final float KF = 1.25f; public static final double KD = 2.5; public static final boolean KZ = true; public static final String KS = \"ks\";"]
+    members = [
+        "  %spublic int fld = 1;" % a(), "  %spublic static final int SF = 2;" % a(), "  %spublic U() {}" % a(), "  %spublic U(%sint x) {}" % (a(), a()),
+        "  %spublic int m(%sint p, %sString q) { return p; }" % (a(), a(), a()), "  %spublic static class In { %spublic int v = 1; }" % (a(), a()),
+        "  %spublic interface Ifc { %sint j(); %sdefault int dj() { return 1; } }" % (a(), a(), a()),
+        "  public enum En { %sA, %sB }" % (a(), a()), "  %spublic <%sT> T gm(T t) { return t; }" % (a(), "" if True else a(), ),
+        "  %spublic record Rc(%sint x) {}" % (a(), a()),
+    ]
+    R.shuffle(members)
+    files["U"] = "%s\npublic class U {\n%s\n}\n" % (au_use(False), "\n".join(consts + members))  # constants first: javac rejects forward references
+    probe += ['%s class SU { %s def sm(%s x: Int) = x; %s val sv = 1 }' % (au_use(False, False), au_use(False, False), au_use(False, False), au_use(False, False)),
+              'pr("u", classOf[U].getAnnotation(classOf[Au]))', 'pr("su", classOf[SU].getAnnotation(classOf[Au]))',
+              'pr("sum", classOf[SU].getDeclaredMethod("sm", classOf[Int]).getAnnotation(classOf[Au]))',
+              'pr("sur", scala.reflect.runtime.universe.typeOf[SU].typeSymbol.annotations.map(_.tree.toString))',
+              'pr("surm", scala.reflect.runtime.universe.typeOf[SU].decl(scala.reflect.runtime.universe.TermName("sm")).annotations.map(_.tree.toString))',
+              'pr("U.m", new U().m(1, "q"))']
+    return files, probe
+
+# ---------------------------------------------------------------- X: several packages, imports, access, package-info, Java referring to Scala
+def gen_X(pkg, cs):
+    files, probe = {}, []
+    a, b, sp = pkg + ".a", pkg + ".b", pkg + ".s"
+    cs = Consts()  # constants of package pkg are not visible from pkg.a
+    hdr = lambda q: "package %s;\n" % q
+    files["!Defs"] = ("package %s\n"
+        "class SDef { def m(x: Int): Int = x + 1; val v: Int = 2; protected def pm: Int = 3; def over(x: Int): Int = 10; def over(x: String): Int = 11 }\n"
+        "object SObj { def f(i: Int): Int = i * 2; final val K = 4; def apply(): SDef = new SDef }\n"
+        "trait STr { def t: Int; def dflt: Int = 5 }\n"
+        "abstract class SAbs[T] { def get: T; def twice: List[T] = List(get, get) }\n"
+        "class SCo { def co(): AnyRef = \"s\" }\n") % sp
+    base = ["  protected int prot() { return 1; }", "  protected static int sprot() { return 2; }", "  int pkg() { return 3; }", "  protected int pf = 4;",
+            "  protected static class PN { public PN() {} public int v() { return 5; } }", "  protected Base() {}", "  public Base(int x) { pf = x; }",
+            "  public static final int C = %s;" % gexpr("int", 2, cs), "  protected interface PI { int f(); }", "  static class PkgNested { public int w = 6; }",
+            "  public static class Pub { public static int s() { return 7; } public class InnerOfPub { public int iv() { return 8; } } }",
+            "  protected static final String PS = \"ps\";", "  public int callPkg() { return pkg() + new PkgNested().w; }"]
+    R.shuffle(base)
+    files["a/Base"] = hdr(a) + "%spublic class Base {\n%s\n}\n" % (ch("", "@Deprecated "), "\n".join(base))
+    files["a/Util"] = hdr(a) + "public final class Util {\n  private Util() {}\n  public static int sum(int... xs) { int s = 0; for (int x : xs) s += x; return s; }\n  public static final String NAME = \"util\";\n  public static <T> java.util.List<T> two(T t) { return java.util.List.of(t, t); }\n}\n"
+    # several top-level types in one file, none named after the file
+    tops = ["class Aux1 { static int v() { return 9; } int iv = 10; }", "interface Aux2 { int CONST = %s; }" % gexpr("int", 1, cs), "enum Aux3 { P, Q; }",
+            "record Aux4(int x) {}", "@interface Aux5 { int v() default 1; }", "abstract class Aux6 extends Base implements Aux2 { abstract int g(); }"]
+    tops = tops[:2] + R.sample(tops[2:], R.randrange(0, 5))  # Aux1 and Aux2 are used elsewhere
+    R.shuffle(tops)
+    files["a/" + ch("Helpers", "Misc", "Zzz")] = hdr(a) + ch("import java.util.*;\n", "") + "\n".join(tops) + "\n"
+    if p(0.6):
+        files["a/package-info"] = ch("/** doc */\n", "") + ch("@Deprecated\n", "@java.lang.Deprecated ", "@PkgA ", "@PkgA(1) @Deprecated\n") + "package %s;\n" % a
+        files["a/PkgA"] = hdr(a) + "@java.lang.annotation.Target(java.lang.annotation.ElementType.PACKAGE) @java.lang.annotation.Retention(java.lang.annotation.RetentionPolicy.RUNTIME)\npublic @interface PkgA { int value() default 0; }\n"
+    imps = R.sample(["import %s.Base;" % a, "import %s.*;" % a, "import static %s.Base.C;" % a, "import static %s.Util.*;" % a, "import %s.Base.Pub;" % a,
+                     "import static %s.Util.sum;" % a, "import java.util.*;", "import static java.util.Collections.emptyList;", "import %s.Util;" % a, "import %s.Base.Pub.InnerOfPub;" % a], R.randrange(3, 8))
+    need = ["import %s.Base;" % a, "import %s.Util;" % a]
+    sub = ["  public Sub() { super(); }", "  public Sub(int x) { super(x); }", "  @Override protected int prot() { return super.prot() + 100; }",
+           "  public int viaStatic() { return %s.Base.C + %s.Util.sum(1, 2) + sprot() + pf; }" % (a, a), "  public int pv() { return new PN().v(); }",
+           "  protected class PInner { public PInner() {} public int q = 11; }", "  public static class SN extends PN { public int v() { return 12; } }",
+           "  public Base.Pub.InnerOfPub iop() { return new Base.Pub().new InnerOfPub(); }", "  protected static int subStatic() { return 13; }",
+           "  public PI pi() { return () -> 14; }", "  public String ps() { return PS; }"]
+    R.shuffle(sub)
+    files["b/Sub"] = hdr(b) + "\n".join(sorted(set(imps + need))) + "\npublic class Sub extends Base {\n%s\n}\n" % "\n".join(sub)
+    ju = ["  public int callObj() { return SObj.f(2) + SObj$.MODULE$.f(1) + SObj.K(); }", "  public int callDef() { return new SDef().m(1) + new SDef().v() + new SDef().over(\"s\"); }",
+          "  public static class JT implements STr { public int t() { return 1; } }", "  public static class JA extends SAbs<String> { public String get() { return \"g\"; } }",
+          "  public static class JD extends SDef { @Override public int m(int x) { return x + 1000; } public int callPm() { return pm(); } }",
+          "  public static class JCo extends SCo { @Override public String co() { return \"j\"; } }"]
+    files["b/UsesScala"] = hdr(b) + "import %s.*;\n%spublic class UsesScala {\n%s\n}\n" % (sp, ch("", "import %s.SObj;\n" % sp, "import %s.SObj$;\n" % sp), "\n".join(ju))
+    probe += ['val sb = new %s.Sub(1)' % b, 'pr("sub", sb.viaStatic() + sb.pv() + sb.callPkg())', 'pr("iop", sb.iop().iv())', 'pr("pi", sb.pi().f())', 'pr("ps", sb.ps())',
+              'pr("pub", %s.Base.Pub.s())' % a, 'pr("util", %s.Util.sum(1, 2, 3) + %s.Util.NAME + %s.Util.two("x"))' % (a, a, a),
+              'class PS extends %s.Sub { def go = prot() + pf + %s.Base.sprot() + new PInner().q }' % (b, a), 'pr("ps", new PS().go)',
+              'val us = new %s.UsesScala' % b, 'pr("us", us.callObj() + us.callDef())', 'pr("jt", new %s.UsesScala.JT().dflt)' % b, 'pr("ja", new %s.UsesScala.JA().twice)' % b,
+              'pr("jd", new %s.UsesScala.JD().m(1) + new %s.UsesScala.JD().callPm())' % (b, b), 'pr("jco", (new %s.UsesScala.JCo(): %s.SCo).co())' % (b, sp),
+              'pr("ina", a.InA.run())']
+    probe.append("PKG-a object InA { def run(): String = \"\" + Aux1.v() + new Aux1().iv + new Base(3).callPkg() + new Base.PkgNested().w + (new Base(1).pkg()) }")
+    return files, probe
+
+# ---------------------------------------------------------------- N: identifiers and tokens the scanner had not seen
+NAMES = [("café", "café"), ("\U0001D465", "`\U0001D465`"), ("\\u0061bc", "abc"), ("\\u0063af\\u00e9", "café2" if False else None), ("Ω", "Ω"), ("so\\u00ADft", "soft"),
+         ("x\U0001D7D9", "`x\U0001D7D9`"), ("ü\\u00fc", "üü"), ("\\uuu0071q", "qq"), ("日本", "日本"), ("a​b", "ab"), ("π2", "π2")]
+def gen_N(pkg, cs):
+    files, probe = {}, []
+    members = ["  public static int ops() { int z = 1; %s return z; }" % " ".join("z %s %s;" % (op, ch("1", "2", "3")) for op in R.sample(["+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=", "<<=", ">>=", ">>>="], R.randrange(3, 11))),
+               "  public static long lops(long y) { y += 1L; y >>>= 1; y ^= -1L; y %%= %s; return y; }" % ch("3", "7L"),
+               "  public static final String Sé = \"é\U0001F600\\uD83D\\uDE00\";"]
+    used = set()
+    for jn, sn in R.sample(NAMES, R.randrange(3, len(NAMES))):
+        if sn is None: continue
+        if sn.startswith("`"):  # known J9: Scala cannot select a Java member whose name has a supplementary character; declare it, do not use it
+            members.append("  public static int %s = 1;" % jn); continue
+        k = R.randrange(3)
+        if k == 0: members.append("  public static final int %s = %s;" % (jn, gexpr("int", 1, cs))); probe.append('pr("N.%s", N.%s)' % (sn.strip("`"), sn))
+        elif k == 1: members.append("  public int %s = %d;" % (jn, R.randrange(100))); probe.append('pr("n.%s", new N().%s)' % (sn.strip("`"), sn))
+        else: members.append("  public static int %s(int a) { a += 1; return a; }" % jn); probe.append('pr("N.%s()", N.%s(1))' % (sn.strip("`"), sn))
+    members.append("  public static class Ünï { public int v = 5; }")
+    R.shuffle(members)
+    files["N"] = "public class N {\n%s\n}\n" % "\n".join(members)
+    probe += ['pr("ops", N.ops() + N.lops(5L))', 'pr("S", N.Sé)', 'pr("un", new N.Ünï().v)']
+    return files, probe
+
 # initializers and bodies that the parser must skip; each is followed by a sentinel member
 INITS = ["a < b ? 1 : 2", "new java.util.HashMap<String, Integer>().size()", "java.util.List.<String>of(\"a\", \"b\").size()", "(a < 1) ? b >> 2 : b >>> 3", "new int[]{1, 2, 3}.length", "\"},;\".length()", "'}' + ';'",
          "new Object() { int q = 1, r = 2; public int hashCode() { return q; } }.hashCode()", "java.util.stream.Stream.of(1, 2).mapToInt(x -> { return x; }).sum()", "((java.util.function.IntSupplier) () -> 3).getAsInt()",
@@ -420,22 +574,31 @@ def gen_case(root, idx, feats):
         files.update(r[0]); probe.extend(r[1])
     if "K" in feats:
         add(gen_K(pkg, cs, "IK", True)); add(gen_K(pkg, cs, "K", False)); add(gen_K(pkg, cs, "K2", False))
-    for f, g in [("E", gen_E), ("R", gen_R), ("S", gen_S), ("An", gen_An), ("G", gen_G), ("I", gen_I), ("B", gen_B), ("M", gen_M)]:
-        if f in feats and p(0.6): add(g(pkg, cs))
+    for f, g in [("N", gen_N), ("X", gen_X), ("Au", gen_Au), ("E", gen_E), ("R", gen_R), ("S", gen_S), ("An", gen_An), ("G", gen_G), ("I", gen_I), ("B", gen_B), ("M", gen_M)]:
+        if f in feats and (len(feats) == 1 or p(0.6)): add(g(pkg, cs))
     d = os.path.join(root, pkg, "src", pkg)
     os.makedirs(d, exist_ok=True)
     for n, src in files.items():
+        if n == "!Defs":
+            with open(os.path.join(root, pkg, "Defs.scala"), "w") as fh: fh.write(src)
+            continue
+        if "/" in n:
+            os.makedirs(os.path.join(d, os.path.dirname(n)), exist_ok=True)
+            with open(os.path.join(d, n + ".java"), "w") as fh: fh.write(src)
+            continue
         head = ch("", "// leading comment\n", "/* c */ ", "\n\n", "/** doc */\n")
         imports = ch("", "import java.util.*;\n", "import static java.lang.Math.*;\nimport java.io.Serializable;\n")
-        with open(os.path.join(d, n + ".java"), "w") as fh: fh.write("%spackage %s;\n%s%s" % (head, pkg, imports, src))
-    with open(os.path.join(root, pkg, "Probe.scala"), "w") as fh:
+        with open(os.path.join(d, n + ".java"), "w", encoding="utf-8") as fh: fh.write("%spackage %s;\n%s%s" % (head, pkg, imports, src))
+    with open(os.path.join(root, pkg, "Probe.scala"), "w", encoding="utf-8") as fh:
         fh.write("package %s\n%s  def main(args: Array[String]): Unit = {\n" % (pkg, PRELUDE))
-        defs = [l for l in probe if l.startswith(("def ", "class ", "@An"))]
-        fh.write("".join("    %s\n" % l for l in probe if l not in defs))
+        defs = [l for l in probe if l.startswith(("def ", "class ", "@An", "@Au"))]
+        pk = [l[6:] for l in probe if l.startswith("PKG-a ")]  # members of the probe in subpackage a, for package-private access
+        fh.write("".join("    %s\n" % l for l in probe if l not in defs and not l.startswith("PKG-a ")))
         fh.write("  }\n" + "".join("  %s\n" % l for l in defs) + "}\n")
+        if pk: fh.write("package a {\n" + "".join("  %s\n" % l for l in pk) + "}\n")
 
 if __name__ == "__main__":
     root, n, seed = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
-    feats = sys.argv[4].split(",") if len(sys.argv) > 4 else ["K", "E", "R", "S", "An", "G", "I", "B", "M"]
+    feats = sys.argv[4].split(",") if len(sys.argv) > 4 else ["K", "E", "R", "S", "An", "G", "I", "B", "M", "Au", "X", "N"]
     R.seed(seed)
     for i in range(n): gen_case(root, seed * 1000 + i, feats)

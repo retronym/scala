@@ -17,4 +17,4 @@ if [ -n "${JACOCO:-}" ]; then
     --classfiles "$PACK/lib/scala-compiler.jar" --classfiles "$PACK/lib/scala-reflect.jar" --xml "$OUT/cov.xml" >/dev/null
   python3 "$HERE/cov.py" "$OUT/cov.xml"
 fi
-tail -1 "$OUT/log.txt"; echo "log: $OUT/log.txt"
+tail -2 "$OUT/log.txt"; echo "log: $OUT/log.txt"

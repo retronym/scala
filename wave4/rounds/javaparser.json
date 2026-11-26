@@ -37,5 +37,122 @@
    "JavaScanners compound assignment tokens (460-535)"
   ],
   "next": "generate Java-side uses of annotations with every element type on every kind of Java member, and read annotations back through Scala runtime reflection in the probe, because annotation argument parsing is the largest unreached parser code"
+ },
+ {
+  "round": 2,
+  "change": "added feature Au: a RUNTIME annotation with every element type applied with literal, constant-name, class-literal, enum, nested and array arguments to every kind of Java member, and applied from Scala with the result read back through Java and Scala runtime reflection; build switched to w4-int",
+  "cases": 200,
+  "seconds": 123,
+  "signatures_new": 1,
+  "signatures_known": 2,
+  "false_alarms": "generator and oracle faults fixed before the counted run: 39 javac rejects for forward references to constants (constants now first), CLASS retention (scalac's class file parser skips RuntimeInvisibleAnnotations, a documented TODO; now RUNTIME only), scala-reflect missing from the probe's class path; under-specified: 1 NaN constant whose sign bit differs (scalac folds -(x % 0f) to a negative NaN, javac's ConstantValue holds the canonical NaN)",
+  "coverage": {
+   "JavaParsers": {
+    "covered": 711,
+    "total": 768
+   },
+   "JavaScanners": {
+    "covered": 510,
+    "total": 651
+   },
+   "JavaConstantFolder": {
+    "covered": 73,
+    "total": 78
+   },
+   "ClassfileParser": {
+    "covered": 658,
+    "total": 808
+   },
+   "Namers": {
+    "covered": 633,
+    "total": 1069
+   }
+  },
+  "largest_unreached": [
+   "Namers.checkSelector Java import paths (545-575)",
+   "JavaParsers.compilationUnit leading annotations / package-info (1289-1296)",
+   "JavaParsers illegal import and unsupported declarations (980, 1250)",
+   "JavaScanners non-ASCII and supplementary identifiers (602-704)",
+   "JavaScanners compound assignment tokens (460-535)"
+  ],
+  "next": "cross-package compilation units: several packages, single-type, on-demand and static imports of Java and Scala members, several top-level types per file and a file name that differs, package-info.java, protected and package-private access from Scala in another package, and Java sources that refer to the probe's Scala classes, because Java import checking in Namers is the largest unreached Java path"
+ },
+ {
+  "round": 3,
+  "change": "added feature X: subpackages a and b of the case package with single-type, on-demand and static imports, several top-level types in a file named after none of them, package-info.java with package annotations, protected and package-private members used from Scala in a subclass and in the same package, and Java classes that extend, implement and call Scala classes, traits and objects compiled together",
+  "cases": 200,
+  "seconds": 242,
+  "signatures_new": 0,
+  "signatures_known": 4,
+  "false_alarms": "none in the counted run; before it, 86 javac rejects from generator faults (a constant of the parent package used in the subpackage, a protected inner-class constructor called from another package) were fixed. GJ2 no longer appears: it is fixed on w4-int",
+  "coverage": {
+   "JavaParsers": {
+    "covered": 712,
+    "total": 768
+   },
+   "JavaScanners": {
+    "covered": 512,
+    "total": 651
+   },
+   "JavaConstantFolder": {
+    "covered": 73,
+    "total": 78
+   },
+   "ClassfileParser": {
+    "covered": 660,
+    "total": 808
+   },
+   "Namers": {
+    "covered": 642,
+    "total": 1069
+   }
+  },
+  "largest_unreached": [
+   "JavaScanners non-ASCII and supplementary identifiers (602-704)",
+   "JavaScanners compound assignment tokens (460-535)",
+   "JavaScanners token2string / toString (error messages only)",
+   "JavaParsers syntax-error and skip paths (90-126, 213-218)",
+   "ClassfileParser constant-pool error paths and stubs"
+  ],
+  "next": "identifiers and tokens the scanner has not seen: non-ASCII, supplementary and unicode-escaped identifiers, identifier-ignorable characters, and every compound assignment operator, because the scanner's identifier and operator paths are the largest unreached code outside error handling"
+ },
+ {
+  "round": 4,
+  "change": "added feature N: non-ASCII, supplementary, unicode-escaped and identifier-ignorable identifiers on fields, methods and nested classes, non-BMP string content, and every compound assignment operator in method bodies",
+  "cases": 150,
+  "seconds": 170,
+  "signatures_new": 0,
+  "signatures_known": 4,
+  "false_alarms": "none from the oracle; 64 of 150 cases had their probe rejected in both orders by the known J9 remark (Scala cannot select a Java member whose name has a supplementary character), which masked the rest of those probes; the generator now declares such members without using them, and a 40-case rerun of N, K and X was clean",
+  "coverage": {
+   "JavaParsers": {
+    "covered": 712,
+    "total": 768
+   },
+   "JavaScanners": {
+    "covered": 543,
+    "total": 651
+   },
+   "JavaConstantFolder": {
+    "covered": 73,
+    "total": 78
+   },
+   "ClassfileParser": {
+    "covered": 660,
+    "total": 808
+   },
+   "Namers": {
+    "covered": 642,
+    "total": 1069
+   }
+  },
+  "largest_unreached": [
+   "JavaScanners token2string / toString (error messages only)",
+   "JavaParsers syntax-error and skip paths (90-126, 213-218)",
+   "ClassfileParser constant-pool error paths and stubs",
+   "JavaParsers compact compilation units without a package (1284-1303)",
+   "Namers Scala-only paths (copy methods, default getters)"
+  ],
+  "next": "stop: budget spent; rounds 3 and 4 found no new signature, and what remains unreached in the Java parser and scanner is error handling, which needs invalid Java inputs (negative probes) rather than more valid constructs"
  }
 ]

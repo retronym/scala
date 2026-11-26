@@ -13,17 +13,18 @@ import scala.tools.nsc.reporters.StoreReporter
 
 object Driver {
   val libJar = classOf[Option[_]].getProtectionDomain.getCodeSource.getLocation.getPath
+  val reflectJar = classOf[scala.reflect.api.Universe].getProtectionDomain.getCodeSource.getLocation.getPath
 
   def files(dir: Path, ext: String): List[String] =
     if (!Files.exists(dir)) Nil
     else Files.walk(dir).iterator.asScala.map(_.toString).filter(_.endsWith(ext)).toList.sorted
 
-  def javac(srcs: List[String], out: Path): Option[String] = {
+  def javac(srcs: List[String], out: Path, cp: String = ""): Option[String] = {
     Files.createDirectories(out)
     val jc = javax.tools.ToolProvider.getSystemJavaCompiler
     val sw = new StringWriter
     val fm = jc.getStandardFileManager(null, null, null)
-    val ok = jc.getTask(sw, fm, null, List("-parameters", "-nowarn", "-Xlint:none", "-proc:none", "-d", out.toString).asJava, null,
+    val ok = jc.getTask(sw, fm, null, (List("-parameters", "-nowarn", "-Xlint:none", "-proc:none", "-d", out.toString) ++ (if (cp.isEmpty) Nil else List("-cp", cp))).asJava, null,
       fm.getJavaFileObjectsFromStrings(srcs.asJava)).call()
     fm.close()
     if (ok) None else Some(sw.toString)
@@ -42,7 +43,7 @@ object Driver {
 
   /** One line per non-private member of every class in package `pkg`. */
   def noiseAnnot(a: String) = a == "transient" || a == "scala.annotation.strictfp" || a.startsWith("SuppressWarnings") || a.startsWith("SafeVarargs") || a.startsWith("Override")
-  def dump(g: Global, pkg: String): List[String] = { dump0(g, pkg); dump0(g, pkg) } // the first pass completes every symbol
+  def dump(g: Global, pkg: String): List[String] = { val ps = List(pkg, pkg + ".a", pkg + ".b"); ps.foreach(dump0(g, _)); ps.flatMap(dump0(g, _)) } // the first pass completes every symbol
   def dump0(g: Global, pkg: String): List[String] = {
     import g._
     val buf = ListBuffer.empty[String]
@@ -87,8 +88,8 @@ object Driver {
         else member(pre, m)
     }
     val p = rootMirror.getPackageIfDefined(TermName(pkg))
-    if (p == NoSymbol) buf += "no package"
-    else exitingTyper(p.info.decls.toList).filter(c => c.isClass && !c.name.toString.contains("$")).sortBy(_.name.toString).foreach(klass)
+    if (p == NoSymbol) { if (!pkg.contains('.')) buf += "no package" }
+    else exitingTyper(p.info.decls.toList).filter(c => c.isClass && !c.name.toString.contains("$") && c.name.toString != "package-info").sortBy(_.name.toString).foreach(klass)
     buf.toList
   }
 
@@ -110,7 +111,18 @@ object Driver {
     val javas = files(dir.resolve("src"), ".java")
     val probe = dir.resolve("Probe.scala").toString
     val cls = work.resolve("cls")
-    javac(javas, cls) match {
+    // Scala definitions the Java sources refer to: compiled first for javac and the separate compilations, given as source to the joint ones
+    val defs = dir.resolve("Defs.scala").toString
+    val hasDefs = Files.exists(Paths.get(defs))
+    val sdefs = work.resolve("sdefs")
+    val defsSrc = if (hasDefs) List(defs) else Nil
+    val defsCp = if (hasDefs) File.pathSeparator + sdefs else ""
+    if (hasDefs) {
+      val (g, r) = mkGlobal(libJar, Some(sdefs))
+      new g.Run().compile(List(defs))
+      if (r.hasErrors) return List("DEFS-REJECT " + msgs(r).take(2).mkString(" | "))
+    }
+    javac(javas, cls, if (hasDefs) libJar + defsCp else "") match {
       case Some(err) => return List("JAVAC-REJECT " + err.linesIterator.take(3).mkString(" | "))
       case None =>
     }
@@ -118,11 +130,11 @@ object Driver {
     // oracle 2: symbols from source against symbols from the class files
     val srcDump = try {
       val (g, r) = mkGlobal(libJar, Some(work.resolve("o2")))
-      new g.Run().compile(javas)
+      new g.Run().compile(javas ++ defsSrc)
       if (r.hasErrors) msgs(r).filter(_.startsWith("ERROR")).map("SRC-ERROR " + _) else dump(g, pkg)
     } catch { case t: Throwable => List("SRC-CRASH " + t.toString.linesIterator.take(2).mkString(" | ") + " at " + t.getStackTrace.take(12).mkString(" < ")) }
     val clsDump = try {
-      val (g, _) = mkGlobal(libJar + File.pathSeparator + cls, Some(work.resolve("o2c")))
+      val (g, _) = mkGlobal(libJar + File.pathSeparator + cls + defsCp, Some(work.resolve("o2c")))
       new g.Run().compileSources(List(new BatchSourceFile("empty.scala", "class Empty$Unit")))
       dump(g, pkg)
     } catch { case t: Throwable => List("CLS-CRASH " + t.toString.linesIterator.take(2).mkString(" | ") + " at " + t.getStackTrace.take(12).mkString(" < ")) }
@@ -143,10 +155,10 @@ object Driver {
         val (g, r) = mkGlobal(cp, Some(o))
         new g.Run().compile(srcs)
         val ok = !r.hasErrors
-        (ok, msgs(r), if (ok) run(List(o, cls), getClass.getClassLoader, pkg + ".Probe") else "")
+        (ok, msgs(r), if (ok) run(List(o, cls) ++ (if (hasDefs) List(sdefs) else Nil), getClass.getClassLoader, pkg + ".Probe") else "")
       } catch { case t: Throwable => (false, List("CRASH " + t.toString.linesIterator.take(2).mkString(" | ") + " at " + t.getStackTrace.take(4).mkString(" < ")), "") }
-      val a = compile("a", probe :: javas, libJar)
-      val b = compile("b", List(probe), libJar + File.pathSeparator + cls)
+      val a = compile("a", probe :: javas ++ defsSrc, libJar + File.pathSeparator + reflectJar)
+      val b = compile("b", List(probe), libJar + File.pathSeparator + reflectJar + File.pathSeparator + cls + defsCp)
       if (a._1 != b._1) out += s"PROBE compile differs: joint=${a._1} separate=${b._1}"
       if (a._1 && b._1 && a._2 != b._2) {
         a._2.filterNot(b._2.toSet).foreach(m => out += "PROBE joint only: " + m)
@@ -165,9 +177,10 @@ object Driver {
   /** Known differences, excluded narrowly so they do not mask what is behind them; each exclusion is counted. */
   val known: List[(String, scala.util.matching.Regex)] = List(
     "record-members-explicit-in-classfile" -> """SYM \S+#def (toString|hashCode|equals) :: src \[\] cls \[flags=<final <java>>.*""".r,
-    "bounded-T-array-prints-with-Object" -> """SYM \S+ :: src \[[^\]]*Array\[T with Object\][^\]]*\] cls \[.*""".r,
+    "bounded-T-array-prints-with-Object" -> """SYM .+? :: src \[.*Array\[T with Object\].*\] cls \[.*""".r,
     "GJ1-sealed-without-permits" -> """(SYM class \S+ :: src \[.*children=\] cls \[.*children=\S+.*)|(PROBE joint only: WARNING: unreachable code)|(PROBE separate only: WARNING: match may not be exhaustive.*)""".r,
-    "GJ2-varargs-record-accessor" -> """SYM \S+#def \w+ :: src \[[^\]]*: \(\): \w+\* erased.*""".r)
+    "WJ1-primitive-or-array-class-literal-in-annotation" -> """SYM .+? :: src \[flags=<[^]]*> @\[\] .*\] cls \[.*classOf\[(scala\.(Int|Boolean|Unit|Long|Char|Byte|Short|Float|Double)|\[).*""".r,
+    "GJ2-varargs-record-accessor" -> """SYM .+?#def \w+ :: src \[.*: \(\): \w+\* erased.*""".r)
   val knownCount = scala.collection.mutable.Map.empty[String, Int].withDefaultValue(0)
   def dropKnown(ls: List[String]): List[String] = ls.filter { l =>
     known.find(_._2.matches(l)) match { case Some((k, _)) => knownCount(k) += 1; false; case None => true }

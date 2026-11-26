@@ -1,0 +1,4 @@
+ro.size: 2
+ro.readOnlySnapshot(): List((1,a), (2,b))
+ro.snapshot(): List((1,a), (2,b))
+ro.clone(): List((1,a), (2,b))

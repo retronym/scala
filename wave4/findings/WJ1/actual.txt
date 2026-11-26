@@ -1,0 +1,10 @@
+--- (A) joint: scalac Test_2.scala *.java
+J: A(value = classOf[java.lang.String])
+K: 
+L: 
+V: 
+--- (B) separate: javac *.java, then scalac Test_2.scala
+J: A(value = classOf[java.lang.String])
+K: A(value = classOf[scala.Int])
+L: A(value = classOf[[Ljava.lang.String;])
+V: A(value = classOf[scala.Unit])

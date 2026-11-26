@@ -12,7 +12,8 @@ import scala.tools.nsc.reporters.StoreReporter
 object W4Bridge {
   /** Compiles the sources with a fresh Global into memory.
    *  Returns Array(errors or null, class files by path). `prior` class files are on the class path.
-   *  Errors are "line: message" lines, or one "CRASH <class>: <message> @ <frame>" line. */
+   *  Errors are "line: message" lines, or one "CRASH <class>: <message> @ <frame>" line.
+   *  The third element is what the compiler printed to the console (for example -Ycheck complaints), or "". */
   def compile(names: Array[String], srcs: Array[String], flags: Array[String], libJar: String,
               prior: java.util.Map[String, Array[Byte]]): Array[AnyRef] = {
     val s = new Settings(_ => ())
@@ -23,7 +24,9 @@ object W4Bridge {
     s.outputDirs.setSingleOutput(out)
     val rep = new StoreReporter(s)
     val g = new Global(s, rep)
-    try {
+    val log = new java.io.ByteArrayOutputStream
+    def withLog(r: Array[AnyRef]): Array[AnyRef] = r :+ log.toString
+    try withLog(Console.withOut(log)(Console.withErr(log) {
       if (!prior.isEmpty) {
         val vd = new VirtualDirectory("prior", None)
         prior.forEach((p, b) => write(vd, p, b))
@@ -33,10 +36,10 @@ object W4Bridge {
       val errs = rep.infos.filter(_.severity == rep.ERROR).toList
       if (errs.nonEmpty) Array(errs.map(i => i.pos.line + ": " + i.msg).mkString("\n"), null)
       else { val m = new JMap[String, Array[Byte]]; collect(out, "", m); Array(null, m) }
-    } catch {
+    })) catch {
       case t: Throwable =>
         val frame = t.getStackTrace.find(_.getClassName.startsWith("scala.tools")).fold("?")(f => f.getClassName + "." + f.getMethodName)
-        Array("CRASH " + t.getClass.getName + ": " + String.valueOf(t.getMessage).linesIterator.take(2).mkString(" | ").take(300) + " @ " + frame, null)
+        withLog(Array("CRASH " + t.getClass.getName + ": " + String.valueOf(t.getMessage).linesIterator.take(2).mkString(" | ").take(300) + " @ " + frame, null))
     } finally g.close()
   }
   private def write(root: VirtualDirectory, path: String, bytes: Array[Byte]): Unit = {

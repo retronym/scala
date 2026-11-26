@@ -147,8 +147,9 @@ class TrieMapFam(keyed: String) extends MutMapFam[CK](s"concurrent.TrieMap[$keye
         chk(name, n)(ok)(m.replace(k, old, v(op.b + 1))); if (ok) t.mod += k -> v(op.b + 1) }
       case "remove2" => w { val old = if (op.b % 2 == 0) t.mod.getOrElse(k, "none") else v(op.b); val ok = t.mod.get(k).contains(old)
         chk(name, n)(ok)(m.remove(k, old)); if (ok) t.mod -= k }
+      case _ if t.ro && Set("snapshot", "readOnlySnapshot", "snapIter")(n) => Excl.hit("WL1 snapshot of a read-only TrieMap snapshot")
       case "snapshot" => ts += new T(m.snapshot(), t.mod, false)
-      case "readOnlySnapshot" => ts += new T(m.readOnlySnapshot(), t.mod, true)
+      case "readOnlySnapshot" => ts += new T(m.readOnlySnapshot().asInstanceOf[co.TrieMap[CK, String]], t.mod, true)
       case "snapIter" => // an iterator over a snapshot, interleaved with writes to the original
         val s = m.readOnlySnapshot(); val it = s.iterator; val before = t.mod
         val first = it.take((op.b % 5).toInt).toList
@@ -214,10 +215,13 @@ class ImmMapFam[K](val name: String, key: Long => K, empty: () => im.Map[K, Stri
         case "foreachEntry" => val b = mu.ListBuffer.empty[(K, String)]; m.foreachEntry((a, s) => b += ((a, s))); chk(name, n)(mo(t.mod))(ordered(b))
         case "transform" => add(m.transform((a, s) => s.take(5) + "t"), t.mod.map(e => (e._1, e._2.take(5) + "t")))
         case "builder" => val b = empty().mapFactory.newBuilder[K, String]; b ++= m; b ++= kvs; val r1 = b.result()
-          chk(name, n)(mo(kvs.foldLeft(t.mod) { case (a, (kk, s)) => upd(a, kk, s) }))(ordered(r1))
+          val exp = mo(kvs.foldLeft(t.mod) { case (a, (kk, s)) => upd(a, kk, s) })
+          // the companion's builder of TreeSeqMap orders by insertion whatever the receiver's ordering
+          if (policy == "modification") chk(name, n)(exp.sortBy(_._1))(r1.toList.sortBy(_._1)) else chk(name, n)(exp)(ordered(r1))
+          add(m.empty ++ kvs, kvs.foldLeft(Vector.empty[(K, String)]) { case (a, (kk, s)) => upd(a, kk, s) })
         case "iterPartial" => val j = (op.b % (t.mod.size + 1)).toInt; val it = m.iterator; val first = it.take(j).toList; val rest = it.toList
           chk(name, n)(mo(t.mod))(ordered(first ++ rest))
-        case "fromSame" => chk(name, n)(mo(t.mod))(ordered(m.mapFactory.from(m)))
+        case "fromSame" => chk(name, n)(mo(t.mod))(ordered(m.mapFactory.from(m))); add(m.empty ++ m, t.mod)
         case other => extraOp(other, op, t, ts, k, kvs)
       }
       val last = ts.last
@@ -250,18 +254,18 @@ class PatriciaFam[K](name: String, key: Long => K, empty: () => im.Map[K, String
         ts += new T(unionWith(m, o.m, f), exp)
       case "intersectionWith" => val f = (kk: K, a: String, b: String) => (b + a).take(8)
         ts += new T(interWith(m, o.m, f), tm.keySet.intersect(om.keySet).toVector.map(kk => (kk, f(kk, tm(kk), om(kk)))))
-      case "intersection" => val r = m match { case x: IntMap[String @unchecked] => x.intersection(o.m.asInstanceOf[IntMap[String]]); case x: LongMap[String @unchecked] => x.intersection(o.m.asInstanceOf[LongMap[String]]) }
+      case "intersection" => val r: Any = m match { case x: IntMap[String @unchecked] => x.intersection(o.m.asInstanceOf[IntMap[String]]); case x: LongMap[String @unchecked] => x.intersection(o.m.asInstanceOf[LongMap[String]]) }
         ts += new T(r.asInstanceOf[im.Map[K, String]], t.mod.filter(e => om.contains(e._1)))
       case "modifyOrRemove" => val f = (kk: K, s: String) => if ((s.hashCode ^ op.b.toInt) % 3 == 0) None else Some(s.take(4) + "m")
-        val r = m match { case x: IntMap[String @unchecked] => x.modifyOrRemove(f.asInstanceOf[(Int, String) => Option[String]]); case x: LongMap[String @unchecked] => x.modifyOrRemove(f.asInstanceOf[(Long, String) => Option[String]]) }
+        val r: Any = m match { case x: IntMap[String @unchecked] => x.modifyOrRemove(f.asInstanceOf[(Int, String) => Option[String]]); case x: LongMap[String @unchecked] => x.modifyOrRemove(f.asInstanceOf[(Long, String) => Option[String]]) }
         ts += new T(r.asInstanceOf[im.Map[K, String]], t.mod.flatMap(e => f(e._1, e._2).map(e._1 -> _)))
       case "pUpdateWith" => val f = (a: String, b: String) => (a + "|" + b).take(9)
-        val r = m match { case x: IntMap[String @unchecked] => x.updateWith(k.asInstanceOf[Int], v(op.b), f); case x: LongMap[String @unchecked] => x.updateWith(k.asInstanceOf[Long], v(op.b), f) }
+        val r: Any = m match { case x: IntMap[String @unchecked] => x.updateWith(k.asInstanceOf[Int], v(op.b), f); case x: LongMap[String @unchecked] => x.updateWith(k.asInstanceOf[Long], v(op.b), f) }
         ts += new T(r.asInstanceOf[im.Map[K, String]], upd(t.mod, k, tm.get(k).fold(v(op.b))(a => f(a, v(op.b)))))
       case "firstLast" => val ks = t.mod.map(_._1)
-        def fl(x: im.Map[K, String]) = x match { case y: IntMap[_] => (y.firstKey, y.lastKey); case y: LongMap[_] => (y.firstKey, y.lastKey) }
-        chk(name, n)(if (ks.isEmpty) throw new NoSuchElementException else (ks.reduce((a, b) => if (unsignedLt(a, b)) a else b), ks.reduce((a, b) => if (unsignedLt(a, b)) b else a)))(fl(m))
-      case "pConcat" => val r = (m, o.m) match { case (x: IntMap[String @unchecked], y: IntMap[String @unchecked]) => x ++ y; case (x: LongMap[String @unchecked], y: LongMap[String @unchecked]) => x ++ y }
+        def fl(x: Any) = x match { case y: IntMap[_] => (y.firstKey, y.lastKey); case y: LongMap[_] => (y.firstKey, y.lastKey) }
+        if (ks.isEmpty) { check(name, n + "/empty", util.Try(fl(m)).isFailure, "firstKey of empty") } else chk(name, n)( (ks.reduce((a, b) => if (unsignedLt(a, b)) a else b), ks.reduce((a, b) => if (unsignedLt(a, b)) b else a)))(fl(m))
+      case "pConcat" => val r: Any = (m, o.m) match { case (x: IntMap[String @unchecked], y: IntMap[String @unchecked]) => x ++ y; case (x: LongMap[String @unchecked], y: LongMap[String @unchecked]) => x ++ y }
         ts += new T(r.asInstanceOf[im.Map[K, String]], o.mod.foldLeft(t.mod) { case (a, (kk, s)) => upd(a, kk, s) })
       case "foreachKV" => val a = mu.ListBuffer.empty[Any]; val b = mu.ListBuffer.empty[String]
         m match { case x: IntMap[String @unchecked] => x.foreachKey(a += _); x.foreachValue(b += _); case x: LongMap[String @unchecked] => x.foreachKey(a += _); x.foreachValue(b += _) }
@@ -269,3 +273,5 @@ class PatriciaFam[K](name: String, key: Long => K, empty: () => im.Map[K, String
     }
   }
 }
+
+object Excl { val counts = scala.collection.mutable.LinkedHashMap.empty[String, Long].withDefaultValue(0L); def hit(s: String): Unit = counts(s) += 1 }

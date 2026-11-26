@@ -1,0 +1,22 @@
+{
+  "id": "WJ1",
+  "theme": "generated",
+  "track": "javaparser",
+  "area": "scala.tools.nsc.javac.JavaParsers (annotation element values)",
+  "area_code": "J",
+  "title": "A Java annotation parsed from source is dropped when an argument is a class literal of a primitive type, void or an array type (int.class, void.class, String[].class)",
+  "kind": "wrong result",
+  "oracle": "differential against javac: each Java member's annotations as scalac types them from the .java source must match the same member read from javac's class file",
+  "generator": "wave4/harness/javaparser (gen.py feature Au: uses of an annotation with every element type on every kind of Java member)",
+  "signature": "SYM <member> :: src [@[]] cls [@[Au(..., k = classOf[scala.Int] | classOf[[I] | classOf[scala.Unit] ...)]]",
+  "seed": "seed 22 (round 2), 82 member lines in 200 cases; all 82 dropped annotations had a primitive, void or array class literal",
+  "measure": "n/a",
+  "detail": "In a joint compilation, `@A(int.class) class K` gets no annotation at all on the symbol scalac creates from source, while the class file gives `A(value = classOf[scala.Int])`; the same for `void.class`, `boolean.class`, `int[].class` and `String[].class`, alone or as an element of an array argument, and any other arguments of the same annotation are lost with it. `JavaParsers.annotation` reads a class literal only through `qualId(orClassLiteral = true)`, which starts at an IDENTIFIER token: a primitive type or `void` is a keyword token, so `elementValue` returns EmptyTree, and after `String` the `[` stops the qualified id, so the argument list is abandoned and the whole annotation becomes EmptyTree. The PR body of GJ3 lists class literals among the accepted forms, so this case is not covered by that write-up. The visible effect is on whatever reads annotations of Java symbols during compilation: macros, compiler plugins and scalac's own checks; a framework annotation such as `@JsonDeserialize(as = int[].class)` or `@Converter(void.class)` is invisible to a macro in a mixed build and visible in a separate one.",
+  "fix_sketch": "In `elementValue` (and `annArg`), parse a class literal with the type parser (`typ()` followed by `.class`) when the token is a primitive keyword, `void`, or a qualified id followed by `[`, producing `classOf[...]` as for reference types. No compatibility cost beyond joint builds now seeing annotations that separate builds already see.",
+  "on_integration": "present",
+  "on_base": "same",
+  "on_2_13_18": "same",
+  "scala3": "not run (the repro observes the compiler's symbols through a Scala 2 macro)",
+  "prior": "GJ3 (same bail-out in JavaParsers.annotation for operator expressions; retronym/scala PR 757), J5 (retronym/scala PR 288, parentheses); PR 313 and PR 638 are about class literals in annotations at run time and in the backend, not in the Java parser. A fix to GJ3 that reuses the constant-expression parser would not cover these unless it adds class literals of primitive and array types.",
+  "confidence": "confirmed"
+}

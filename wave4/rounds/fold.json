@@ -1,0 +1,62 @@
+[
+ {
+  "round": 1,
+  "change": "Embedded fold trees in 46 control-flow contexts (scrutinee, guard, case body, try/handler/finalizer, while/do, return in closures and try/finally, throw, by-name, synchronized, assignments, local lazy val, pattern definitions) in four spellings (inline, bound val, @noinline method, applied closure), optimizer off and on.",
+  "cases": 3600,
+  "seconds": 558,
+  "signatures_new": 0,
+  "signatures_known": 0,
+  "false_alarms": "0",
+  "coverage": {
+   "BCodeSkelBuilder": {
+    "covered": 255,
+    "total": 335
+   },
+   "BCodeBodyBuilder": {
+    "covered": 723,
+    "total": 917
+   },
+   "UnCurry": {
+    "covered": 302,
+    "total": 488
+   },
+   "Erasure": {
+    "covered": 568,
+    "total": 823
+   },
+   "Fields": {
+    "covered": 113,
+    "total": 276
+   },
+   "Constructors": {
+    "covered": 177,
+    "total": 337
+   },
+   "CleanUp": {
+    "covered": 131,
+    "total": 346
+   },
+   "ScalaPrimitives": {
+    "covered": 272,
+    "total": 288
+   },
+   "ConstantFolder": {
+    "covered": 151,
+    "total": 176
+   },
+   "RefChecks": {
+    "covered": 608,
+    "total": 1371
+   }
+  },
+  "coverage_note": "lines; measured on a 900-case replay of the same seed because the first JaCoCo run missed boot-classpath classes",
+  "largest_unreached": [
+   "CleanUp.transformApplyDynamic",
+   "UnCurry.liftedTryCall",
+   "UnCurry.liftedTryReturn",
+   "CleanUp.genArrayCall",
+   "BCodeBodyBuilder.genStringConcat (spill)"
+  ],
+  "next": "Aim at UnCurry.liftedTryCall/liftedTryReturn: try, match, while, synchronized and return in argument, operand, constructor and super-constructor position; and add an oracle: each context has a hand-written expected trace from the specification."
+ }
+]

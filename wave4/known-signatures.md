@@ -12,3 +12,4 @@ Exclude these narrowly in a harness so they do not mask what is behind them.
 | GE6 | `-opt:inline:**` on a method with about 190 or more exception handlers | `LimitExceededException: Too many allocated bytes` (retronym/scala#767) |
 | GJ3 | a Java annotation argument that is a constant expression | the annotation is dropped from source |
 | scala/bug#8156 | lambdas in constructors of specialized classes | different cause from GE7, still fails |
+| J9 (wave one, remark) | a Java member whose name has a supplementary character (`int 𝑥`, `int x𝟙`), from source or class file | Scala source cannot select it: Scala encodes the surrogate pair as `$uD835$uDC65`, so "value 𝑥 is not a member" in both compilation orders (retronym/scala#291 leaves this open) |

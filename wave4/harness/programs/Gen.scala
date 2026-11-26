@@ -257,6 +257,28 @@ class Gen(seed: Long, opts: GenOpts = GenOpts()) {
         s"({ @scala.annotation.tailrec def $f($i: Int, $acc: ${show(t)}): ${show(t)} = if ($i <= 0) $acc else $f($i - 1, ${gen(t, w(Var(acc, t), Var(i, TInt)), d - 1)}); $f(2, ${g(t)}) })" })
       nodes += (() => { val x = fresh("x"); s"({ case $x if $x > 1 => ${gen(t, w(Var(x, TInt)), d - 1)} }: PartialFunction[Int, ${show(t)}]).applyOrElse(${g(TInt)}, (($x: Int) => ${g(t)}))" })
       env.vars.filter(_.mutable).foreach(v => nodes += (() => s"({ ${v.name} = ${g(v.ty)}; ${g(t)} })"))
+      if (Gen.round >= 3) { // structural (reflective) calls and @varargs members
+        nodes += (() => s"({ val s: { def get(n: Int): ${show(t)} } = new Box[${show(t)}](${g(t)}); s.get(${g(TInt)}) })")
+        if (!env.inVC) nodes += (() => { val x = fresh("x"); s"(new { def k($x: Int): ${show(t)} = ${gen(t, w(Var(x, TInt)), d - 1)} }).k(${g(TInt)})" })
+        if (t == TLong) nodes += (() => s"({ val s: { def sum(a: Int, b: Long): Long } = new Box(0); s.sum(${g(TInt)}, ${g(TLong)}) })")
+        if (t == TStr) nodes += (() => s"({ val s: { def cat(s: String, d: Double): String } = new Box(1); s.cat(${g(TStr)}, ${g(TDouble)}) })")
+        if (t == TStr) nodes += (() => s"Va.cat(${List.fill(r.nextInt(3))(g(TStr)).mkString(", ")})")
+        if (t == TInt) nodes += (() => s"Va.sumi(${List.fill(r.nextInt(3))(g(TInt)).mkString(", ")})")
+      }
+      if (Gen.round >= 2) { // switches over Int, Char and String literals
+        def arm(pat: String) = if (chance(0.2)) s"case $pat if ${g(TBool)} => ${g(t)}" else s"case $pat => ${g(t)}"
+        def ann = if (chance(0.3)) ": @scala.annotation.switch" else ""
+        nodes += (() => { val x = fresh("x"); val ks = r.shuffle(List(0, 1, 2, 3, 5, 7, -1, 100)).take(3 + r.nextInt(4))
+          val cs = ks.map(k => arm(if (chance(0.25)) s"$k | ${k + 1000}" else k.toString))
+          s"((${g(TInt)}$ann) match { ${cs.mkString("; ")}; case $x => ${gen(t, w(Var(x, TInt)), d - 1)} })" })
+        nodes += (() => { val x = fresh("x"); val ks = r.shuffle(List("a", "bc", "", "xyz", "Aa", "BB", "abc")).take(3 + r.nextInt(4)).map("\"" + _ + "\"")
+          val scr = if (chance(0.3)) s"""(if (${g(TBool)}) "Aa" else "BB")""" else g(TStr)
+          val cs = ks.grouped(1 + r.nextInt(2)).map(k => arm(k.mkString(" | "))).toList
+          s"(($scr$ann) match { ${cs.mkString("; ")}; case $x => ${gen(t, w(Var(x, TStr)), d - 1)} })" })
+        nodes += (() => { val ks = r.shuffle(List('a', 'A', 'b', 'B', 'z')).take(3 + r.nextInt(2)).map("'" + _ + "'")
+          val cs = ks.grouped(1 + r.nextInt(2)).map(k => arm(k.mkString(" | "))).toList
+          s"""(("aAbBz".charAt(Math.abs(${g(TInt)}) % 5)$ann) match { ${cs.mkString("; ")}; case _ => ${g(t)} })""" })
+      }
     }
     if (leaves.isEmpty && nodes.isEmpty) throw new GenFail("no way to make " + show(t))
     if (leaves.isEmpty) { if (d < -6) throw new GenFail("depth " + show(t)); pick(nodes)() }
@@ -382,7 +404,8 @@ class Gen(seed: Long, opts: GenOpts = GenOpts()) {
           var seen = Set[String]()
           for (_ <- 0 until 2) {
             val ps = List.fill(1 + r.nextInt(2))(Param(fresh("p"), baseTy()))
-            val key = ps.map(p => erasureKey(p.ty)).mkString
+            // numeric types share a key: Int against Double in a subclass override is ambiguous by the overloading rules
+            val key = ps.map(p => erasureKey(p.ty)).mkString.replaceAll("[IJD]", "N")
             if (!seen(key)) {
               seen += key
               val m = Meth(idx(), nm, "def", Nil, ps, ret)
@@ -443,7 +466,7 @@ class Gen(seed: Long, opts: GenOpts = GenOpts()) {
   def program(): List[List[String]] = {
     val units = ArrayBuffer[List[String]]()
     val imp0 = "import scala.reflect.ClassTag"
-    val imp = "import scala.reflect.ClassTag; import Imp._"
+    val imp = "import scala.reflect.ClassTag; import Imp._" + (if (Gen.round >= 3) "; import scala.language.reflectiveCalls" else "")
     units += List(imp0, "trait U0[A] extends Any { def uu: A; def uc(x: Int): (A, Int) = (uu, x) }")
     units += List(imp0, s"trait Sam0[${specAnn()}A, ${specAnn()}B] { def ap(a: A): B${if (chance(0.3)) "; def twice(a: A): (B, B) = (ap(a), ap(a))" else ""} }")
     units += List(imp0,
@@ -452,6 +475,8 @@ class Gen(seed: Long, opts: GenOpts = GenOpts()) {
       "case class K0(a: Int, b: String) extends Sh",
       "case class K1(x: Sh, n: Long) extends Sh",
       "case object K2 extends Sh",
+      "class Box[A](val v: A) { def get(n: Int): A = v; def sum(a: Int, b: Long): Long = a + b * 2; def cat(s: String, d: Double): String = s + d }",
+      "object Va { @scala.annotation.varargs def cat(xs: String*): String = xs.mkString(\"/\"); @scala.annotation.varargs def sumi(xs: Int*): Int = xs.sum }",
       "object Ev { def unapply(i: Int): Option[Int] = if (i % 2 == 0) Some(i / 2) else None }",
       "object Imp { implicit class RichI(private val self: Int) extends AnyVal { def dbl: Int = self * 2 }; implicit class Pairer[T](private val self: T) { def pairUp: (T, T) = (self, self) }; implicit val defaultK: K0 = K0(7, \"imp\"); def withImp(x: Int)(implicit k: K0): Int = x + k.a }")
     for (i <- 0 until r.nextInt(3)) units += imp :: genVC(i)
@@ -513,6 +538,8 @@ class Gen(seed: Long, opts: GenOpts = GenOpts()) {
 object Gen {
   /** Super calls to methods with their own type parameters hit two known faults (see the README); off unless -Dw4e.superpoly=true. */
   val specWeight: Double = sys.props.get("w4p.spec").fold(0.0)(_.toDouble)
+  /** Steering round of the campaign; each round switches on the constructs added for it. */
+  val round: Int = sys.props.get("w4p.round").fold(1)(_.toInt)
   val superPoly: Boolean = sys.props.get("w4p.superpoly").contains("true")
   /** Up to `tries` attempts with derived seeds; returns the units and the number of attempts that the generator abandoned. */
   def make(seed: Long, opts: GenOpts = GenOpts()): (List[List[String]], Int) = {

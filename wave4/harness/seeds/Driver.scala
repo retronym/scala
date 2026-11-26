@@ -42,6 +42,7 @@ object Driver {
     val (g, _) = newGlobal(Nil, Nil, Left(new VirtualDirectory("o", None)))
     try {
       import g._
+      new Run()
       val unit = new CompilationUnit(new BatchSourceFile("p.scala", src))
       val tree = newUnitParser(unit).parse()
       var stats = tree match { case PackageDef(_, ss) => ss; case _ => return None }
@@ -66,7 +67,7 @@ object Driver {
         (name, text)
       }
       Some((header, chunks))
-    } catch { case _: Throwable => None } finally g.close()
+    } catch { case t: Throwable => if (sys.props.contains("w4s.debug")) t.printStackTrace(); None } finally g.close()
   }
   /** Units (each preceded by earlier imports), companions merged. */
   def units(chunks: List[(String, String)]): List[String] = {
@@ -101,7 +102,7 @@ object Driver {
 
   var sepN = 0
   /** One configuration. Result kind: ok, throw:<class>, compile-error, crash, timeout-compile, timeout-run, skip. */
-  def eval(src: String, flags: List[String], separate: Option[Boolean]): (String, String) = {
+  def eval(src: String, flags: List[String], separate: Option[Int]): (String, String) = {
     val parent = classOf[Option[_]].getClassLoader
     def go(): (String, String) = {
       separate match {
@@ -115,14 +116,22 @@ object Driver {
           val (header, chunks) = split(src).getOrElse(return ("skip", "cannot split"))
           var us = units(chunks)
           if (us.size < 2) return ("skip", "single unit")
-          if (rev) us = us.reverse
+          if (rev == 1) us = us.reverse
           sepN += 1
           val dir = Files.createDirectories(work.toPath.resolve("sep" + sepN))
           try {
-            for ((u, i) <- us.zipWithIndex) compile(List(s"u$i.scala" -> (header + u)), flags, List(dir.toString), Right(dir)) match {
-              case Some(e) => return (if (e.startsWith("CRASH")) "crash" else "compile-error", s"unit $i: " + e)
-              case None =>
+            // rev == 2: dependency order, retrying units that failed until no progress (companions stay together; sealed hierarchies cannot be split and fail)
+            var pending = us.zipWithIndex; var lastErr = ""
+            var progress = true
+            while (pending.nonEmpty && progress) {
+              progress = false
+              for ((u, i) <- pending) compile(List(s"u$i.scala" -> (header + u)), flags, List(dir.toString), Right(dir)) match {
+                case Some(e) if e.startsWith("CRASH") => return ("crash", s"unit $i: " + e)
+                case Some(e) => lastErr = s"unit $i: " + e; if (rev != 2) return ("compile-error", lastErr)
+                case None => pending = pending.filterNot(_._2 == i); progress = true
+              }
             }
+            if (pending.nonEmpty) return ("compile-error", lastErr)
             val l = new URLClassLoader(Array(dir.toUri.toURL), parent)
             try runIt(l) finally l.close()
           } finally {
@@ -155,8 +164,9 @@ object Driver {
             case "delam" => eval(src, "-Ydelambdafy:inline" :: opts, None)
             case "xsource3" => eval(src, "-Xsource:3" :: opts, None)
             case "nospec" => val s2 = src.replaceAll(specRx, ""); if (s2 == src) ("skip", "no specialized") else eval(s2, opts, None)
-            case "sepfwd" => eval(src, opts, Some(false))
-            case "seprev" => eval(src, opts, Some(true))
+            case "sepfwd" => eval(src, opts, Some(0))
+            case "seprev" => eval(src, opts, Some(1))
+            case "sepdep" => eval(src, opts, Some(2))
           }
           if (r._1.startsWith("timeout")) timeouts += 1
           Files.write(f.toPath, (r._1 + "\n" + r._2).getBytes("UTF-8"))

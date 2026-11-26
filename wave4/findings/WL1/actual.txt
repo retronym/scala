@@ -1,0 +1,4 @@
+ro.size: 2
+ro.readOnlySnapshot(): java.lang.NullPointerException
+ro.snapshot(): java.lang.NullPointerException
+ro.clone(): List((1,a), (2,b))
