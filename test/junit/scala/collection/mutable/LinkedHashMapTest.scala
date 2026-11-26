@@ -183,4 +183,7 @@ class LinkedHashMapTest {
     assertEquals(fromlhm2, lhm)
     assertFalse(fromlhm2 eq lhm)
   }
+
+  @Test
+  def updateWithModifyingTheMap(): Unit = HashMapTest.checkUpdateWithModifyingTheMap(LinkedHashMap.from(_))
 }
