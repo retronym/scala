@@ -1,0 +1,4 @@
+error:
+  mergePrefixAndArgs(List(ErasedValueType(class V0, Int), ErasedValueType(class V0, Int(7))), covariant, Depth(1)): unsupported tps
+        during phase: globalPhase=erasure, enteringPhase=posterasure
+No such file or class on classpath: Test

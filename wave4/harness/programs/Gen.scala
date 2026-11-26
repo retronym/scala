@@ -263,6 +263,48 @@ class Gen(seed: Long, opts: GenOpts = GenOpts()) {
       nodes += (() => { val x = fresh("x"); s"({ case $x if $x > 1 => ${gen(t, w(Var(x, TInt)), d - 1)} }: PartialFunction[Int, ${show(t)}]).applyOrElse(${g(TInt)}, (($x: Int) => ${g(t)}))" })
       env.vars.filter(_.mutable).foreach(v => nodes += (() => s"({ ${v.name} = ${g(v.ty)}; ${g(t)} })"))
       def addF(f: String)(th: () => String): Unit = for (_ <- 0 until weight(f)) nodes += th
+      if (Gen.round >= 8 && !env.inVC) { // stackable traits, trait field initialisation order, super calls through the linearization, lazy vals in objects
+        if (t == TStr) addF("linear")(() => { val ts = r.shuffle(List("SA", "SB", "SC", "SD")).take(2 + r.nextInt(3)); val o = s"(new Im with ${ts.mkString(" with ")})"
+          pick(List(s"$o.f(${g(TInt)})", s"{ val q = $o; q.f(${g(TInt)}) + q.tag + q.f(1) }", s"($o: Bs).f(${g(TInt)})")) })
+        if (t == TStr && chance(0.5)) addF("linear")(() => pick(List("(new Im with SC with SB).lc", "(new Im with SA with SC).ta", "LzO.y", "new GG().h", "(new GG: G1).h", "(new G3 with G2 {}).h")))
+        if (t == TInt) addF("linear")(() => pick(List("(new FI2 with FI3 {}).c", "(new FI3 with FI2 {}).c", "(new FI2 {}).c", "LzO.x", "(new Im with SB with SA).lb", "(new Im with SD with SB).ld", s"{ val q = new Im with SD; q.vd = ${g(TInt)}; q.ld }")))
+      }
+      if (Gen.round >= 7 && !env.inVC) { // local and nested classes and objects capturing variables and each other (lambdalift, explicitouter, constructors)
+        def b(t2: Ty, e: Env) = gen(t2, e, d - 1)
+        addF("nested")(() => { val (c, l, k) = (fresh("c"), fresh("L"), fresh("l")); val e = w(Var(c, TInt, mutable = true))
+          s"({ var $c: Int = ${g(TInt)}; class $l { val k: ${show(t)} = ${b(t, e.copy(ret = None))}; def inc(): Int = { $c += 1; $c } }; val $k = new $l; $k.inc(); ${b(t, w(Var(c, TInt), Var(k + ".k", t)))} })" })
+        addF("nested")(() => { val (c, o) = (fresh("c"), fresh("LO")); val e = w(Var(c, TStr, mutable = true))
+          s"({ var $c: String = ${g(TStr)}; object $o { def f(): String = { $c = $c + \"!\"; $c }; lazy val k: ${show(t)} = ${b(t, e.copy(ret = None))} }; $o.f(); val r = $o.k; $c = \"z\"; Tr.t(${fresh("")}, $o.f()); r })" })
+        addF("nested")(() => { val (a, bb, n) = (fresh("A"), fresh("B"), fresh("n"))
+          s"({ class $a { def f($n: Int): Int = if ($n <= 0) ${gen(TInt, env.copy(ret = None), d - 1)} else new $bb().g($n - 1) + 1 }; class $bb { def g($n: Int): Int = new $a().f($n) * 2 }; Tr.t(${fresh("")}, new $a().f(3)); ${g(t)} })" })
+        addF("nested")(() => { val (acc, f, x) = (fresh("acc"), fresh("add"), fresh("x"))
+          s"({ var $acc = 0; def $f($x: Int): Int = { $acc += $x; $acc }; List[Int](1, 2, ${g(TInt)}).map($f); Tr.t($acc, ${g(t)}) })" })
+        addF("nested")(() => { val (c, x) = (fresh("c"), fresh("x")); val e = w(Var(c, TInt, mutable = true), Var(x, TInt))
+          s"({ var $c: Int = ${g(TInt)}; val s = new Sam0[Int, ${show(t)}] { var hits = 0; def ap($x: Int): ${show(t)} = { hits += 1; $c += $x; ${b(t, e.copy(ret = Some(t)))} } }; s.ap(${g(TInt)}) })" })
+        addF("nested")(() => { val (l, a, s1) = (fresh("L"), fresh("a"), fresh("s"))
+          s"({ class $l(val $a: Int, val $s1: String) { def this($a: Int) = this($a, \"d\" + $a); def this() = this(${lit(TInt)}); def show = $s1 + $a }; Tr.t(${fresh("")}, new $l(${g(TInt)}).show + new $l().show); ${g(t)} })" })
+        addF("nested")(() => { val (c, l, m) = (fresh("c"), fresh("L"), fresh("M")); val e = w(Var(c, TInt))
+          s"({ val $c: Int = ${g(TInt)}; class $l { class $m { def f: ${show(t)} = ${b(t, e.copy(ret = Some(t)))}; def g = $c + h }; def h = $c * 2 }; val o = new $l; new o.$m().g; new o.$m().f })" })
+      }
+      if (Gen.round >= 6) { // pattern matching: nested case classes with binders, alternatives, extractors (Boolean, name-based, unapplySeq), type patterns, catch patterns
+        def b(t2: Ty, vs: Var*) = gen(t2, w(vs: _*), d - 1)
+        addF("patmat")(() => { val (p, a, s1, x, rest, q, xs) = (fresh("p"), fresh("a"), fresh("s"), fresh("x"), fresh("r"), fresh("q"), fresh("xs"))
+          s"(P3(P2(${g(TInt)}, ${g(TOpt(TStr))}), ${g(TList(TInt))}) match { case P3($p @ P2($a, Some($s1)), $x :: $rest) if $a > $x => ${b(t, Var(a, TInt), Var(s1, TStr), Var(x, TInt), Var(rest, TList(TInt)))}; case P3(P2($a, None), Nil) => ${b(t, Var(a, TInt))}; case P3(P2(0 | 1, _), _ :: _) => ${g(t)}; case P3($q, $xs) => ${b(t, Var(xs, TList(TInt)))} })" })
+        addF("patmat")(() => { val (k, n) = (fresh("k"), fresh("n"))
+          s"(${g(TInt)} match { case Pos() if ${g(TBool)} => ${g(t)}; case NB($k) => ${b(t, Var(k, TInt))}; case NB2($k, $n) => ${b(t, Var(k, TInt), Var(n, TStr))}; case _ => ${g(t)} })" })
+        addF("patmat")(() => { val (a, c, xs) = (fresh("a"), fresh("c"), fresh("xs"))
+          s"(${g(TStr)} match { case Digits() => ${g(t)}; case Digits($a) => ${b(t, Var(a, TInt))}; case Digits($a, $c, $xs @ _*) => ${b(t, Var(a, TInt), Var(c, TInt), Var(xs, TSeq(TInt)))}; case _ => ${g(t)} })" })
+        addF("patmat")(() => { val (a, c, tl, rs) = (fresh("a"), fresh("c"), fresh("tl"), fresh("rs"))
+          s"(${g(TList(TInt))} match { case List(1, _) | List(_, 2) => ${g(t)}; case List($a, $c) => ${b(t, Var(a, TInt), Var(c, TInt))}; case $a :: $c :: $tl => ${b(t, Var(a, TInt), Var(tl, TList(TInt)))}; case Seq($a, $rs @ _*) => ${b(t, Var(a, TInt), Var(rs, TSeq(TInt)))}; case _ => ${g(t)} })" })
+        addF("patmat")(() => { val o = other(); val (x, y, a, c) = (fresh("x"), fresh("y"), fresh("a"), fresh("c"))
+          s"((${g(o)}: Any) match { case $x: List[_] => ${b(t, Var(x + ".length", TInt))}; case Some($y: Int) => ${b(t, Var(y, TInt))}; case ($a: Int, $c) => ${b(t, Var(a, TInt))}; case $x: Array[Int] => ${g(t)}; case Gen1($y: String) => ${b(t, Var(y, TStr))}; case $x: Sh with Product => ${g(t)}; case _ => ${g(t)} })" })
+        addF("patmat")(() => { val o = other(); val (y) = (fresh("y"))
+          s"((Gen1[Any](${g(o)}): Gen1[Any]) match { case Gen1($y: Int) if $y > 2 => ${b(t, Var(y, TInt))}; case Gen1(_: String) | Gen1(_: Long) => ${g(t)}; case Gen1(Some($y)) => ${g(t)}; case _ => ${g(t)} })" })
+        addF("patmat")(() => { val (a, c, e, m) = (fresh("a"), fresh("c"), fresh("e"), fresh("m"))
+          s"""({ val P2($a, $c) = P2(${g(TInt)}, ${g(TOpt(TStr))}); ${b(t, Var(a, TInt), Var(c, TOpt(TStr)))} })""" })
+        addF("patmat")(() => { val (e, m) = (fresh("e"), fresh("m"))
+          s"""(try { if (${g(TBool)}) throw new IllegalArgumentException(${g(TStr)}); ${g(t)} } catch { case $e @ (_: IllegalStateException | _: UnsupportedOperationException) => ${g(t)}; case ExMsg($m) if $m.length > 1 => ${b(t, Var(m, TStr))}; case $e: IllegalArgumentException => ${b(t, Var(e + ".getMessage", TStr))} })""" })
+      }
       if (Gen.round >= 5 && env.ret.nonEmpty) { // return from the enclosing method: plain, from closures, by-name arguments, try/finally
         val rt = env.ret.get
         def rv() = g(rt)
@@ -431,7 +473,13 @@ class Gen(seed: Long, opts: GenOpts = GenOpts()) {
           all = all :+ m; eager = Var(m.name, ty) :: eager
         case 2 =>
           val ty = retTy(env); val m = Meth(idx(), fresh("lz"), "lazy val", Nil, Nil, ty)
-          t.lines += s"  ${sig(m)} = ${gen(ty, env, 3)}"
+          val ann = if (Gen.round >= 8) pick(List("", "", "@volatile ", "@transient ", "private[this] ".take(0))) else ""
+          t.lines += s"  $ann${sig(m)} = ${gen(ty, env, 3)}"
+          all = all :+ m
+        case 5 if Gen.round >= 7 && chance(0.5) => // a member class using the outer instance's members
+          val ty = retTy(env); val c = fresh("In"); val m = Meth(idx(), fresh("m"), "def", Nil, Nil, ty); val x = fresh("x")
+          val e = env.copy(meths = env.meths.filter(_.idx < m.idx), vars = List(Var(x, TInt)), ret = Some(ty))
+          t.lines += s"  class $c($x: Int) { def get: ${show(ty)} = ${gen(ty, e, 2)} }; ${sig(m)} = new $c(${gen(TInt, Env(Nil, Nil, Set(), Set()), 1)}).get"
           all = all :+ m
         case 4 if kind != "class" || tps.isEmpty || true => // nested object, initialised on first use
           val ty = retTy(env); val o = fresh("O"); val m = Meth(idx(), fresh("m"), "def", Nil, Nil, ty)
@@ -517,6 +565,18 @@ class Gen(seed: Long, opts: GenOpts = GenOpts()) {
       "object Va { @scala.annotation.varargs def cat(xs: String*): String = xs.mkString(\"/\"); @scala.annotation.varargs def sumi(xs: Int*): Int = xs.sum }",
       "object Ev { def unapply(i: Int): Option[Int] = if (i % 2 == 0) Some(i / 2) else None }",
       "object Bn { def apply[T](x: => T): T = x; def twice[T](x: => T): (T, T) = (x, x) }",
+      "case class P2(a: Int, b: Option[String]); case class P3(p: P2, xs: List[Int]); case class Gen1[T](x: T)",
+      "object Pos { def unapply(i: Int): Boolean = i > 0 }; object NB { def unapply(i: Int): NBR = new NBR(i) }; class NBR(val i: Int) { def isEmpty: Boolean = i % 3 == 0; def get: Int = i * 2 }",
+      "object NB2 { def unapply(i: Int): Option[(Int, String)] = if (i < 0) Some((i, \"neg\")) else None }; object ExMsg { def unapply(e: Throwable): Option[String] = Option(e.getMessage) }",
+      "abstract class Bs { def f(x: Int): String; val tag: String = Tr.t(901, \"bs\") }; class Im extends Bs { def f(x: Int): String = \"i\" + x }",
+      "trait SA extends Bs { abstract override def f(x: Int): String = \"a(\" + super.f(x + 1) + \")\"; val ta: String = Tr.t(902, \"A\" + tag) }",
+      "trait SB extends Bs { abstract override def f(x: Int): String = super.f(x * 2) + \"b\"; lazy val lb: Int = Tr.t(903, f(1).length) }",
+      "trait SC extends SA { abstract override def f(x: Int): String = \"c\" + super.f(x) + ta; @volatile lazy val lc: String = Tr.t(904, \"C\" + ta) }",
+      "trait SD extends Bs { abstract override def f(x: Int): String = super.f(x - 1) + vd; var vd: Int = Tr.t(905, 4); @transient lazy val ld: Int = vd + 1 }",
+      "trait FI1 { val a: Int = Tr.t(910, 1); val b: Int = a + 1 }; trait FI2 extends FI1 { val c: Int = b * 10 + a }; trait FI3 extends FI1 { override val a: Int = Tr.t(911, 5) }",
+      "object LzO { @volatile lazy val x: Int = Tr.t(920, 3); @transient lazy val y: String = Tr.t(921, \"y\" + x) }",
+      "trait G1 { def h: String = \"g1\" }; trait G2 extends G1 { override def h: String = \"g2\" + super.h }; trait G3 extends G1 { override def h: String = \"g3\" + super.h }; class GG extends G2 with G3 { override def h: String = super[G2].h + super[G3].h + super.h }",
+      "object Digits { def unapplySeq(s: String): Option[Seq[Int]] = if (s.forall(_.isLetter)) Some(s.map(_.toInt).toSeq) else None }",
       "object Imp { implicit class RichI(private val self: Int) extends AnyVal { def dbl: Int = self * 2 }; implicit class Pairer[T](private val self: T) { def pairUp: (T, T) = (self, self) }; implicit val defaultK: K0 = K0(7, \"imp\"); def withImp(x: Int)(implicit k: K0): Int = x + k.a }")
     for (i <- 0 until r.nextInt(3)) units += imp :: genVC(i)
     val tpls = ArrayBuffer[Tpl]()

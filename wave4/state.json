@@ -28,6 +28,20 @@
   ],
   "agents": [
     [
+      "w4 fix campaign 3",
+      "Opus",
+      "Fixes for WS1, WS2",
+      "pending",
+      "Waiting for a build slot"
+    ],
+    [
+      "w4 rework #773",
+      "Opus",
+      "Rework of retronym/scala#773 after diff review",
+      "running",
+      ""
+    ],
+    [
       "w4 fix WP3",
       "Opus",
       "Fix for WP3: value-class box around an unlifted try",
@@ -45,15 +59,15 @@
       "w4 diff review java annotations",
       "Opus",
       "Independent read of the annotation element-value fix",
-      "running",
-      ""
+      "done",
+      "#773: defect, low risk. On about 6,300 real Java files (eight JDK modules, jackson, guava, jmh, bsp4j) errors and annotations are the same as the base except 45 jdk.jfr annotations with constant-expression arguments that are now kept; 1,500 generated constant fields get identical types. The defect: a Scala ConstantAnnotation used from Java source with an array argument is now unmappable. Also, arguments javac rejects are now dropped silently where the base reported a type mismatch"
     ],
     [
       "w4 review campaign 3",
       "Opus",
       "Independent review of WS1, WS2",
-      "running",
-      ""
+      "done",
+      "Both real. WS1 medium, a regression from 2.12: it also fails without the flag for a lambda in a super-constructor argument, and mdoc and Scastie set -Ydelambdafy:inline for every compile; the anonymous class takes its type argument from the body where 2.11 took it from the function type. WS2 low: slow, not a hang; the tree checker falsely reports type parameters bound inside the inferred lub type (scala/bug#10908) and renders an 834 KB signature per report; not a defect of any draft fix"
     ],
     [
       "w4c programs2",
@@ -309,6 +323,14 @@
     ]
   ],
   "log": [
+    [
+      "27 Nov 00:38",
+      "Review of WS1 and WS2: both real. WS1 matters more than reported, since mdoc and Scastie set the flag and a lambda in a super-constructor argument fails without it. Its fix worker starts when a build slot frees."
+    ],
+    [
+      "27 Nov 00:31",
+      "Diff review of #773: sound on a corpus of real Java sources, one defect for Scala annotations used from Java source; being reworked. The machine is at its limit of three builds; nothing further starts until one finishes."
+    ],
     [
       "27 Nov 00:27",
       "Review of WX1 and WP1 to WP3: all real. WP3 is the most severe finding of the wave: an ordinary collect with a nested match and a try returning a value class compiles and then fails to verify, a regression in 2.13.9. Two fix workers started."

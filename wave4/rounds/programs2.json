@@ -1,0 +1,59 @@
+[
+ {
+  "round": 1,
+  "change": "Triaged the two untriaged -Ycheck signatures of the programs campaign (WP4 new, the other WP1); added subexpression shrinking (hoist a nested group, drop a block statement or case arm), base-build triage of 2.13.18 differences, per-oracle counts, per-program focus on two construct families, and the non-local return family (return from closures, by-name arguments, partial functions, local lazy vals, try/finally, while).",
+  "cases": 431,
+  "seconds": 220,
+  "compile_rate": "99.5% (429 of 431; one WP5 crash and one WP7 crash of the reference)",
+  "signatures_new": 4,
+  "signatures_known": 6,
+  "false_alarms": "0 from the oracles; WP6 (-Ycheck on a return inside a partial function) fired on 30 of 44 -Ycheck samples and is now excluded",
+  "oracle_disagreements": {
+   "opt-local": "3/431",
+   "delambdafy-inline": "0/431",
+   "separate": "0/431",
+   "v18": "131/431 (130 fixed by earlier waves, 1 upstream after 2.13.18)",
+   "ycheck": "37/44",
+   "inline": "0/4"
+  },
+  "known_hits": {
+   "v18-wavefix": 130,
+   "v18-upstream": 1,
+   "WP6": 30,
+   "WP1": 6,
+   "WP2": 1,
+   "WP5": 1
+  },
+  "coverage": {
+   "backend/jvm": [
+    2802,
+    3905
+   ],
+   "backend/jvm/opt": [
+    2470,
+    2955
+   ],
+   "transform": [
+    3989,
+    5328
+   ],
+   "transform/patmat": [
+    1566,
+    2186
+   ],
+   "typechecker": [
+    7071,
+    13867
+   ]
+  },
+  "largest_unreached": [
+   "PlainSkelBuilder.appendToStaticCtor (30)",
+   "CleanUp.transformApplyDynamic (26 of 47)",
+   "PlainBodyBuilder.genStringConcat lambda (26)",
+   "MatchTreeMaking TypeTestTreeMaker.prefixAligns (17)",
+   "MatchTranslation.translateTry (16 of 19)"
+  ],
+  "next": "Pattern-matching family (nested case classes with binders, alternatives, Boolean/name-based/unapplySeq extractors, type patterns on generics, catch patterns) for patmat, unchanged at 1566 lines for three rounds.",
+  "notes": "New: WP4 (-Ycheck, trait lazy val in a by-name argument, from the programs campaign's round 4), WP5 (return with operands on the stack in try/finally: backend crash; VerifyError on 2.13.18 and Scala 3), WP6 (-Ycheck, return in a partial function), WP7 (erasure crash, if of value class constructions with a literal). The two JVMs: 23.9 (JaCoCo) and 102.3 programs/min."
+ }
+]

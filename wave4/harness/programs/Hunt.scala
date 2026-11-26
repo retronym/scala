@@ -12,6 +12,8 @@ object Hunt {
   val bridge = prop("bridge", "")
   lazy val int = Compiler("int", prop("int", ""), bridge + "/int")
   lazy val v18 = Compiler("v18", prop("v18", ""), bridge + "/v18")
+  /** The unfixed base (upstream 2.13.x): decides whether a difference from 2.13.18 was fixed upstream or by an earlier wave. */
+  lazy val baseC = Compiler("base", prop("base", ""), bridge + "/base")
   val inlineMaxChars = prop("inlineMaxChars", "15000").toInt
 
   def ref = Config("ref", int)
@@ -28,6 +30,14 @@ object Hunt {
                    "WP1" -> "^ycheck\\|log\\|.*Tree has erroneous type: (N\\(\\)$|scala\\.[A-Za-z]+\\.box\\()".r,
                    "WP4" -> "^ycheck\\|log\\|.*Tree has erroneous type: N\\.this\\.N\\(\\)$".r, "WP2" -> "^ycheck\\|log\\|.*Tree has erroneous type: s\\.get\\(".r)
   def knownId(sig: String): Option[String] = known.collectFirst { case (id, rx) if rx.findFirstIn(sig).nonEmpty => id }
+  val prePhases = Set("typer", "superaccessors", "extmethods", "pickler", "refchecks", "patmat")
+  /** Known defects recognised from more than the signature: the configuration's whole log and the source. */
+  def knownFull(c: Config, o: Outcome, src: String): Option[String] = {
+    val phases = "during phase: (\\w+)".r.findAllMatchIn(o.log).map(_.group(1)).toSet
+    if (c.name == "opt-local" && o.kind == "crash" && o.text.contains("AnalyzerException") && src.contains("return ") && src.contains("finally")) Some("WP5")
+    else if (c.name == "ycheck" && o.log.contains("erroneous type") && phases.nonEmpty && phases.subsetOf(prePhases) && src.contains("PartialFunction") && src.contains("return ")) Some("WP6")
+    else None
+  }
 
   def normErr(e: String): String =
     e.linesIterator.nextOption().getOrElse("").replaceAll("^\\d+: ", "").replaceAll("[A-Za-z]+\\d+", "N").replaceAll("\\d+", "N").take(110)
@@ -150,9 +160,20 @@ object Hunt {
       oracleRuns.synchronized { res.tail.foreach { case (c, o) =>
         oracleRuns(c.name) = oracleRuns.getOrElse(c.name, 0) + 1
         if (signature(base, c, o).nonEmpty) oracleDiffs(c.name) = oracleDiffs.getOrElse(c.name, 0) + 1 } }
-      for ((c, o) <- res.tail; sig <- signature(base, c, o)) {
-        knownId(sig) match {
-          case Some(id) => knownHits.synchronized(knownHits(id) = knownHits.getOrElse(id, 0) + 1)
+      def countKnown(id: String) = knownHits.synchronized(knownHits(id) = knownHits.getOrElse(id, 0) + 1)
+      val refKnown =
+        if (base.kind == "compile-error" && base.text.contains("Index 0 out of bounds for length 0")) Some("WP5")
+        else if (base.kind == "crash" && base.text.contains("mergePrefixAndArgs(List(ErasedValueType")) Some("WP7")
+        else None
+      refKnown.foreach(countKnown)
+      val wp5 = refKnown.nonEmpty
+      lazy val baseOut = driver.eval(units, Config("base", baseC))
+      def same(a: Outcome, b: Outcome) = a.kind == b.kind && a.text == b.text
+      for ((c, o) <- res.tail if !wp5; sig <- signature(base, c, o)) {
+        val k = knownId(sig).orElse(knownFull(c, o, src)).orElse(
+          if (c.name == "v18") Some(if (same(baseOut, base)) "v18-upstream" else if (same(baseOut, o)) "v18-wavefix" else null).filter(_ != null) else None)
+        k match {
+          case Some(id) => countKnown(id)
           case None =>
             val first = sigs.synchronized { val f = !sigs.contains(sig); sigs(sig) = (sigs.get(sig).fold(1)(_._1 + 1), sigs.get(sig).fold(seed)(_._2)); f }
             if (first) {

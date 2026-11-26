@@ -1,0 +1,1 @@
+Return () from a structural call to a void method through Any
