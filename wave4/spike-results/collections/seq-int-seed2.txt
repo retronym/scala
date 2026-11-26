@@ -1,0 +1,7 @@
+==== seed 2: 89103 cases x 30 impls, 164 ops, 6 signatures
+     50  tail | Queue | exc-type   List: EX:UnsupportedOperationException / Queue: EX:NoSuchElementException @ xs=List() (len 0) Args(0,0,1,0,1,List())
+     50  tail | Queue.deq | exc-type   List: EX:UnsupportedOperationException / Queue.deq: EX:NoSuchElementException @ xs=List() (len 0) Args(0,0,1,0,1,List())
+     50  tail | Queue.split | exc-type   List: EX:UnsupportedOperationException / Queue.split: EX:NoSuchElementException @ xs=List() (len 0) Args(0,0,1,0,1,List())
+     43  updated | LazyList | exc-type   List: EX:IndexOutOfBoundsException / LazyList: EX:UnsupportedOperationException @ xs=List() (len 0) Args(0,0,1,0,1,List())
+     43  updated | LazyList.cons | exc-type   List: EX:IndexOutOfBoundsException / LazyList.cons: EX:UnsupportedOperationException @ xs=List() (len 0) Args(0,0,1,0,1,List())
+     43  updated | LazyList.forced | exc-type   List: EX:IndexOutOfBoundsException / LazyList.forced: EX:UnsupportedOperationException @ xs=List() (len 0) Args(0,0,1,0,1,List())

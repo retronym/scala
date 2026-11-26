@@ -1,0 +1,30 @@
+quarantined after a hang or OutOfMemoryError (op, impl): 
+
+==== map seed 1: 31220 programs x 23 impls, 24 ops, 27 signatures
+   1188  collect | mu.TreeMap.range | value
+   1146  concat | mu.TreeMap.range | value
+   1129  concat.l | mu.TreeMap.range | value
+   1134  count | mu.TreeMap.range | value
+   1144  equals | mu.TreeMap.range | value
+   1192  filter | mu.TreeMap.range | value
+   1098  flatMap | mu.TreeMap.range | value
+   1164  get | mu.TreeMap.range | value
+   1193  groupBy | mu.TreeMap.range | value
+   1115  i.concat | mu.TreeMap.range | value
+   1155  i.updated | mu.TreeMap.range | value
+   1142  i.updatedWith | mu.TreeMap.range | value
+   1145  iter | mu.TreeMap.range | value
+   1159  keySet | mu.TreeMap.range | value
+   1241  map | mu.TreeMap.range | value
+   1131  map.v | mu.TreeMap.range | value
+   1128  partition | mu.TreeMap.range | value
+   1132  s.iteratorFrom | mu.TreeMap.range | value
+   1138  s.minAfter | mu.TreeMap.range | value
+   1169  s.range | mu.TreeMap.range | value
+   2238  s.range.ops | mu.TreeMap | value
+   1458  s.range.ops | mu.TreeMap.range | value
+    350  s.slice | mu.TreeMap | exc-type
+    340  s.slice | mu.TreeMap.range | exc-type
+   1124  s.slice | mu.TreeMap.range | value
+   1131  values | mu.TreeMap.range | value
+   1159  views | mu.TreeMap.range | value
