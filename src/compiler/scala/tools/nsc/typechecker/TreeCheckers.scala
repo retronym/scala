@@ -397,8 +397,13 @@ abstract class TreeCheckers extends AbstractAnalyzer {
         def typeOf(t: Tree): Type      = if (t.tpe eq null) NoType else t.tpe
         def infoOf(t: Tree): Type      = symbolOf(t).info
         def referencesInType(tp: Type) = {
-          val bound = tp.collect { case ExistentialType(quantified, _) => quantified }.flatten
-          tp collect { case TypeRef(_, sym, _) if !bound.contains(sym) => sym }
+          // Symbols bound in `tp` itself: existential quantifiers, and the type parameters of polymorphic
+          // types, such as the members and type lambdas of a refinement inferred by `lub`.
+          val bound = tp.collect {
+            case ExistentialType(quantified, _) => quantified
+            case PolyType(tparams, _)           => tparams
+          }.flatten.toSet
+          tp collect { case TypeRef(_, sym, _) if !bound(sym) => sym }
         }
         // Accessors are known to steal the type of the underlying field without cloning existential symbols at the new owner.
         // This happens in Namer#accessorTypeCompleter. We just look the other way here.
@@ -421,7 +426,7 @@ abstract class TreeCheckers extends AbstractAnalyzer {
 
         def encls = enclosingMemberDefs.filterNot(_.symbol == treeSym).zipWithIndex map { case (md, i) => mk(s"encl(${i+1})", md.symbol, signature) }
 
-        def mkErrorMsg(outOfScope: Symbol): String = {
+        def mkErrorMsg(outOfScope: List[Symbol]): String = {
 
           def front = List(
             mk[Tree]("tree", tree),
@@ -432,9 +437,9 @@ abstract class TreeCheckers extends AbstractAnalyzer {
             case NoType => Nil
             case _      => mk[Type]("and tpe", treeTpe) :: Nil
           }
-          def ref = mk[Symbol]("ref to", outOfScope, (s: Symbol) => s.nameString + " (" + s.debugFlagString + ")")
+          def refs = outOfScope.map(mk[Symbol]("ref to", _, (s: Symbol) => s.nameString + " (" + s.debugFlagString + ")"))
 
-          val pairs = front ++ tpes ++ encls ++ (ref :: Nil)
+          val pairs = front ++ tpes ++ encls ++ refs
           val width = pairs.map(_._2.length).max
           val fmt = "%-" + width + "s"
           val lines = pairs map {
@@ -444,12 +449,11 @@ abstract class TreeCheckers extends AbstractAnalyzer {
           lines.mkString("Out of scope symbol reference {\n", "\n", "\n}")
         }
 
-        referencedSymbols foreach (sym =>
-          if (!reportedAlready((tree, sym))) {
-            errorFn("\n" + mkErrorMsg(sym))
-            reportedAlready += ((tree, sym))
-          }
-        )
+        val outOfScope = referencedSymbols.filterNot(sym => reportedAlready((tree, sym)))
+        if (outOfScope.nonEmpty) {
+          errorFn("\n" + mkErrorMsg(outOfScope))
+          outOfScope.foreach(sym => reportedAlready += ((tree, sym)))
+        }
       }
 
       private def checkReturnReferencesDirectlyEnclosingDef(tree: Tree): Unit = tree match {
