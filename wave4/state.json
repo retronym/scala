@@ -28,6 +28,13 @@
   ],
   "agents": [
     [
+      "w4 rework #779",
+      "Opus",
+      "Rework of retronym/scala#779 after diff review",
+      "running",
+      ""
+    ],
+    [
       "w4 fix WP7",
       "Opus",
       "Fix for WP7: erased value type with a constant argument",
@@ -66,8 +73,8 @@
       "w4 diff review campaign 3",
       "Opus",
       "Independent read of #778 and #779",
-      "running",
-      ""
+      "done",
+      "#778 ok: fun.tpe is always a FunctionN type reference here; under -Ydelambdafy:inline 6 of 3,918 library classes and 9 of about 330 run tests differ, each either a constant-bodied lambda now extending a specialized AbstractFunctionN or a local class named as Object in a generic superclass; apply methods and serialization are unchanged, and the changed check file is a correction. #779 concern: the new rule also counts the checked symbol's own outer PolyType, so a shared type-parameter symbol could go unreported"
     ],
     [
       "w4 diff review #777",
@@ -379,6 +386,10 @@
     ]
   ],
   "log": [
+    [
+      "27 Nov 01:23",
+      "#778 passed diff review and is out of draft; #779 is being narrowed so that only binders nested inside the checked type count as bound."
+    ],
     [
       "27 Nov 01:22",
       "Review of WP4 to WP9: all real, two already known upstream. Fix workers started for the two crashes (WP7, WP5); the four -Ycheck findings get test-only branches."
@@ -824,7 +835,7 @@
         778
       ],
       "state": "fixed",
-      "note": "Fix: expandFunction now takes the AbstractFunctionN type arguments from fun.tpe (dealiased), which typer builds from the parameter symbols and the packed body type, and which the generated apply method already used for its result type. The constant-type leak into the parent came with literal types and is fixed by the same change."
+      "note": "Fix (judged ok by an independent diff review): expandFunction now takes the AbstractFunctionN type arguments from fun.tpe (dealiased), which typer builds from the parameter symbols and the packed body type, and which the generated apply method already used for its result type. The constant-type leak into the parent came with literal types and is fixed by the same change."
     },
     "WS2": {
       "prs": [

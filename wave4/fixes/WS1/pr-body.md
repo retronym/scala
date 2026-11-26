@@ -21,7 +21,7 @@ This is a regression from 2.12.0. 2.11's UnCurry took the parent's type argument
 
 The fix takes the type arguments from `fun.tpe` again. The parameter types are the same as before (typer builds `fun.tpe` from the parameter symbols), and the lifted `apply` method already took its result type from `fun.tpe`, so the parent and the `apply` it is implemented by now agree. Two visible differences in expanded classes:
 
-- A lambda with a constant body (`() => 42`, `() => true`) now extends the specialized `AbstractFunction0$mcI$sp` / `$mcZ$sp`, as in 2.11. The body's type `42` survives `deconst` since literal types, so the parent was `AbstractFunction0[42]`, which specialization does not match. `run/delambdafy_uncurry_byname_inline.check` changes from `AbstractFunction0[1]` to `AbstractFunction0[Int]` accordingly.
+- A lambda or by-name thunk with a constant body (`() => 42`, `() => true`, `(x: Int) => 1.0`) now extends the specialized `AbstractFunctionN$mc..$sp` for its arity and primitive types, as in 2.11. The body's type `42` survives `deconst` since literal types, so the parent was `AbstractFunction0[42]`, which specialization does not match. `run/delambdafy_uncurry_byname_inline.check` changes from `AbstractFunction0[1]` to `AbstractFunction0[Int]` accordingly.
 - A lambda returning a class local to its body (`() => { class L; new L }`) has the generic superclass `AbstractFunction0<Object>` instead of naming the local class, which is defined inside the `apply` method.
 
 Other expanded lambdas, including primitive ones that extend `AbstractFunction1$mcII$sp` and the like, compile to the same class files.
