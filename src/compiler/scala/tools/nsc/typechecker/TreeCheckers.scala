@@ -397,12 +397,17 @@ abstract class TreeCheckers extends AbstractAnalyzer {
         def typeOf(t: Tree): Type      = if (t.tpe eq null) NoType else t.tpe
         def infoOf(t: Tree): Type      = symbolOf(t).info
         def referencesInType(tp: Type) = {
-          // Symbols bound in `tp` itself: existential quantifiers, and the type parameters of polymorphic
-          // types, such as the members and type lambdas of a refinement inferred by `lub`.
-          val bound = tp.collect {
+          // Symbols bound inside `tp`: existential quantifiers, and the type parameters of nested polymorphic
+          // types, such as the members and type lambdas of a refinement inferred by `lub`. The type parameters
+          // of the outermost `PolyType` are the checked symbol's own, so they must pass the owner check.
+          val inner = tp match {
+            case PolyType(tparams, restpe) => restpe :: tparams.map(_.info)
+            case _                         => tp :: Nil
+          }
+          val bound = inner.flatMap(_.collect {
             case ExistentialType(quantified, _) => quantified
             case PolyType(tparams, _)           => tparams
-          }.flatten.toSet
+          }).flatten.toSet
           tp collect { case TypeRef(_, sym, _) if !bound(sym) => sym }
         }
         // Accessors are known to steal the type of the underlying field without cloning existential symbols at the new owner.
