@@ -226,8 +226,8 @@ object BasicIO {
   /** A sentinel value telling ProcessBuilderImpl to redirect. */
   private[process] val connectToStdIn: OutputStream => Unit = _ => ()
 
-  /** A sentinel value telling ProcessBuilderImpl not to process. */
-  private[process] val connectNoOp: OutputStream => Unit = _ => ()
+  /** A sentinel value telling ProcessBuilderImpl to close the input without spawning a thread. */
+  private[process] val connectNoOp: OutputStream => Unit = _.close()
 
   /** Returns a `ProcessIO` connected to stdout and stderr, and, optionally, stdin. */
   def standard(connectInput: Boolean): ProcessIO = standard(input(connectInput))
