@@ -1,0 +1,9 @@
+Test.scala:4: warning: method a in class J is deprecated (since 12)
+  def f = J.a() + J.b()
+            ^
+Test.scala:4: warning: method b in class J is deprecated (since 12)
+  def f = J.a() + J.b()
+                    ^
+error: No warnings can be incurred under -Werror.
+2 warnings
+1 error
