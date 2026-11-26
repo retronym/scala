@@ -66,4 +66,35 @@ class ErasureTest extends BytecodeTesting {
     val c = compileClasses(code).find(_.name == "C").get
     assertSameSummary(getMethod(c, "cond"), List(ILOAD, IFEQ, DLOAD, DRETURN, -1, DCONST_0, DRETURN))
   }
+
+  @Test
+  def valueClassConditionalReceiverOfDifferentInstantiations(): Unit = {
+    val code =
+      """class G[T](val t: T) extends AnyVal
+        |class C {
+        |  def wider(ok: Boolean, s: String) = (if (ok) new G(s) else new G[CharSequence](s)).t
+        |  def unrelated(ok: Boolean) = (if (ok) new G(1) else new G("s")).t
+        |}
+      """.stripMargin
+    val c = compileClasses(code).find(_.name == "C").get
+    assertSameSummary(getMethod(c, "wider"), List(ILOAD, IFEQ, ALOAD, ARETURN, -1, ALOAD, ARETURN))
+    assertSameSummary(getMethod(c, "unrelated"), List(ILOAD, IFEQ, ICONST_1, "boxToInteger", CHECKCAST, ARETURN, -1, LDC, ARETURN))
+  }
+
+  @Test
+  def valueClassInjectionKeepsArgumentType(): Unit = {
+    val code =
+      """class R(val x: AnyRef) extends AnyVal
+        |class G[T](val t: T) extends AnyVal
+        |class C {
+        |  def cast(s: String) = new R(s).x.asInstanceOf[String]
+        |  def castG(s: String) = new G[AnyRef](s).t.asInstanceOf[String]
+        |  def hash(s: String) = new R(s).x.hashCode
+        |}
+      """.stripMargin
+    val c = compileClasses(code).find(_.name == "C").get
+    assertSameCode(getMethod(c, "cast"), List(VarOp(ALOAD, 1), Op(ARETURN)))
+    assertSameCode(getMethod(c, "castG"), List(VarOp(ALOAD, 1), Op(ARETURN)))
+    assertSameCode(getMethod(c, "hash"), List(VarOp(ALOAD, 1), Invoke(INVOKEVIRTUAL, "java/lang/String", "hashCode", "()I", itf = false), Op(IRETURN)))
+  }
 }

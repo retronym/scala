@@ -256,6 +256,23 @@ final class GlbLubs[U <: SymbolTable with Singleton](val self: U) {
       }
     }
 
+  /** The lub of erased values of value class `clazz` whose erased underlying types differ, as when
+   *  erasure retypes an `if` whose branches are values of `clazz`, or `NoType` if `ts` are not all
+   *  such values. One underlying type can be a constant or narrower type, from an injection `new C(e)`.
+   *  For a class with a type parameter, the underlying types are the boxed erasures of the type arguments,
+   *  so they are all references, and `Object` is their common representation.
+   */
+  private def erasedValueTypeLub(clazz: Symbol, ts: List[Type]): Type =
+    if (!ts.forall { case ErasedValueType(`clazz`, _) => true case _ => false }) NoType
+    else {
+      val us = ts.map(_.asInstanceOf[ErasedValueType].erasedUnderlying.widen).distinct
+      us.find(u => us.forall(_ <:< u)) match {
+        case Some(u)                                              => ErasedValueType(clazz, u)
+        case None if !us.exists(definitions.isPrimitiveValueType) => ErasedValueType(clazz, ObjectTpe)
+        case None                                                 => NoType
+      }
+    }
+
   /** Does this set of types have the same weak lub as
    *  it does regular lub? This is exposed so lub callers
    *  can discover whether the trees they are typing will
@@ -463,6 +480,8 @@ final class GlbLubs[U <: SymbolTable with Singleton](val self: U) {
         TypeBounds(glb(ts map (_.lowerBound), depth), lub(ts map (_.upperBound), depth))
       case ts @ AnnotatedType(annots, tpe) :: rest =>
         annotationCheckerSupport.annotationsLub(lub0(ts map (_.withoutAnnotations)), ts)
+      case ts @ ErasedValueType(clazz, _) :: _ if erasedValueTypeLub(clazz, ts) ne NoType =>
+        erasedValueTypeLub(clazz, ts)
       case ts =>
         lubResults get ((depth, ts)) match {
           case Some(lubType) =>
