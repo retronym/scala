@@ -509,7 +509,12 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
     case PolyType(tparams, resTpe)   => specializedTypeVarsBuffer(resTpe, result);  tparams.foreach(sym => specializedTypeVarsBuffer(sym.info, result))
     // since this method may be run at phase typer (before uncurry, where NMTs are eliminated)
     case NullaryMethodType(resTpe)   => specializedTypeVarsBuffer(resTpe, result)
-    case MethodType(argSyms, resTpe) => specializedTypeVarsBuffer(resTpe, result); argSyms.foreach(sym => specializedTypeVarsBuffer(sym.tpe, result))
+    case MethodType(argSyms, resTpe) =>
+      specializedTypeVarsBuffer(resTpe, result)
+      // A by-name parameter `=> T` does not count. After uncurry its type is `() => T`, where T would count,
+      // but the answer must not depend on the phase: a variant's name is computed from the original symbol
+      // (entering typer) and from its clones (after uncurry), and the two names must agree.
+      argSyms.foreach(sym => if (!sym.isByNameParam) specializedTypeVarsBuffer(sym.tpe, result))
     case ExistentialType(_, res)     => specializedTypeVarsBuffer(res, result)
     case AnnotatedType(_, tp)        => specializedTypeVarsBuffer(tp, result)
     case TypeBounds(lo, hi)          => specializedTypeVarsBuffer(lo, result); specializedTypeVarsBuffer(hi, result)
