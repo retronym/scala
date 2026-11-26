@@ -453,11 +453,11 @@ object NumericRange {
           //   * there to the end
           val negone = num.fromInt(-1)
           val startlim  = if (posStep) negone else one
-          //Use start value if the start value is closer to zero than startlim
+          //Step towards zero instead if the start value is closer to zero than startlim
           //   * e.g. .5 is closer to zero than 1 and -.5 is closer to zero than -1
           val startdiff = {
             if ((posStep && num.lt(startlim, start)) || (!posStep && num.gt(startlim, start)))
-              start
+              num.negate(start)
             else
               num.minus(startlim, start)
           }
