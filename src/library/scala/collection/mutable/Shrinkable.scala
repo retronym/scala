@@ -13,7 +13,7 @@
 package scala
 package collection.mutable
 
-import scala.annotation.tailrec
+import scala.annotation.{nowarn, tailrec}
 
 /** This trait forms part of collections that can be reduced
  *  using a `-=` operator.
@@ -64,6 +64,21 @@ trait Shrinkable[-A] {
         case xs: Clearable => xs.clear()
         case xs            => subtractAll(Buffer.from(xs))
       }
+    } else if (this.isInstanceOf[Buffer[_]] && {
+      // A buffer shifts its elements as they are removed, so a source that may read this buffer is read in full first.
+      // Each removal is linear in the buffer's length anyway.
+      @nowarn("cat=deprecation") // Stream
+      val mayReadThis = xs match {
+        case _: Option[_] => false
+        case _: collection.immutable.LazyList[_] | _: collection.immutable.Stream[_] => true
+        case _: collection.immutable.Iterable[_] | _: ArraySeq[_] => false
+        case _: ArrayBuffer[_] | _: ArrayDeque[_] | _: ListBuffer[_] | _: UnrolledBuffer[_] | _: HashSet[_] | _: LinkedHashSet[_] =>
+          xs.asInstanceOf[AnyRef] eq this
+        case _ => true
+      }
+      mayReadThis
+    }) {
+      subtractAll(Buffer.from(xs))
     } else {
       xs match {
         case xs: collection.LinearSeq[A] => loop(xs)

@@ -132,7 +132,18 @@ class ArrayDeque[A] protected (
   }
 
   override def addAll(elems: IterableOnce[A]): this.type = {
-    elems.knownSize match {
+    // Appending moves the end that a view of this deque reads, so a source that may read this deque is read in full first.
+    @nowarn("cat=deprecation") // Stream
+    val mayReadThis = elems match {
+      case _: Option[_] => false
+      case _: immutable.LazyList[_] | _: immutable.Stream[_] => true
+      case _: immutable.Iterable[_] | _: ArraySeq[_] => false
+      case _: ArrayBuffer[_] | _: ArrayDeque[_] | _: ListBuffer[_] | _: UnrolledBuffer[_] | _: HashSet[_] | _: LinkedHashSet[_] =>
+        elems.asInstanceOf[AnyRef] eq this
+      case _ => true
+    }
+    if (mayReadThis) addAll(ArrayBuffer.from(elems))
+    else elems.knownSize match {
       case srcLength if srcLength > 0 =>
         ensureSize(srcLength + length)
         elems.iterator.foreach(appendAssumingCapacity)
@@ -534,7 +545,13 @@ object ArrayDeque extends StrictOptimizedSeqFactory[ArrayDeque] {
       val actual = IterableOnce.copyElemsToArray(coll, array.asInstanceOf[Array[Any]])
       if (actual != s) throw new IllegalStateException(s"Copied $actual of $s")
       new ArrayDeque[B](array, start = 0, end = s)
-    } else new ArrayDeque[B]() ++= coll
+    } else {
+      // `coll` cannot read a deque created here, so it is appended without the copy `addAll` makes of a lazy source.
+      val d = new ArrayDeque[B]()
+      val it = coll.iterator
+      while (it.hasNext) d.addOne(it.next())
+      d
+    }
   }
 
   def newBuilder[A]: Builder[A, ArrayDeque[A]] =
