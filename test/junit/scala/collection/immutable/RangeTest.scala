@@ -103,4 +103,13 @@ class RangeTest {
     assertFalse((1 to 5).startsWith(1 to 1, 8))
   }
 
+  // A range with step Int.MinValue can hold two elements. The reverse needs a step of 2^31.
+  @Test
+  def reverseWithMinValueStep(): Unit = {
+    assertEquals(List(5), (5 to 5 by Int.MinValue).reverse.toList)
+    val r = Int.MaxValue to Int.MinValue by Int.MinValue
+    assertEquals(List(Int.MaxValue, -1), r.toList)
+    assertEquals(List(-1, Int.MaxValue), r.reverse.toList)
+    assertEquals(List(Int.MinValue, 0), (0 to Int.MinValue by Int.MinValue).reverse.toList)
+  }
 }
