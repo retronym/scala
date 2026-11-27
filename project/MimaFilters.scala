@@ -81,6 +81,15 @@ object MimaFilters extends AutoPlugin {
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.SynchronizedTypes.globalGlbDepth*"),
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.JavaUniverse.globalGlbDepth*"),
 
+    // thread-local override of internal state in the private[reflect] trait SynchronizedTypes:
+    // `pendingSubTypes` and `knownFalseSubTypes` are replaced by `subTypeCycles`
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.SynchronizedTypes.pendingSubTypes"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.JavaUniverse.pendingSubTypes"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.SynchronizedTypes.knownFalseSubTypes"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.JavaUniverse.knownFalseSubTypes"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.SynchronizedTypes.subTypeCycles"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.JavaUniverse.subTypeCycles"),
+
     // implementation traits of the reflect internal API (Kinds, Variances, GlbLubs, ...) are components of SymbolTable rather than
     // mixins, so the private[reflect] runtime universe no longer has them as parents, nor their synthetic accessors
     ProblemFilters.exclude[MissingTypesProblem]("scala.reflect.runtime.JavaUniverse"),
