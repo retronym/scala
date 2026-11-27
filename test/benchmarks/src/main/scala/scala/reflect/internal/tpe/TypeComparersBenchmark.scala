@@ -14,11 +14,6 @@ import scala.tools.nsc.{Global, Settings}
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 @State(Scope.Benchmark)
 class TypeComparersBenchmark {
-  // Capacity hint `knownFalseSubTypes` has been grown to by an earlier, deeper subtype check.
-  // `IdentityHashMap.clear` never shrinks the table, so each top-level subtype check pays for it.
-  @Param(Array("0", "1024"))
-  var grownTo: Int = _
-
   var g: Global = _
   var tp1, tp2: Global#Type = _
 
@@ -31,9 +26,6 @@ class TypeComparersBenchmark {
     new global.Run()
     tp1 = global.definitions.StringTpe
     tp2 = global.definitions.AnyRefTpe
-    val m = global.knownFalseSubTypes
-    for (i <- 0 until grownTo) m.put(global.ConstantType(global.Constant(i)), Nil)
-    m.clear()
   }
 
   @Benchmark def isSubType(): Boolean = {
