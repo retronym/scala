@@ -106,6 +106,35 @@ class LazyListTest {
     assertEquals(2, n)
   }
 
+  // A thread overflows its stack while it evaluates a chain of cells, each from within the state function of the one
+  // before. Other threads are already waiting for the innermost cells. The clean-up of those cells runs with the
+  // stack nearly full, so its calls can overflow the stack again; the waiting threads must still get their result.
+  @Test def stackOverflowWhileOthersWait(): Unit = {
+    import LazyListTest.OverflowingChain
+    for (_ <- 1 to 2) {
+      val depth = 20000
+      val calibration = new OverflowingChain(depth, Int.MaxValue, Int.MaxValue)
+      assertTrue("no StackOverflowError", calibration.overflow())
+      val waiters = 48
+      val from = math.max(0, calibration.reached - 40)
+      val chain = new OverflowingChain(depth, from, from + waiters)
+      val results = new java.util.concurrent.atomic.AtomicIntegerArray(waiters)
+      val threads = (0 until waiters).map { i =>
+        OverflowingChain.start("waiter-" + i, 256L * 1024 * 1024) {
+          val k = from + i
+          while (chain.handedOff < k && !chain.done) Thread.sleep(1)
+          results.set(i, chain.cells(k).head)
+        }
+      }
+      assertTrue("no StackOverflowError", chain.overflow())
+      val deadline = System.nanoTime + 20L * 1000 * 1000 * 1000
+      threads.foreach(t => t.join(math.max(1L, (deadline - System.nanoTime) / 1000000)))
+      val stuck = (0 until waiters).filter(i => threads(i).isAlive).map(_ + from)
+      assertTrue(s"overflow at ${chain.reached}, threads still waiting for cells ${stuck.mkString(", ")}", stuck.isEmpty)
+      for (i <- 0 until waiters) assertEquals(depth - (from + i), results.get(i))
+    }
+  }
+
   @Test def storeNull(): Unit = {
     val l = "1" #:: null #:: "2" #:: LazyList.empty
     assert(l.toList == List("1", null, "2"))
@@ -553,6 +582,51 @@ class LazyListTest {
 
 object LazyListTest {
   var serializationForceCount = 0
+
+  /** `cells(k).head` is `cells(k + 1).head + 1`, down to `cells(depth).head`, which is 0. The thread that runs
+    * `overflow` goes down with a small stack. Between `probeFrom` and `probeTo` it does not go on to the next cell
+    * until another thread waits for the cell it is evaluating.
+    */
+  final class OverflowingChain(depth: Int, probeFrom: Int, probeTo: Int) {
+    @volatile private var prober: Thread = null
+    @volatile var reached = 0
+    @volatile var handedOff = -1
+    @volatile var done = false
+    val cells: Array[LazyList[Int]] = Array.tabulate(depth + 1)(k => LazyList.cons(body(k), LazyList.empty))
+
+    private def body(k: Int): Int = {
+      if (Thread.currentThread eq prober) {
+        reached = k
+        if (k >= probeFrom && k < probeTo) {
+          handedOff = k
+          val cell = cells(k)
+          var spins = 0
+          while (!cell.rawTail.isInstanceOf[LazyListBase.InRace] && spins < 200000000) spins += 1
+        }
+      }
+      if (k == depth) 0 else cells(k + 1).head + 1
+    }
+
+    /** Whether evaluating the first cell on a thread with a small stack threw a StackOverflowError. */
+    def overflow(): Boolean = {
+      @volatile var overflowed = false
+      val t = OverflowingChain.start("small-stack", 256 * 1024) {
+        prober = Thread.currentThread
+        try cells(0).head catch { case _: StackOverflowError => overflowed = true }
+        done = true
+      }
+      t.join(60000)
+      overflowed && done
+    }
+  }
+  object OverflowingChain {
+    def start(name: String, stackSize: Long)(body: => Unit): Thread = {
+      val t = new Thread(null, () => body, name, stackSize)
+      t.setDaemon(true)
+      t.start()
+      t
+    }
+  }
 
   object sd {
     import java.io._

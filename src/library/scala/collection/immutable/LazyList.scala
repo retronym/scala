@@ -18,7 +18,6 @@ import java.io.{ObjectInputStream, ObjectOutputStream}
 import java.lang.{StringBuilder => JStringBuilder}
 import scala.annotation.tailrec
 import scala.collection.generic.SerializeEnd
-import scala.collection.immutable.LazyListBase.InRace
 import scala.collection.mutable.{Builder, ReusableBuilder, StringBuilder}
 import scala.language.implicitConversions
 import scala.runtime.Statics
@@ -300,65 +299,16 @@ final class LazyList[+A] private (lazyState: AnyRef /* EmptyMarker.type | () => 
 
   @inline private def isEvaluated: Boolean = _head.asInstanceOf[AnyRef] ne Uninitialized
 
-  private def initState(): Unit = {
-    def selfRef(): Nothing =
-      // if it's already mid-evaluation, we're stuck in an infinite self-referential loop (also it's empty)
-      throw new RuntimeException(
-        "LazyList evaluation depends on its own result (self-reference); see docs for more info")
+  private[immutable] def evaluatedState(result: AnyRef): LazyListBase[_] = result.asInstanceOf[LazyList[A]].evaluated
 
-    while (!isEvaluated) {
-      rawTail match {
-        case t: Thread =>
-          if (LazyListBase.isCurrentThread(t)) selfRef()
-          val ir = InRace(t)
-          if (TailUpdater.updater.compareAndSet(this, t, ir))
-            ir.await()
-          // loop on lost CAS
-
-        case ir: InRace =>
-          if (LazyListBase.isCurrentThread(ir.owner)) selfRef()
-          ir.await()
-
-        case fun: Function0[_] =>
-          // use the current thread as marker that `fun` is being evaluated.
-          // this way, there is no allocation in the common case where there's no race.
-          // if multiple threads attempt to initialize a LazyList, an `InRace` instance is created to coordinate.
-          if (TailUpdater.updater.compareAndSet(this, fun, Thread.currentThread)) {
-            var ex: Throwable = null
-            // `fun` returns a LazyList that represents the state (head/tail) of `this`. We call `evaluated` to ensure
-            // the result is initialized, to prevent races when reading `rawTail` / `rawHead` below.
-            // Often, lazy lists are created with `newLL(eagerCons(...))` so `l` is already initialized, but `newLL`
-            // also accepts non-evaluated lazy lists.
-            val l = try fun().asInstanceOf[LazyList[A]].evaluated catch {
-              case t: Throwable =>
-                ex = t
-                null
-            }
-            // update `_tail` before `_head`, because `_head` is used to test `isEvaluated`
-            val newTail = if (ex == null) l.rawTail else fun
-            val sentinel = TailUpdater.updater.getAndSet(this, newTail)
-            if (ex == null) _head = l.rawHead
-            sentinel match {
-              case ir: InRace => ir.countDown()
-              case _ =>
-            }
-            if (ex != null) throw ex
-          }
-          // loop on lost CAS
-
-        case _ =>
-          // loop when _tail is a LazyList but _head is still `Uninitialized`
-          // could call `Thread.onSpinWait()` on JDK 9+
-      }
-    }
-  }
+  private[immutable] def initHead(state: LazyListBase[_]): Unit = _head = state.asInstanceOf[LazyList[A]].rawHead
 
   @tailrec private def evaluated: LazyList[A] =
     if (isEvaluated) {
       if (rawTail == null) Empty
       else this
     } else {
-      initState()
+      initState(TailUpdater.updater)
       evaluated
     }
 
