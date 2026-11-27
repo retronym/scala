@@ -261,4 +261,13 @@ class StreamConvertersTest {
     assertEquals(Vector[Short](1.toShort, 2.toShort, 3.toShort), (Vector[Short](1.toShort, 2.toShort, 3.toShort).asJavaSeqStream: IntStream).toScala(Vector))
     assertEquals(Vector[String]("a", "b"), (Vector[String]("a", "b").asJavaSeqStream: JStream[String]).toScala(Vector))
   }
+
+  @Test
+  def boxedStreamsSelectPrimitiveAccumulator(): Unit = {
+    import scala.collection.convert.StreamExtensions.AccumulatorFactoryInfo
+    def companion[A, C](implicit info: AccumulatorFactoryInfo[A, C]): AnyRef = info.companion
+    assertEquals(IntAccumulator, companion[java.lang.Integer, IntAccumulator])
+    assertEquals(LongAccumulator, companion[java.lang.Long, LongAccumulator])
+    assertEquals(DoubleAccumulator, companion[java.lang.Double, DoubleAccumulator])
+  }
 }
