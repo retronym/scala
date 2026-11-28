@@ -17,8 +17,7 @@ import scala.tools.nsc.doc.model._
 import scala.tools.nsc.doc.base.comment._
 import java.io.{FileOutputStream, File}
 import scala.reflect.NameTransformer
-import java.nio.channels.Channels
-import java.io.Writer
+import java.io.{StringWriter, Writer}
 
 object Page {
   def inlineToStr(inl: Inline): String = inl match {
@@ -96,15 +95,14 @@ abstract class Page {
   }
 
   def writeFile(site: HtmlFactory, suffix: String = "")(fn: Writer => Unit) = {
+    // Render in memory and encode once: the XML writer emits many small writes, each of
+    // which would otherwise run the charset encoder (and `Raw` flushes) on the file.
+    val w = new StringWriter(16 * 1024)
+    fn(w)
+    val bytes = w.toString.getBytes(site.encoding)
     val fos = createFileOutputStream(site, suffix)
-    val w = Channels.newWriter(fos.getChannel, site.encoding)
-    try {
-      fn(w)
-    }
-    finally {
-      w.close()
-      fos.close()
-    }
+    try fos.write(bytes)
+    finally fos.close()
   }
 
   /** Writes this page as a file. The file's location is relative to the

@@ -19,7 +19,7 @@ import scala.annotation.{nowarn, tailrec}
 import scala.collection.mutable, mutable.ListBuffer
 import scala.reflect.internal.util.Position
 import scala.tools.nsc.Reporting.WarningCategory
-import scala.util.matching.Regex.{quoteReplacement, Match}
+import scala.util.matching.Regex, Regex.{quoteReplacement, Match}
 
 /** The comment parser transforms raw comment strings into `Comment` objects.
   * Call `parse` to run the parser. Note that the parser is stateless and
@@ -168,26 +168,32 @@ trait CommentFactoryBase { this: MemberLookupBase =>
 
   private val safeTagMarker = '\u000E'  // control-N
 
+  /** A regex extractor that skips matching lines that lack a literal the regex requires.
+    * `parse0` tries several of these on every line of every comment. */
+  private final class Prefiltered(regex: Regex)(mayMatch: String => Boolean) {
+    def unapplySeq(s: String): Option[List[String]] = if (mayMatch(s)) regex.unapplySeq(s) else None
+  }
+
   /** A Scaladoc tag not linked to a symbol and not followed by text */
   private val SingleTagRegex =
-    raw"\s*@(\S+)\s*".r
+    new Prefiltered(raw"\s*@(\S+)\s*".r)(_.indexOf('@') >= 0)
 
   /** A Scaladoc tag not linked to a symbol. Returns the name of the tag, and the rest of the line. */
   private val SimpleTagRegex =
-    raw"\s*@(\S+)\s+(.*)".r
+    new Prefiltered(raw"\s*@(\S+)\s+(.*)".r)(_.indexOf('@') >= 0)
 
   /** A Scaladoc tag linked to a symbol. Returns the name of the tag, the name
     * of the symbol, and the rest of the line. */
   private val SymbolTagRegex =
-    raw"\s*@(param|tparam|throws|groupdesc|groupname|groupprio)\s+(\S*)\s*(.*)".r
+    new Prefiltered(raw"\s*@(param|tparam|throws|groupdesc|groupname|groupprio)\s+(\S*)\s*(.*)".r)(_.indexOf('@') >= 0)
 
   /** The start of a Scaladoc code block */
   private val CodeBlockStartRegex =
-    raw"(.*?)((?:\{\{\{)|(?:$safeTagMarker<pre(?: [^>]*)?>$safeTagMarker))(.*)".r
+    new Prefiltered(raw"(.*?)((?:\{\{\{)|(?:$safeTagMarker<pre(?: [^>]*)?>$safeTagMarker))(.*)".r)(s => s.contains("{{{") || s.indexOf(safeTagMarker) >= 0)
 
   /** The end of a Scaladoc code block */
   private val CodeBlockEndRegex =
-    raw"(.*?)((?:\}\}\})|(?:$safeTagMarker</pre>$safeTagMarker))(.*)".r
+    new Prefiltered(raw"(.*?)((?:\}\}\})|(?:$safeTagMarker</pre>$safeTagMarker))(.*)".r)(s => s.contains("}}}") || s.indexOf(safeTagMarker) >= 0)
 
   /** A key used for a tag map. The key is built from the name of the tag and
     * from the linked symbol if the tag has one.
@@ -201,6 +207,17 @@ trait CommentFactoryBase { this: MemberLookupBase =>
 
   private val TrailingWhitespaceRegex = """\s+$""".r
 
+  // Used by `WikiParser`, which is instantiated per comment, so compile them once here.
+
+  /** Starts and end with a cell separator matching the minimal row || and all other possible rows */
+  private val TableRow = """^\|.*\|$""".r
+  private val LeftAlignmentPattern = "^:?-++$".r
+  private val CenterAlignmentPattern = "^:-++:$".r
+  private val RightAlignmentPattern = "^-++:$".r
+  private val OpenTag = "^<([A-Za-z]+)( [^>]*)?(/?)>$".r
+  private val CloseTag = "^</([A-Za-z]+)>$".r
+  private val SchemeUri = """([a-z]+:.*)""".r
+
   /** Parses a raw comment string into a `Comment` object.
     * @param comment The expanded comment string (including start and end markers) to be parsed.
     * @param src     The raw comment source string.
@@ -209,18 +226,42 @@ trait CommentFactoryBase { this: MemberLookupBase =>
     /** The cleaned raw comment as a list of lines. Cleaning removes comment
       * start and end markers, line start markers  and unnecessary whitespace. */
     def clean(comment: String): List[String] = {
-      def cleanLine(line: String): String = {
+      def cleanLineRegex(line: String): String = {
         // Remove trailing whitespaces
         TrailingWhitespaceRegex.replaceAllIn(line, "") match {
           case CleanCommentLine(ctl) => ctl
           case tl => tl
         }
       }
+      // `\s` in the regexes above
+      def isWhitespace(c: Char) = c == ' ' || c == '\t' || c == '\n' || c == '\u000B' || c == '\f' || c == '\r'
+      // characters that `.` does not match, or that `$` treats as a line end
+      def isLineTerminator(c: Char) = c == '\n' || c == '\r' || c == '\u0085' || c == ' ' || c == ' '
+      // equivalent to `cleanLineRegex`, without the regexes
+      def cleanLine(line: String): String = {
+        var end = line.length
+        while (end > 0 && isWhitespace(line.charAt(end - 1))) end -= 1
+        var i = 0
+        while (i < end && isWhitespace(line.charAt(i))) i += 1
+        val start =
+          if (i < end && line.charAt(i) == '*') { if (i + 1 < end && isWhitespace(line.charAt(i + 1))) i + 2 else i + 1 }
+          else 0
+        var j = start
+        while (j < line.length && !isLineTerminator(line.charAt(j))) j += 1
+        if (j < line.length) cleanLineRegex(line)
+        else line.substring(start, end)
+      }
       val strippedComment = comment.trim.stripPrefix("/*").stripSuffix("*/")
-      val safeComment = DangerousTags.replaceAllIn(strippedComment, { htmlReplacement(_) })
-      val javadoclessComment = JavadocTags.replaceAllIn(safeComment, { javadocReplacement(_) })
+      // skip each pass when the comment lacks a literal its regex requires
+      val safeComment =
+        if (strippedComment.indexOf('<') < 0) strippedComment
+        else DangerousTags.replaceAllIn(strippedComment, { htmlReplacement(_) })
+      val javadoclessComment =
+        if (!safeComment.contains("{@")) safeComment
+        else JavadocTags.replaceAllIn(safeComment, { javadocReplacement(_) })
       val markedTagComment =
-        SafeTags.replaceAllIn(javadoclessComment, { mtch =>
+        if (javadoclessComment.indexOf('<') < 0 && javadoclessComment.indexOf('&') < 0) javadoclessComment
+        else SafeTags.replaceAllIn(javadoclessComment, { mtch =>
           quoteReplacement(s"$safeTagMarker${mtch.matched}$safeTagMarker")
         })
       markedTagComment.linesIterator.toList map cleanLine
@@ -550,9 +591,6 @@ trait CommentFactoryBase { this: MemberLookupBase =>
       HorizontalRule()
     }
 
-    /** Starts and end with a cell separator matching the minimal row || and all other possible rows */
-    private val TableRow = """^\|.*\|$""".r
-
     /* Checks for a well-formed table row */
     private def checkTableRow = {
       check(TableCellStart) && {
@@ -787,10 +825,6 @@ trait CommentFactoryBase { this: MemberLookupBase =>
 
       /* Convert the row following the header row to column options */
 
-      val leftAlignmentPattern = "^:?-++$".r
-      val centerAlignmentPattern = "^:-++:$".r
-      val rightAlignmentPattern = "^-++:$".r
-
       import ColumnOption._
       /* Encourage user to fix by defaulting to least ignorable fix. */
       val defaultColumnOption = ColumnOptionRight
@@ -801,9 +835,9 @@ trait CommentFactoryBase { this: MemberLookupBase =>
             // TODO: Save pos when delimiter row is parsed and use here in reported errors
             case Paragraph(Text(as)) :: Nil =>
               as.trim match {
-                case leftAlignmentPattern(_*) => ColumnOptionLeft
-                case centerAlignmentPattern(_*) => ColumnOptionCenter
-                case rightAlignmentPattern(_*) => ColumnOptionRight
+                case LeftAlignmentPattern(_*) => ColumnOptionLeft
+                case CenterAlignmentPattern(_*) => ColumnOptionCenter
+                case RightAlignmentPattern(_*) => ColumnOptionRight
                 case x =>
                   reportError(pos, s"Fixing invalid column alignment: $x", site)
                   defaultColumnOption
@@ -844,14 +878,12 @@ trait CommentFactoryBase { this: MemberLookupBase =>
 
     /* INLINES */
 
-    val OPEN_TAG = "^<([A-Za-z]+)( [^>]*)?(/?)>$".r
-    val CLOSE_TAG = "^</([A-Za-z]+)>$".r
     private def readHTMLFrom(begin: HtmlTag): String = {
       val list = mutable.ListBuffer.empty[String]
       val stack = mutable.ListBuffer.empty[String]
 
       begin.close match {
-        case Some(HtmlTag(CLOSE_TAG(s))) =>
+        case Some(HtmlTag(CloseTag(s))) =>
           stack += s
         case _ =>
           return ""
@@ -864,11 +896,11 @@ trait CommentFactoryBase { this: MemberLookupBase =>
         list += str
 
         str match {
-          case OPEN_TAG(s, _, standalone) =>
+          case OpenTag(s, _, standalone) =>
             if (standalone != "/") {
               stack += s
             }
-          case CLOSE_TAG(s) =>
+          case CloseTag(s) =>
             if (s == stack.last) {
               stack.remove(stack.length-1)
             }
@@ -1004,7 +1036,6 @@ trait CommentFactoryBase { this: MemberLookupBase =>
     }
 
     def link(): Inline = {
-      val SchemeUri = """([a-z]+:.*)""".r
       jump("[[")
       val parens = 2 + repeatJump('[')
       val stop  = "]" * parens
