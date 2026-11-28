@@ -273,7 +273,9 @@ trait BaseTypeSeqs {
     override def toString = elems.mkString("MBTS(", ",", ")")
   }
 
-  val CyclicInheritance = new Throwable
+  // Thrown and matched by identity. Without a stack trace, so that it does not keep the classes (and class loaders)
+  // of the code that created this symbol table reachable for as long as the symbol table lives.
+  val CyclicInheritance: Throwable = new Throwable(null, null, false, false) {}
 }
 
 trait BaseTypeSeqsStats {
