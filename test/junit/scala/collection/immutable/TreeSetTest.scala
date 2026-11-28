@@ -367,4 +367,14 @@ class TreeSetTest extends AllocationTest {
     assertEquals(expected, TreeSet.from[Any](tm)(o))
     assertEquals(expected, tm.to(TreeSet.evidenceIterableFactory[Any](o)))
   }
+
+  @Test def knownSize(): Unit = {
+    assertEquals(3, TreeSet(1, 2, 3).knownSize)
+    assertEquals(0, TreeSet.empty[Int].knownSize)
+    assertEquals(2, TreeMap(1 -> 1, 2 -> 2).keySet.knownSize)
+    assertEquals(4, TreeSet.from(1 to 10).range(3, 7).knownSize)
+    // toArray sizes its result from knownSize: one int[1000] (4,016 bytes) and the iterator
+    val ts = TreeSet.from(1 to 1000)
+    onlyAllocates(5000, ignoreEqualCheck = true)(ts.toArray)
+  }
 }
