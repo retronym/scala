@@ -1,0 +1,13 @@
+implicit-ranking-order.scala:24: error: ambiguous implicit values:
+ both value z in trait Low of type p.TC with p.M2
+ and value x in trait X of type p.TC with p.M1 with p.M3
+ match expected type p.TC
+class YX extends Y with X { def site = implicitly[TC] } // ambiguous
+                                                 ^
+implicit-ranking-order.scala:39: error: ambiguous implicit values:
+ both value z in trait LowOY of type p.TC with p.M2
+ and value x in object OX of type p.TC with p.M1 with p.M3
+ match expected type p.TC
+    implicitly[TC] // ambiguous
+              ^
+2 errors
