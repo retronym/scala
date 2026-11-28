@@ -705,4 +705,28 @@ class TrieMapTest {
     assert(!TrieMap.from((1 to 10).map(x => x -> x)).isEmpty)
     assert(!TrieMap.from((1 to 100).map(x => x -> x)).isEmpty)
   }
+
+  // An I-node reads the key equivalence from the TrieMap it is operated on; it does not keep a copy.
+  @Test
+  def inodeFields(): Unit = {
+    val fields = classOf[INode[_, _]].getDeclaredFields.toList.filterNot(f => java.lang.reflect.Modifier.isStatic(f.getModifiers))
+    assertEquals(Nil, fields.map(_.getName))
+  }
+
+  @Test
+  def customEquivSurvivesNodeCreation(): Unit = {
+    val ci: Equiv[String] = (a: String, b: String) => a.equalsIgnoreCase(b)
+    val h: scala.util.hashing.Hashing[String] = (s: String) => s.toLowerCase.hashCode & 0x7 // force deep tries and collisions
+    val m = new TrieMap[String, Int](h, ci)
+    for (i <- 0 until 500) m.put(s"k$i", i)
+    for (i <- 0 until 500) assertEquals(Some(i), m.get(s"K$i"))
+    val snap = m.snapshot()
+    for (i <- 0 until 500 by 2) m.remove(s"K$i")
+    assertEquals(250, m.size)
+    assertEquals(500, snap.size)
+    for (i <- 0 until 500) assertEquals(Some(i), snap.get(s"K$i"))
+    snap.put("K1", -1)
+    assertEquals(Some(-1), snap.get("k1"))
+    assertEquals(500, snap.size)
+  }
 }

@@ -24,12 +24,12 @@ import scala.collection.mutable.GrowableBuilder
 import scala.util.Try
 import scala.util.hashing.Hashing
 
-private[collection] final class INode[K, V](bn: MainNode[K, V], g: Gen, equiv: Equiv[K]) extends INodeBase[K, V](g) {
+private[collection] final class INode[K, V](bn: MainNode[K, V], g: Gen) extends INodeBase[K, V](g) {
   import INodeBase._
 
   WRITE(bn)
 
-  def this(g: Gen, equiv: Equiv[K]) = this(null, g, equiv)
+  def this(g: Gen) = this(null, g)
 
   def WRITE(nval: MainNode[K, V]) = INodeBase.updater.set(this, nval)
 
@@ -87,13 +87,13 @@ private[collection] final class INode[K, V](bn: MainNode[K, V], g: Gen, equiv: E
   private def equal(k1: K, k2: K, ct: TrieMap[K, V]) = ct.equality.equiv(k1, k2)
 
   private def inode(cn: MainNode[K, V]) = {
-    val nin = new INode[K, V](gen, equiv)
+    val nin = new INode[K, V](gen)
     nin.WRITE(cn)
     nin
   }
 
   def copyToGen(ngen: Gen, ct: TrieMap[K, V]) = {
-    val nin = new INode[K, V](ngen, equiv)
+    val nin = new INode[K, V](ngen)
     val main = GCAS_READ(ct)
     nin.WRITE(main)
     nin
@@ -126,7 +126,7 @@ private[collection] final class INode[K, V](bn: MainNode[K, V], g: Gen, equiv: E
               if (sn.hc == hc && equal(sn.k, k, ct)) GCAS(cn, cn.updatedAt(pos, new SNode(sn.k, v, hc), gen), ct)
               else {
                 val rn = if (cn.gen eq gen) cn else cn.renewed(gen, ct)
-                val nn = rn.updatedAt(pos, inode(CNode.dual(sn, sn.hc, new SNode(k, v, hc), hc, lev + 5, gen, equiv)), gen)
+                val nn = rn.updatedAt(pos, inode(CNode.dual(sn, sn.hc, new SNode(k, v, hc), hc, lev + 5, gen, ct.equality)), gen)
                 GCAS(cn, nn, ct)
               }
             case basicNode => throw new MatchError(basicNode)
@@ -184,7 +184,7 @@ private[collection] final class INode[K, V](bn: MainNode[K, V], g: Gen, equiv: E
                   if (GCAS(cn, cn.updatedAt(pos, new SNode(sn.k, v, hc), gen), ct)) Some(sn.v) else null
                 } else {
                   val rn = if (cn.gen eq gen) cn else cn.renewed(gen, ct)
-                  val nn = rn.updatedAt(pos, inode(CNode.dual(sn, sn.hc, new SNode(k, v, hc), hc, lev + 5, gen, equiv)), gen)
+                  val nn = rn.updatedAt(pos, inode(CNode.dual(sn, sn.hc, new SNode(k, v, hc), hc, lev + 5, gen, ct.equality)), gen)
                   if (GCAS(cn, nn, ct)) None
                   else null
                 }
@@ -192,7 +192,7 @@ private[collection] final class INode[K, V](bn: MainNode[K, V], g: Gen, equiv: E
                 if (sn.hc == hc && equal(sn.k, k, ct)) Some(sn.v)
                 else {
                   val rn = if (cn.gen eq gen) cn else cn.renewed(gen, ct)
-                  val nn = rn.updatedAt(pos, inode(CNode.dual(sn, sn.hc, new SNode(k, v, hc), hc, lev + 5, gen, equiv)), gen)
+                  val nn = rn.updatedAt(pos, inode(CNode.dual(sn, sn.hc, new SNode(k, v, hc), hc, lev + 5, gen, ct.equality)), gen)
                   if (GCAS(cn, nn, ct)) None
                   else null
                 }
@@ -429,10 +429,10 @@ private[concurrent] object INode {
   final val KEY_ABSENT = new AnyRef
   final val KEY_PRESENT_OR_ABSENT = new AnyRef
 
-  def newRootNode[K, V](equiv: Equiv[K]) = {
+  def newRootNode[K, V] = {
     val gen = new Gen
     val cn = new CNode[K, V](0, new Array(0), gen)
-    new INode[K, V](cn, gen, equiv)
+    new INode[K, V](cn, gen)
   }
 }
 
@@ -660,7 +660,7 @@ private[concurrent] object CNode {
     val yidx = (yhc >>> lev) & 0x1f
     val bmp = (1 << xidx) | (1 << yidx)
     if (xidx == yidx) {
-      val subinode = new INode[K, V](gen, equiv)//(TrieMap.inodeupdater)
+      val subinode = new INode[K, V](gen)//(TrieMap.inodeupdater)
       subinode.mainnode = dual(x, xhc, y, yhc, lev + 5, gen, equiv)
       new CNode(bmp, Array(subinode), gen)
     } else {
@@ -706,7 +706,7 @@ final class TrieMap[K, V] private (r: AnyRef, rtupd: AtomicReferenceFieldUpdater
   @volatile private var root = r
 
   def this(hashf: Hashing[K], ef: Equiv[K]) = this(
-    INode.newRootNode(ef),
+    INode.newRootNode[K, V],
     AtomicReferenceFieldUpdater.newUpdater(classOf[TrieMap[K, V]], classOf[AnyRef], "root"),
     hashf,
     ef
@@ -732,7 +732,7 @@ final class TrieMap[K, V] private (r: AnyRef, rtupd: AtomicReferenceFieldUpdater
   }
 
   private def readObject(in: java.io.ObjectInputStream): Unit = {
-    root = INode.newRootNode(equality)
+    root = INode.newRootNode[K, V]
     rootupdater = AtomicReferenceFieldUpdater.newUpdater(classOf[TrieMap[K, V]], classOf[AnyRef], "root")
 
     hashingobj = in.readObject().asInstanceOf[Hashing[K]]
@@ -884,7 +884,7 @@ final class TrieMap[K, V] private (r: AnyRef, rtupd: AtomicReferenceFieldUpdater
 
   @tailrec override def clear(): Unit = {
     val r = RDCSS_READ_ROOT()
-    if (!RDCSS_ROOT(r, r.gcasRead(this), INode.newRootNode[K, V](equality))) clear()
+    if (!RDCSS_ROOT(r, r.gcasRead(this), INode.newRootNode[K, V])) clear()
   }
 
   def computeHash(k: K) = hashingobj.hash(k)
