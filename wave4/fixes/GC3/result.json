@@ -1,0 +1,13 @@
+{
+ "id": "GC3",
+ "outcome": "FIXED",
+ "branch": "review/w4-gc3-range-iterator-drop-empty",
+ "commit": "6efa557745",
+ "workspace": "/Users/jzaugg-virtus/code/.worktrees/scala/w4-fix-a",
+ "files": "src/library/scala/collection/immutable/Range.scala, test/junit/scala/collection/immutable/RangeTest.scala",
+ "failing_before": "RangeTest.iteratorDropWhenExhausted: AssertionError: empty Range -2147483648 until -2147483648.iterator.drop(1)",
+ "ran_after": "sbt \"junit/testOnly scala.collection.immutable.RangeTest scala.collection.immutable.RangeConsistencyTest scala.collection.IteratorTest\" (passed), \"scalacheck/testOnly scala.collection.immutable.RangeProperties\" (passed), library/mimaReportBinaryIssues (success, no new filters). git merge-tree of the branch with retronym/scala#558 head, #555 head and the GC1 branch: clean.",
+ "prior_work": "retronym/scala#558 (LI7, same method, overflow of the position for non-empty ranges). No ticket found.",
+ "unsure": "Branched from the base, not stacked on #558: the guard does not need #558's change, and it is written on the method's first line so the two merge cleanly. The review suggested adding it to #558; the coordinator may prefer to fold it in there.",
+ "note": "RangeIterator.drop returns early when the iterator is exhausted, covering empty ranges whose lastElement wraps and exhausted iterators of ranges ending at Int.MaxValue."
+}

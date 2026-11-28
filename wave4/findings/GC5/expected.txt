@@ -1,0 +1,7 @@
+Range.BigDecimal.inclusive(0.34, -0.12, -0.01).length   (control)          = 47
+Range.BigDecimal.inclusive(0.34, -21474835.00, -0.01).length   (control)   = 2147483535
+Range.BigDecimal.inclusive(0.34, -21474836.11, -0.01).length               = 2147483646
+Range.BigDecimal.inclusive(0.34, -21474836.12, -0.01).length               = 2147483647
+d = Range.BigDecimal.inclusive(0.34, -245480424064.33, -0.01); d.take(Int.MaxValue).length = 2147483647
+d.take(Int.MaxValue).last                                                  = -21474836.12
+d.take(1000).length   (control)                                            = 1000

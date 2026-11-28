@@ -1,0 +1,13 @@
+{
+ "id": "GE4",
+ "outcome": "TEST ONLY",
+ "branch": "review/w4-ge4-specialize-partial-function-literal",
+ "commit": "f8deaa9f41",
+ "workspace": "/Users/jzaugg-virtus/code/.worktrees/scala/w4-fix-d",
+ "files": "test/files/run/specialized-partial-function-literal.scala, test/files/run/specialized-partial-function-literal.check",
+ "failing_before": "Base build (w3-base build/pack/bin/scalac): 'error: type mismatch; found: x1.type (with underlying type Int) required: A1' for the guarded literal; the collect { case 1 => p } method and the collectFirst in the specialized class fail the same way (found x1.type with underlying type Any).",
+ "ran_after": "Test-only: compiled by hand with the base build; the check holds the expected output (Some(1), Some(s), List(1, 1), 1, 3).",
+ "prior_work": "scala/bug#8633 (open since 2.11.0; #8694 closed as duplicate); the ticket links a miniboxing-plugin fix said to port directly. retronym/scala#431 is another Duplicators retyping rejection.",
+ "unsure": "Not attempted: the ticket's fix is in Duplicators' retyping of the synthesized applyOrElse, and was not plainly small; the mechanism in the body follows the ticket and the review, not a debugging session.",
+ "note": "Known since 2.11 (scala/bug#8633); test-only as the brief directs unless the fix is plainly small."
+}

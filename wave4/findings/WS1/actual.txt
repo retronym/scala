@@ -1,0 +1,7 @@
+== default
+compiled
+== -Ydelambdafy:inline
+scalac failed:
+repro/T.scala:3: error: type mismatch;
+ found   : scala.runtime.AbstractFunction0[C] with java.io.Serializable
+ required: () => C forSome { type C <: AnyRef with A; type A <: AnyRef }

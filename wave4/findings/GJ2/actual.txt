@@ -1,0 +1,23 @@
+--- (A) joint: scalac Test.scala *.java, then javac
+repro/Test.scala:4: error: no type parameters for method apply: (elems: A*): List[A] in trait IterableFactory exist so that it can be applied to arguments (Int*)
+ --- because ---
+argument expression's type is not compatible with formal parameter type;
+ found   : Int*
+ required: ?A
+Note that <repeated...> extends Any, not AnyRef.
+Such types can participate in value classes, but instances
+cannot appear in singleton types or in reference comparisons.
+    val l = List(r.rest)
+            ^
+repro/Test.scala:4: error: type mismatch;
+ found   : Int*
+ required: A
+    val l = List(r.rest)
+                   ^
+repro/Test.scala:5: error: value length is not a member of Nothing
+    println(l.head.length)
+                   ^
+3 errors
+scalac failed
+--- (B) separate: javac *.java, then scalac Test.scala
+2

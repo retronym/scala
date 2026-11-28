@@ -1,0 +1,1 @@
+Type the default label of a switch with the type of the match

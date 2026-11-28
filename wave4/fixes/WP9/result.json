@@ -1,0 +1,15 @@
+{
+ "id": "WP9",
+ "outcome": "TEST ONLY",
+ "branch": "review/w4-wp9-empty-list-literal-pattern",
+ "commit": "3f8c7f70f400e6e1319f231ac4f1fd0c28dcc9b3",
+ "workspace": "/Users/jzaugg-virtus/code/.worktrees/scala/w4-fix-q",
+ "files": [
+  "test/files/pos/ycheck-pattern-on-empty-list-literal.scala"
+ ],
+ "failing_before": "type mismatch; found: scala.collection.immutable.::[Int], required: scala.collection.immutable.Nil.type; then 'Tree has erroneous type: (head: Int, next: List[Int]): scala.collection.immutable.::[Int]((a @ _), (tl @ _))'",
+ "ran_after": "n/a, test only",
+ "prior_work": "none checked beyond the review's links; retronym/scala#509",
+ "unsure": "Verified by hand with the w3-base build (older than 4a67cb8202, which lacks the fork's -Ycheck pull requests); on the base itself the test is unverified. With -Werror the compiler exits 1 for all four; without it WP4 and WP8 exit 0 and WP6 and WP9 exit 1 because of the destructive checker fixed by retronym/scala#459.",
+ "note": "Pos test with `//> using options -Ycheck:all -Werror`; belongs with retronym/scala#509."
+}

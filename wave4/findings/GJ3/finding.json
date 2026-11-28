@@ -1,0 +1,21 @@
+{
+  "id": "GJ3",
+  "theme": "generated",
+  "track": "javaparser",
+  "area": "scala.tools.nsc.javac.JavaParsers (annotation arguments)",
+  "title": "A Java annotation parsed from source is dropped when an argument is a constant expression rather than a literal, so @Deprecated(since = \"1\" + \"2\") gives no deprecation warning in joint compilation",
+  "kind": "missing warning",
+  "oracle": "differential against javac: the same Scala source compiled jointly with the Java sources and separately against javac's class files must get the same diagnostics and print the same output; and each Java member typed from source must match the member read from the class file",
+  "generator": "wave4/harness/javaparser (gen.py, Driver.scala), modifier shuffling with annotations between modifiers (the @Deprecated(since = \"1\" + \"2\", forRemoval = false) form, taken out of the generator after this finding to quiet later runs)",
+  "signature": "PROBE separate only: WARNING: ... is deprecated (since 12) / SYM src [@[]] cls [@[Deprecated(since = \"12\", forRemoval = false)]]",
+  "seed": "seed 1, case p01003",
+  "measure": "n/a",
+  "detail": "A Java method or field annotated `@Deprecated(since = \"1\" + \"2\", forRemoval = false)` has no annotation at all on its symbol when the Java file is parsed by scalac, so a Scala use compiled jointly gets no deprecation warning; against the class file it gets 'deprecated (since 12)'. The same annotation with the literal \"12\" is kept, as are a bare @Deprecated and @Deprecated(forRemoval = false). The Java parser accepts only a limited form of annotation argument and discards the whole annotation when an argument is anything else, instead of evaluating it with the constant folder that field initialisers now use. For @Deprecated this loses a warning; for any other annotation the Scala side sees the element as absent. Concatenated strings and references to constants in annotation arguments are common in Java code (names, messages, paths), though less so on @Deprecated itself.",
+  "fix_sketch": "Parse annotation arguments with constantExprOpt and fold them in the namer through JavaConstantFolder, keeping the annotation with the arguments that do fold. Cost: new deprecation warnings in joint builds, which separate builds already get.",
+  "on_integration": "present",
+  "on_base": "same for the missing warning (the base also prints 'since false' and 'since 0' for d, which is B9)",
+  "on_2_13_18": "same for the missing warning (also B9 for d)",
+  "scala3": "not run",
+  "prior": "B9 (the since text of @Deprecated, fixed on the integration build) is a different cause in the same annotation; J5 (annotation argument starting with a parenthesis) is the same parser area",
+  "confidence": "confirmed for the symptom; the description of the parser's handling is from the behaviour of the four variants in the repro, not from reading every branch"
+}

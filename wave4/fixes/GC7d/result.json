@@ -1,0 +1,14 @@
+{
+ "id": "GC7",
+ "outcome": "DESIGN",
+ "branch": "review/w4-gc7-set-map-aliased-source",
+ "commit": "b788c4721c",
+ "workspace": "/Users/jzaugg-virtus/code/.worktrees/scala/w4-fix-b",
+ "files": "test/junit/scala/collection/mutable/HashSetTest.scala, test/junit/scala/collection/mutable/TreeSetTest.scala, test/junit/scala/collection/mutable/LinkedHashSetTest.scala, test/junit/scala/collection/mutable/HashMapTest.scala, test/junit/scala/collection/mutable/TreeMapTest.scala, test/junit/scala/collection/mutable/LinkedHashMapTest.scala, test/junit/scala/collection/mutable/LongMapTest.scala",
+ "failing_before": "All 7 new tests fail: HashSet subtractAll -> HashSet(1, 3); TreeSet -> TreeSet(1, 4, 7, 11, 21, 31); LinkedHashSet -> LinkedHashSet(1, 4, 5, 6, ...); HashMap addAll -> HashMap(1 -> 2, 2 -> 12, 3 -> 22, 4 -> 32, 5 -> 42, ...); TreeMap subtractAll -> TreeMap(1 -> 1, 4 -> 4, 9 -> 9, 13 -> 13, 17 -> 17, 25 -> 25, 29 -> 29); LinkedHashMap -> LinkedHashMap(1 -> 1, 4 -> 4, 5 -> 5, ...); LongMap addAll -> LongMap(5 -> 33, 1 -> 2, 4 -> 23, 2 -> 12, 3 -> 13).",
+ "ran_after": "sbt -java-home ~/.sdkman/candidates/java/21.0.12+1.1-tem \"junit/testOnly scala.collection.mutable.HashSetTest ... LongMapTest\" (the seven classes): Failed 7 (the new tests), Passed 30. Test-only, no MiMa run needed.",
+ "prior_work": "scala/bug#12121 (open, comments lean both ways; NthPortal notes subtractAll copies seem unnecessarily expensive). retronym/scala#535 (addAll tests for HashSet, LinkedHashSet, TreeSet, LinkedHashMap, TreeMap; label no-fix). This branch avoids duplicating those cells.",
+ "stacked_on": "",
+ "unsure": "Judged DESIGN: the snapshot fix costs a copy on s ++= iterator / m ++= view / s --= iterator for non-empty receivers, the main uses of these methods; fail-fast needs modification counts in five classes and breaks iterate-while-modifying code that works today (HashMapTest has such a test). Whether to fold these tests into #535 instead is the coordinator's call.",
+ "note": "Failing tests for addAll/subtractAll of a mapped view of the receiver on HashSet, TreeSet, LinkedHashSet, HashMap, TreeMap, LinkedHashMap and LongMap; the body gives snapshot, fail-fast and document as options."
+}

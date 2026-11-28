@@ -1,0 +1,21 @@
+{
+  "id": "GC3",
+  "theme": "generated",
+  "track": "collections3",
+  "area": "scala.collection.immutable.Range",
+  "title": "drop on the iterator of an empty Range can make it non-empty: it then yields elements outside the range, indexWhere returns a position and segmentLength walks 2^32 elements",
+  "kind": "wrong result",
+  "oracle": "an iterator of an empty range stays empty after drop; BigInt model",
+  "generator": "wave4/harness/collections3/RangeDiff.scala: empty ranges produced directly and by take(0), slice and takeRight(0) near the Int bounds, then iterator.drop / indexWhere(p, from) / segmentLength(p, from)",
+  "signature": "Range | .slice(#,#) | it.hasNext | val -> val; HANG at segmentLength",
+  "seed": "seed 1 (hang at case 494) and seed 2 (case 2148)",
+  "measure": "n/a",
+  "detail": "RangeIterator.drop (src/library/scala/collection/immutable/Range.scala, class RangeIterator) sets _hasNext from a comparison of the new position with lastElement and never consults whether the iterator was already exhausted or initially empty. For an empty range lastElement is not an element; for (Int.MinValue until Int.MinValue) it is Int.MaxValue after wrapping, so drop(1) turns hasNext to true and the iterator yields -2147483647, -2147483646 and so on for 2^32 elements. (4 until Int.MaxValue by -1) and (Int.MaxValue until Int.MaxValue by -1) behave the same. The inherited indexWhere(p, from) and segmentLength(p, from) use iterator.drop(from), so on such an empty range indexWhere(_ => true, 1) returns 1 and segmentLength(_ => true, 1) runs through the 2^32 elements (about 3 s, then returns -1 after its counter wraps; the reproduction waits 1 s). The integration build contains the LI7 change to this method and still fails. Empty ranges with a start at a bound, or with a step pointing away from the end, are needed.",
+  "fix_sketch": "In drop, do nothing when !_hasNext. No compatibility cost.",
+  "on_integration": "present",
+  "on_base": "same",
+  "on_2_13_18": "same",
+  "scala3": "not run (the 2.13 library is shared)",
+  "prior": "LI7 (retronym/scala#558): same method, overflow of the position for a non-empty range; this is the empty-range case that fix leaves",
+  "confidence": "confirmed"
+}

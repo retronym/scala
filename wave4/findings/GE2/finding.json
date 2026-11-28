@@ -1,0 +1,21 @@
+{
+  "id": "GE2",
+  "theme": "generated",
+  "track": "erasure",
+  "area": "scala.tools.nsc.transform.SpecializeTypes",
+  "title": "super.m[X] from a class that fixes a @specialized trait parameter recurses forever when m has its own type parameter",
+  "kind": "miscompile",
+  "oracle": "the program with every @specialized removed prints 2",
+  "generator": "wave4/harness/erasure (Gen.scala, Driver.scala): override with a super call in a class whose parent fixes a specialized parameter, on a method with a method type parameter (-Dw4e.superpoly=true)",
+  "signature": "nospec|diff|java.lang.StackOverflowError/value",
+  "seed": "1031 (round 1)",
+  "measure": "n/a",
+  "detail": "class C extends T0[Int] and overrides m[X](x: X, b: Int) with super.m[X](x, b) + 1, where T0 is specialized in B. new C().m(1, 2) throws StackOverflowError instead of returning 2. The same program without the method type parameter X is wave-one B2: it prints 2 on the integration build and overflows on the base, so the B2 fix does not reach a super call to a polymorphic method. The specialized variant of the trait method forwards to the generic one, which the class overrides, which calls super again.",
+  "fix_sketch": "Extend the B2 fix (rewiring of the super call to the implementation the specialized trait actually holds) to methods with type parameters. No compatibility cost beyond that of the B2 fix.",
+  "on_integration": "present",
+  "on_base": "same",
+  "on_2_13_18": "same",
+  "scala3": "not run",
+  "prior": "B2 (retronym/scala#354) and B13 (retronym/scala#433): same family, not covered by the fix on the integration build; NW3 is the abstract-override variant",
+  "confidence": "confirmed"
+}

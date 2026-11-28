@@ -1,0 +1,5 @@
+scalac failed:
+repro/Test.scala:3: error: type mismatch;
+ found   : x1.type (with underlying type Int)
+ required: A1
+    ({ case x if x > 1 => p }: PartialFunction[Int, B]).lift(2)

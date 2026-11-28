@@ -1,0 +1,21 @@
+{
+  "id": "GF1",
+  "theme": "generated",
+  "track": "fold",
+  "area": "patmat / backend",
+  "title": "A literal match whose scrutinee is an if with a constant condition and a Nothing-typed live branch crashes the back end",
+  "kind": "crash",
+  "oracle": "every form of a generated expression must compile; here all forms with an inline or final-val condition fail and take the unit with them",
+  "generator": "wave4/harness/fold/fold.py --evolved: the ifthrow production (if (c) e else throw ...) as the scrutinee of a match on Int literals, with the condition a literal",
+  "signature": "compiler crash: assertion failed: Bad superClass for class Int: <none> (also: not a method-symbol: value <error>)",
+  "seed": "--evolved --seed 4 --n 150, batch 1, case 8",
+  "measure": "n/a",
+  "detail": "def f: String = (if (false) -1 else ???) match { case 3 => \"b\"; case _ => \"c\" } fails in the jvm phase with 'Bad superClass for class Int: <none>' (BTypesFromSymbols.scala:339). After typer the tree is still the if, typed Int. At the end of patmat the scrutinee has been reduced to its live branch: case val x1: Nothing = ???, and the test is 3.<==: error>(x1), a select of an error symbol that no later phase reports, so the back end meets it. (if (true) ??? else 1) fails the same way. It needs an Int scrutinee: the same shape with String or Boolean patterns, with the if inside a block or try, with a non-constant condition, or with the scrutinee ascribed to Any compiles and runs. The step that drops the dead branch was not located in this spike. Ordinary code reaches it through a constant flag guarding a throw or ??? in a match scrutinee, for example a stubbed branch behind a final val.",
+  "fix_sketch": "Keep the scrutinee's widened static type (Int) for the synthetic val when the reduced tree is Nothing-typed, or do not reduce the if before the match is translated. No compatibility cost: the programs do not compile today.",
+  "on_integration": "present",
+  "on_base": "same",
+  "on_2_13_18": "same",
+  "scala3": "absent (3.7.4 compiles it and it throws NotImplementedError)",
+  "prior": "none found (searched for superClass, Nothing scrutinee, constant condition in the wave one and two lists and wave3/findings)",
+  "confidence": "confirmed"
+}

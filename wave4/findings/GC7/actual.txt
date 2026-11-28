@@ -1,0 +1,11 @@
+HashSet(1, 2, 3).addAll(s.view.map(_ + 1)).size                            = 8
+HashSet(1, 2, 3).subtractAll(s.view.map(_ + 1))                            = HashSet(1, 3)
+TreeSet(1 to 40).subtractAll(s.view.map(_ + 1))                            = TreeSet(1, 4, 7, 11, 21, 31)
+LinkedHashSet(1 to 40).subtractAll(s.view.map(_ + 1)).size                 = 38
+HashMap(1->2, 2->3, 3->4).addAll(m.view.map { case (k, v) => (k + 1, v + 10) }).size = 8
+TreeMap(1->2, 2->3, 3->4).addAll(same)                                     = TreeMap(1 -> 2, 2 -> 12, 3 -> 22, 4 -> 32)
+LinkedHashMap(1->2, 2->3, 3->4).addAll(same)                               = LinkedHashMap(1 -> 2, 2 -> 12, 3 -> 22, 4 -> 32)
+LongMap(1->2, 2->3, 3->4).addAll(same).size                                = 5
+HashMap(1->2, 2->3, 3->4).subtractAll(m.keySet.view.map(_ + 1))            = HashMap(1 -> 2, 3 -> 4)
+ArrayBuffer(1, 2, 3).flatMapInPlace(_ => b.view.take(2))                   = ArrayBuffer()
+ListBuffer(1, 2, 3).flatMapInPlace(_ => b.view.take(2))   (control)        = ListBuffer(1, 2, 1, 2, 1, 2)

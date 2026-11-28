@@ -1,0 +1,21 @@
+{
+  "id": "GJ1",
+  "theme": "generated",
+  "track": "javaparser",
+  "area": "scala.tools.nsc.javac / namer (sealed Java types from source), patmat analysis",
+  "title": "A sealed Java interface without a permits clause, implemented by records in the same file, has no known subclasses in joint compilation: a spurious unreachable-code warning and no exhaustivity warning",
+  "kind": "spurious warning; missing warning; regression",
+  "oracle": "differential against javac: the same Scala source compiled jointly with the Java sources and separately against javac's class files must get the same diagnostics and print the same output; and each Java member typed from source must match the member read from the class file",
+  "generator": "wave4/harness/javaparser (gen.py, Driver.scala), feature S (sealed hierarchies; the shape with nested enum and record implementors and no permits clause)",
+  "signature": "PROBE joint only: WARNING: unreachable code / PROBE separate only: WARNING: match may not be exhaustive / SYM class S: children= empty from source",
+  "seed": "seed 1, case p01002 (first seen); 41 of 300 cases at seed 4",
+  "measure": "n/a",
+  "detail": "For `sealed interface S { record A() implements S {} record B() implements S {} record D() implements S {} }` compiled together with Scala code, `s match { case _: S.A => 0; case _: S.B => 1 }` is reported as having unreachable code at the second case and gets no exhaustivity warning. Against the class files the same match gets the exhaustivity warning naming D(), which is right. The generated code is the same and runs correctly, so the damage is a wrong warning (a failed build under -Werror) and a lost one. The harness's symbol dump shows the sealed type with an empty set of known direct subclasses when read from source. Without a permits clause the namer (Namers.enterJavaClass) takes the permitted subclasses from patmat.javaClassesByUnit, which JavaParsers initialises for a sealed class or interface declaration; replacing the record implementors by final classes makes the warning correct again, and one enum plus records also fails, so records (and enums) declared in the unit appear not to be collected. A sealed interface whose cases are records in the same file is the usual way to write an algebraic data type in Java 17 and later, so mixed projects that match on one from Scala will meet this.",
+  "fix_sketch": "Make records and enums nested in the compilation unit count as candidates for the implicit permitted subclasses, as nested classes and interfaces do; compare with the 2.13.18 behaviour to find the change that dropped them. No compatibility cost: only warnings change.",
+  "on_integration": "present",
+  "on_base": "same",
+  "on_2_13_18": "different: joint compilation reports the exhaustivity warning and no unreachable code, as the separate order does",
+  "scala3": "absent (3.7.4 warns about exhaustivity in joint compilation)",
+  "prior": "none found (PM1 is a wrong unreachable-code warning with a different cause)",
+  "confidence": "confirmed for the symptom on three builds; the cause in the namer is read from the code and from shrinking, not from a debugger"
+}

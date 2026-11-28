@@ -1,0 +1,332 @@
+[
+ {
+  "round": 1,
+  "change": "Triaged the two untriaged -Ycheck signatures of the programs campaign (WP4 new, the other WP1); added subexpression shrinking (hoist a nested group, drop a block statement or case arm), base-build triage of 2.13.18 differences, per-oracle counts, per-program focus on two construct families, and the non-local return family (return from closures, by-name arguments, partial functions, local lazy vals, try/finally, while).",
+  "cases": 431,
+  "seconds": 220,
+  "compile_rate": "99.5% (429 of 431; one WP5 crash and one WP7 crash of the reference)",
+  "signatures_new": 4,
+  "signatures_known": 6,
+  "false_alarms": "0 from the oracles; WP6 (-Ycheck on a return inside a partial function) fired on 30 of 44 -Ycheck samples and is now excluded",
+  "oracle_disagreements": {
+   "opt-local": "3/431",
+   "delambdafy-inline": "0/431",
+   "separate": "0/431",
+   "v18": "131/431 (130 fixed by earlier waves, 1 upstream after 2.13.18)",
+   "ycheck": "37/44",
+   "inline": "0/4"
+  },
+  "known_hits": {
+   "v18-wavefix": 130,
+   "v18-upstream": 1,
+   "WP6": 30,
+   "WP1": 6,
+   "WP2": 1,
+   "WP5": 1
+  },
+  "coverage": {
+   "backend/jvm": [
+    2802,
+    3905
+   ],
+   "backend/jvm/opt": [
+    2470,
+    2955
+   ],
+   "transform": [
+    3989,
+    5328
+   ],
+   "transform/patmat": [
+    1566,
+    2186
+   ],
+   "typechecker": [
+    7071,
+    13867
+   ]
+  },
+  "largest_unreached": [
+   "PlainSkelBuilder.appendToStaticCtor (30)",
+   "CleanUp.transformApplyDynamic (26 of 47)",
+   "PlainBodyBuilder.genStringConcat lambda (26)",
+   "MatchTreeMaking TypeTestTreeMaker.prefixAligns (17)",
+   "MatchTranslation.translateTry (16 of 19)"
+  ],
+  "next": "Pattern-matching family (nested case classes with binders, alternatives, Boolean/name-based/unapplySeq extractors, type patterns on generics, catch patterns) for patmat, unchanged at 1566 lines for three rounds.",
+  "notes": "New: WP4 (-Ycheck, trait lazy val in a by-name argument, from the programs campaign's round 4), WP5 (return with operands on the stack in try/finally: backend crash; VerifyError on 2.13.18 and Scala 3), WP6 (-Ycheck, return in a partial function), WP7 (erasure crash, if of value class constructions with a literal). The two JVMs: 23.9 (JaCoCo) and 102.3 programs/min."
+ },
+ {
+  "round": 2,
+  "change": "Pattern-matching family: nested case classes with binders and alternatives, Boolean, name-based and unapplySeq extractors, type patterns on generic and Any scrutinees, a val pattern, and catch clauses with alternatives and an extractor.",
+  "cases": 93,
+  "seconds": 220,
+  "compile_rate": "98.9% (92 of 93; a generator fault: foldLeft inferred a narrower accumulator type, fixed after the round)",
+  "signatures_new": 0,
+  "signatures_known": 5,
+  "false_alarms": "0; 5 -opt:local compile timeouts (GE6: the larger match-heavy programs push CopyProp past 60 s), counted as GE6",
+  "oracle_disagreements": {
+   "opt-local": "5/93",
+   "delambdafy-inline": "0/93",
+   "separate": "0/93",
+   "v18": "23/93 (21 fixed by earlier waves, 2 upstream)",
+   "ycheck": "10/10 (all WP6)"
+  },
+  "known_hits": {
+   "v18-wavefix": 21,
+   "v18-upstream": 2,
+   "WP6": 10,
+   "GE6": 4,
+   "WP5": 1
+  },
+  "largest_unreached": [
+   "PlainSkelBuilder.appendToStaticCtor (30)",
+   "CleanUp.transformApplyDynamic (26 of 47)",
+   "PlainBodyBuilder.genStringConcat lambda (26)",
+   "BCJGenSigGen.getGenericSignature (25 of 36)",
+   "CleanUp.transformApply (23 of 66)"
+  ],
+  "next": "Local and nested classes and objects capturing variables and each other, member classes using the outer instance, secondary constructors (lambdalift, explicitouter, constructors); new families now nest at depth d-2 and -opt:local skips sources over 45,000 characters, since round 2 ran at 5 and 20 programs/min.",
+  "notes": "patmat 1566 -> 1628 lines. Throughput fell to 5.2 (JaCoCo) and 19.6 programs/min: match-heavy programs grew about 1.5x and -opt:local took 26 s per program.",
+  "coverage": {
+   "backend/jvm": [
+    2731,
+    3905
+   ],
+   "backend/jvm/opt": [
+    1789,
+    2955
+   ],
+   "transform": [
+    3999,
+    5328
+   ],
+   "transform/patmat": [
+    1628,
+    2186
+   ],
+   "typechecker": [
+    6916,
+    13867
+   ]
+  }
+ },
+ {
+  "round": 3,
+  "change": "Local and nested classes and objects capturing variables and each other, member classes using the outer instance, an anonymous SAM class capturing a var, secondary constructors; new families nest at depth d-2; -opt:local skips sources over 45,000 characters.",
+  "cases": 314,
+  "seconds": 220,
+  "compile_rate": "99.7% (313 of 314; the one failure is a WP5 backend crash)",
+  "signatures_new": 1,
+  "signatures_known": 6,
+  "false_alarms": "0; one v18 difference where the base matched neither side was the integration build running a finalizer the base and 2.13.18 skip, i.e. fixed by an earlier wave",
+  "oracle_disagreements": {
+   "opt-local": "2/230 (84 sources over the size cap)",
+   "delambdafy-inline": "0/314",
+   "separate": "0/314",
+   "v18": "39/314 (38 fixed by earlier waves)",
+   "ycheck": "26/33"
+  },
+  "known_hits": {
+   "v18-wavefix": 38,
+   "WP6": 21,
+   "WP1": 2,
+   "WP2": 1,
+   "WP5": 2
+  },
+  "largest_unreached": [
+   "PlainSkelBuilder.appendToStaticCtor (30)",
+   "CleanUp.transformApplyDynamic (26 of 47)",
+   "PlainBodyBuilder.genStringConcat lambda (26)",
+   "BCJGenSigGen.getGenericSignature (25 of 36)",
+   "CleanUp.transformApply (23 of 66)"
+  ],
+  "next": "Stackable traits with abstract override over three or four traits, trait field initialisation order, super[T] calls, @volatile and @transient lazy vals in traits, objects and classes (mixin, fields); run one JVM per round and use the other for shrinking.",
+  "notes": "New: WP8 (-Ycheck, ex.value() of the non-local return handler in a method with a type parameter; 2 hits, first seen in round 1's smoke run). transform 3999 -> 4019. Two JVMs: 27.0 (JaCoCo) and 63.3 programs/min.",
+  "coverage": {
+   "backend/jvm": [
+    2733,
+    3905
+   ],
+   "backend/jvm/opt": [
+    1795,
+    2955
+   ],
+   "transform": [
+    4019,
+    5328
+   ],
+   "transform/patmat": [
+    1628,
+    2186
+   ],
+   "typechecker": [
+    7330,
+    13867
+   ]
+  }
+ },
+ {
+  "round": 4,
+  "change": "Stackable traits (abstract override, three to four traits in random order), trait val initialisation order with an overriding val, super[T] calls through a diamond, @volatile and @transient lazy vals in traits, objects and generated classes.",
+  "cases": 112,
+  "seconds": 240,
+  "compile_rate": "100.0%",
+  "signatures_new": 1,
+  "signatures_known": 2,
+  "false_alarms": "0",
+  "oracle_disagreements": {
+   "opt-local": "0/89",
+   "delambdafy-inline": "0/112",
+   "separate": "0/112",
+   "v18": "19/112 (all fixed by earlier waves)",
+   "ycheck": "9/12"
+  },
+  "known_hits": {
+   "v18-wavefix": 19,
+   "WP6": 8
+  },
+  "largest_unreached": [
+   "PlainSkelBuilder.appendToStaticCtor (30)",
+   "CleanUp.transformApplyDynamic (26 of 47)",
+   "PlainBodyBuilder.genStringConcat lambda (26)",
+   "BCJGenSigGen.getGenericSignature (25 of 36)",
+   "CleanUp.transformApply (23 of 66)"
+  ],
+  "next": "Value classes as scrutinee, closure capture, local lazy val, by-name argument, array and Seq element; default arguments that depend on earlier parameters and named arguments out of order; varargs passed as sequences.",
+  "notes": "One JVM under JaCoCo (27.7 programs/min); the other slot shrank round 3's signatures. patmat 1628 -> 1730 (the pattern constructs of round 2 now meet more of the program), transform 4019 -> 4024. The new signature is a -Ycheck report on a :: pattern, triaged in round 5.",
+  "coverage": {
+   "backend/jvm": [
+    2744,
+    3905
+   ],
+   "backend/jvm/opt": [
+    1794,
+    2955
+   ],
+   "transform": [
+    4024,
+    5328
+   ],
+   "transform/patmat": [
+    1730,
+    2186
+   ],
+   "typechecker": [
+    7243,
+    13867
+   ]
+  }
+ },
+ {
+  "round": 5,
+  "change": "Value classes as match scrutinee, closure capture, local lazy val, by-name argument, array and Seq element; default arguments depending on earlier parameters with named arguments out of order (traced); varargs passed as List, Vector, Seq and Array sequences.",
+  "cases": 124,
+  "seconds": 240,
+  "compile_rate": "99.2% (123 of 124; the failure is a WP5 backend crash)",
+  "signatures_new": 0,
+  "signatures_known": 4,
+  "false_alarms": "0; one reference crash reported 'Error while emitting T1: null' in the in-process driver and ArrayIndexOutOfBoundsException standalone; it shrinks to WP5 (two returns in a try/finally, one in an argument) and is counted there",
+  "oracle_disagreements": {
+   "opt-local": "1/103",
+   "delambdafy-inline": "0/124",
+   "separate": "0/124",
+   "v18": "16/124 (15 fixed by earlier waves, 1 the WP5 program)",
+   "ycheck": "8/13"
+  },
+  "known_hits": {
+   "v18-wavefix": 15,
+   "WP6": 7,
+   "WP5": 2,
+   "WP1": 1
+  },
+  "largest_unreached": [
+   "PlainSkelBuilder.appendToStaticCtor (30)",
+   "CleanUp.transformApplyDynamic (26 of 47)",
+   "PlainBodyBuilder.genStringConcat lambda (26)",
+   "BCJGenSigGen.getGenericSignature (25 of 36)",
+   "CleanUp.transformApply (23 of 66)"
+  ],
+  "next": "Dynamic (selectDynamic, applyDynamic, applyDynamicNamed, updateDynamic), standard and user-defined string interpolators including pattern interpolators, and for comprehensions with pattern generators and filters over Map, List of Option, Vector, Set and Iterator.",
+  "notes": "One JVM under JaCoCo, 30.5 programs/min; the other slot triaged round 4 (WP9). backend/jvm 2744 -> 2770; transform and patmat within sampling noise of round 4.",
+  "coverage": {
+   "backend/jvm": [
+    2770,
+    3905
+   ],
+   "backend/jvm/opt": [
+    1798,
+    2955
+   ],
+   "transform": [
+    4019,
+    5328
+   ],
+   "transform/patmat": [
+    1628,
+    2186
+   ],
+   "typechecker": [
+    7366,
+    13867
+   ]
+  }
+ },
+ {
+  "round": 6,
+  "change": "Dynamic (selectDynamic, applyDynamic, applyDynamicNamed, updateDynamic), f, raw, s and user-defined interpolators including s and user-defined pattern interpolators, and for comprehensions with tuple and Some pattern generators and filters over Map, List of Option, Vector, Set and Iterator with ranges.",
+  "cases": 635,
+  "seconds": 240,
+  "compile_rate": "99.5% (632 of 635; 3 generator faults: Bn.twice's type argument inferred as AnyVal around a return, fixed after the round by passing it explicitly)",
+  "signatures_new": 0,
+  "signatures_known": 7,
+  "false_alarms": "0",
+  "oracle_disagreements": {
+   "opt-local": "2/500",
+   "delambdafy-inline": "0/635",
+   "separate": "0/635",
+   "v18": "64/635 (62 fixed by earlier waves, 2 upstream)",
+   "ycheck": "48/64"
+  },
+  "known_hits": {
+   "v18-wavefix": 62,
+   "v18-upstream": 2,
+   "WP6": 26,
+   "WP9": 15,
+   "WP1": 6,
+   "WP5": 2,
+   "WP8": 1
+  },
+  "largest_unreached": [
+   "PlainSkelBuilder.appendToStaticCtor (30)",
+   "CleanUp.transformApplyDynamic (26 of 47)",
+   "PlainBodyBuilder.genStringConcat lambda (26)",
+   "BCJGenSigGen.getGenericSignature (25 of 36)",
+   "CleanUp.transformApply (23 of 66)"
+  ],
+  "next": "Stop (six rounds). Next: Java-facing members (generic signatures, static forwarders, appendToStaticCtor), symbol and array literals for CleanUp.transformApply, string concatenation of many parts; a -Ycheck-free sample now that the checker reports dominate its disagreements.",
+  "notes": "One JVM under JaCoCo (26.6 programs/min, 110 programs) and, after it, two without (68.4 and 78.7 programs/min, 525 programs). transform 4024 -> 4061. Two rounds without a new signature (5 and 6), but each gained coverage, so the stop rule was not met; the campaign stopped at six rounds.",
+  "coverage": {
+   "backend/jvm": [
+    2738,
+    3905
+   ],
+   "backend/jvm/opt": [
+    1798,
+    2955
+   ],
+   "transform": [
+    4061,
+    5328
+   ],
+   "transform/patmat": [
+    1628,
+    2186
+   ],
+   "typechecker": [
+    7165,
+    13867
+   ]
+  }
+ }
+]

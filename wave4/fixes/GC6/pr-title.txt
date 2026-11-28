@@ -1,0 +1,1 @@
+Test updateWith whose function modifies a HashMap or LinkedHashMap

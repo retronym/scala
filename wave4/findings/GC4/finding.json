@@ -1,0 +1,21 @@
+{
+  "id": "GC4",
+  "theme": "generated",
+  "track": "collections3",
+  "area": "scala.collection.immutable.Range",
+  "title": "Range.lastIndexOf(elem, end) and indexOf(elem, from) return a negative index other than -1 for an element whose position exceeds Int.MaxValue",
+  "kind": "wrong result",
+  "oracle": "indexOf and lastIndexOf return a valid index or -1; BigInt model",
+  "generator": "wave4/harness/collections3/RangeDiff.scala: ranges of more than Int.MaxValue elements, element taken from the model at a random position, explicit from/end argument",
+  "signature": "Range | | lastIndexOf.end | val -> val; Range | .reverse(#,#) | indexOf.from | val -> val",
+  "seed": "seed 2, 100 s run; case number not recorded",
+  "measure": "n/a",
+  "detail": "Range.posOf (src/library/scala/collection/immutable/Range.scala) computes ((i.toLong - start) / step).toInt. For a range of more than Int.MaxValue elements the position of an element can exceed Int.MaxValue and the narrowing wraps it to a negative number. lastIndexOf(elem, end) then returns it because pos <= end holds: (Int.MinValue to 51).lastIndexOf(3, 1073741823) is -2147483645. indexOf(elem, from) returns it when from is negative enough. Callers that test the result against -1 take it for a hit. Such ranges cannot be indexed (length throws), so this needs code that searches an oversize range, which is unusual.",
+  "fix_sketch": "Keep the position as Long in posOf and return -1 (or throw as length does) when it does not fit in Int. No compatibility cost.",
+  "on_integration": "present",
+  "on_base": "same",
+  "on_2_13_18": "same",
+  "scala3": "not run (the 2.13 library is shared)",
+  "prior": "LI1 (retronym/scala#555) moved this computation to Long; the narrowing is what is left",
+  "confidence": "confirmed"
+}

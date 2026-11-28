@@ -1,0 +1,13 @@
+{
+ "id": "WL3",
+ "outcome": "DESIGN",
+ "branch": "review/w4-wl3-asjava-null-key-unboxed",
+ "commit": "0992437401",
+ "workspace": "/Users/jzaugg-virtus/code/.worktrees/scala/w4-fix-j",
+ "files": "test/junit/scala/collection/convert/CollectionConvertersTest.scala",
+ "failing_before": "sbt junit/testOnly scala.collection.convert.CollectionConvertersTest: \"asJava of an Int or Long keyed collection does not read a null key as 0\" failed: java.lang.AssertionError: expected:<false> but was:<true> (mutable.BitSet(0, 5).asJava.contains(null)).",
+ "ran_after": "Same run: the other 5 tests in CollectionConvertersTest pass; the new test fails as intended (test-only branch).",
+ "prior_work": "None in scala/bug (9676, 11894 concern other methods) or the branch index. retronym/scala#540 (Buffer.asJava.remove) handles null correctly and is not a duplicate.",
+ "unsure": "The test accepts false/null or NullPointerException for each null probe, so it does not prejudge the choice; it does require add(null)/put(null, v) to leave key 0 alone. Only the first failing assertion is shown by JUnit; the later ones were reproduced by the review, not individually by me.",
+ "note": "Test-only. The wrapper cannot tell a primitive element type from one that holds null; options in the body are a null-only iteration fallback (correct for all collections, O(n) for null probes) or type tests for the known Int/Long keyed collections."
+}

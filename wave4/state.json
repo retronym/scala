@@ -1,0 +1,998 @@
+{
+  "phases": [
+    [
+      "Wave four: design and first spike",
+      "done",
+      "Generated inputs checked by oracles, steered by JaCoCo coverage; the loop is borrowed from Datadog's Ephyra, rebuilt on the JVM. Design note, harnesses and tools: retronym/scala#745 (wave4/README.md). First spike: differential harnesses for the Seq, buffer, set and map APIs on the integration build of earlier draft fixes"
+    ],
+    [
+      "Wave four: parallel spikes",
+      "done",
+      "Four tracks of about 45 minutes each on the integration build: Java sources through scalac's parser against javac (GJ), a third collections round (GC), primitive expressions in many embeddings (GF), generated Scala programs compiled several ways that must agree (GE). 22 findings with the first spike, each re-run by the coordinating session except the two unshrunk crashes GE7 and GE8; none independently reviewed, none with a pull request. Findings came in each track's first cases; more volume of the same kind found nothing"
+    ],
+    [
+      "Wave four: independent review and pull requests",
+      "done",
+      "All 39 findings were re-run and judged by a reviewer that did not write them; every one links to a fork pull request (retronym/scala#747 to #785). 28 hold fixes, each read by a second independent reviewer, 9 of them reworked after that read; the rest hold a failing test and the options. #758 and #759 stay drafts on an owner decision; #747, #748 and #753 were folded or promoted by the owner's account"
+    ],
+    [
+      "Wave four: integration build",
+      "done",
+      "Local branch integration/w4-draft in the worktree w4-int: the wave-three integration build plus the 17 wave-four fix pull requests, no conflicts. The campaign tracks hunt on it from their next round. Details in wave4/INTEGRATION.md"
+    ],
+    [
+      "Wave four: steered campaign",
+      "done",
+      "Seven campaigns on five tracks: Java sources against javac, three rounds of generated Scala programs on a shared in-process driver, expressions in new embedding contexts, library files still unreached, and existing run tests as seeds. 17 findings (WJ1, WL1 to WL3, WX1, WP1 to WP10, WS1, WS2), each reviewed independently; the last programs campaign found one compile error and no miscompile in 1,692 programs. Coverage per round is in wave4/rounds and the treemaps in wave4/reports"
+    ]
+  ],
+  "agents": [
+    [
+      "w4 ci triage 3",
+      "Sonnet",
+      "Why the validate check of #784 failed",
+      "done",
+      "#784 failed because its new JUnit test did not compile under the build's fatal infer-any lint (a list mixing opcodes and names); not a JDK difference. Fixed with a one-word commit on top"
+    ],
+    [
+      "w4 diff review #785 (2)",
+      "Opus",
+      "Second read of the WP7 fix, now in GlbLubs",
+      "done",
+      "ok, low risk. The new lub case is reached only from erasure's typing of conditionals and costs an ordinary lub one type test. Every crash shape, including the two regressions of the first version, compiles and runs with output equal to Scala 3.7.4's; the standard library and 116 value-class tests are byte-identical with and without -opt:local"
+    ],
+    [
+      "w4 rework #785",
+      "Opus",
+      "Rework of retronym/scala#785: make the lub of erased value types succeed",
+      "done",
+      "The fix now lives in the lub: two erased value types of one class merge to that class with the widest underlying type, or Object for unrelated references. The change to constructions is reverted, so bytecode for code that compiled before is identical to the base. An argument of type Nothing is handled separately, which fixes two base failures. Output matches Scala 3.7.4"
+    ],
+    [
+      "w4 ci triage 2",
+      "Sonnet",
+      "Fork CI results for retronym/scala#747 to #785",
+      "done",
+      "Of 38: 26 pass, 7 still running, 5 fail only in the deliberately failing tests they add (#749, #761, #765, #767, #772). The allocation tests of #758 to #760 pass on JDK 8. #757 passes because its test is skipped on JDK 8. #747, #748 and #753 were closed by the owner's account: the first two folded into retronym/scala#769 (now scala/scala#11426), the third promoted as scala/scala#11427"
+    ],
+    [
+      "w4 verify WP10",
+      "Sonnet",
+      "Check WP10 against #750 and add its test",
+      "done",
+      "#750 fixes WP10: with its RefChecks over the base build the program compiles and prints the expected output. A run test for a sequence argument in the surviving branch was added to #750 as a commit on top"
+    ],
+    [
+      "w4 diff review #785",
+      "Opus",
+      "Independent read of the WP7 fix in erasure",
+      "done",
+      "defect, medium risk. Every crash shape in the finding now compiles and the standard library and 116 value-class tests are byte-identical, but (if (c) new G(s) else new G[CharSequence](s)).x compiled on the base and now crashes, and branches that are vals of different instantiations still crash on both. A cast back to the argument's own type also keeps a checkcast it used to drop"
+    ],
+    [
+      "w4 diff review #784",
+      "Opus",
+      "Independent read of the WP5 fix in the back end",
+      "done",
+      "ok, low risk. 62 cases with a return in operand position give the same result and finalizer trace as hand-written equivalents, under default flags, -opt:local and the inliner; the base crashes on the same file. The standard library and 1,104 run and jvm tests are byte-identical. Cost: 4 ms on the library, 66 ms for 500 generated methods; the frame limit of GE6 cannot be hit because the analyzer's limits are already unbounded. Suggests closing #618 and moving its test here. Seen in passing on the base: 1L + lock.synchronized { intExpr } fails verification"
+    ],
+    [
+      "w4 rework #779",
+      "Opus",
+      "Rework of retronym/scala#779 after diff review",
+      "done",
+      "Only binders nested inside the checked type count as bound; a definition's own type parameters go through the owner check again. A new JUnit test shows a shared type-parameter symbol is still reported. Left as options for the owner: nested binders are not scoped to their binder (the same limit #459 has for existentials)"
+    ],
+    [
+      "w4 fix WP7",
+      "Opus",
+      "Fix for WP7: erased value type with a constant argument",
+      "done",
+      "WP7 fixed (retronym/scala#785, draft): a value-class construction is typed with the class's erased underlying type, not the argument's own type. The reviewer's suggestion to widen would not cover a narrower non-constant argument, null, or a literal-typed class, all of which crash the base too. The standard library and 137 value-class tests compile byte-identical"
+    ],
+    [
+      "w4 fix WP5",
+      "Opus",
+      "WP5 (scala/bug#10183): a return in operand position under try/finally",
+      "done",
+      "WP5 (scala/bug#10183) fixed in the back end (retronym/scala#784, draft): each return that jumps to a cleanup is recorded, an analysis after the method is emitted finds the operand stack there, and pops are inserted. The standard library compiles byte-identical. It composes with #618 and makes #618 unnecessary for correctness. Compile-time cost of the per-method analysis not measured"
+    ],
+    [
+      "w4 tests WP4 WP6 WP8 WP9",
+      "Sonnet",
+      "Test-only branches for the four -Ycheck findings",
+      "done",
+      "Four test-only pull requests (retronym/scala#780 to #783), each a pos test under -Ycheck:all -Werror. The failure was checked against the older base build by hand, not through partest"
+    ],
+    [
+      "w4c programs3",
+      "Opus",
+      "Campaign 3: generated programs, wrong-result and crash oracles, up to five rounds",
+      "done",
+      "5 rounds, 1,692 programs, about 21,000 compilations, compile rate 97% or more. 1 finding (WP10: a sequence argument in the surviving branch of a constant if is rejected; the current version of retronym/scala#750 is believed to fix it). No miscompile, no new crash, no new VerifyError or linkage error. 2.13.18 differs on 534 programs, 533 of them fixed by earlier waves. The hunter recommends no further campaign on this generator."
+    ],
+    [
+      "w4 review campaign 4",
+      "Opus",
+      "Independent review of WP4 to WP9",
+      "done",
+      "WP4, WP7, WP8, WP9 real; WP5 and WP6 real and known (scala/bug#10183; the rest of retronym/scala#460). WP5 critical, WP7 high, the four -Ycheck reports low. WP7: (if (ok) Meters(d) else Meters(0)).value crashes erasure since 2.11.0, because a value-class construction with a literal argument keeps the literal's constant type. WP5: the crash against a VerifyError on 2.13.18 comes from the upstream ASM 9.11.1 upgrade, not a draft fix"
+    ],
+    [
+      "w4 diff review campaign 3",
+      "Opus",
+      "Independent read of #778 and #779",
+      "done",
+      "#778 ok: fun.tpe is always a FunctionN type reference here; under -Ydelambdafy:inline 6 of 3,918 library classes and 9 of about 330 run tests differ, each either a constant-bodied lambda now extending a specialized AbstractFunctionN or a local class named as Object in a generic superclass; apply methods and serialization are unchanged, and the changed check file is a correction. #779 concern: the new rule also counts the checked symbol's own outer PolyType, so a shared type-parameter symbol could go unreported"
+    ],
+    [
+      "w4 diff review #777",
+      "Opus",
+      "Independent read of the WP3 fix in erasure",
+      "done",
+      "ok, low risk. About 70 shapes (field and lazy val initialisers, constructor and by-name arguments, guards, captures, labels, nested boxes) run correctly with the fix under default flags, -opt:local, the inliner, -Ydelambdafy:inline and -Xcheckinit, and each fails on the base. The standard library and 286 tests mentioning AnyVal or try are byte-identical. One neighbour stays open on both compilers: a try as a string-concatenation operand (scala/bug#12993). Merging with #526 needs localOwner in two more places"
+    ],
+    [
+      "w4 diff review campaign 2",
+      "Opus",
+      "Independent read of #774, #775, #776 and re-read of #773",
+      "done",
+      "All four ok, low risk. #774: every result type in question now yields (); a null from a non-void method, primitives and bytecode for AnyRef-bounded results are unchanged; Scala 3 still returns null, so upstreaming is an owner decision. #775: the standard library is byte-identical; one compiler method is laid out with one fewer goto. #776: a wrong member cannot be picked. #773 rework: the array case did fail before and is fixed"
+    ],
+    [
+      "w4 fix campaign 3",
+      "Opus",
+      "Fixes for WS1, WS2",
+      "done",
+      "WS1 fixed (retronym/scala#778: the anonymous function class takes its type arguments from the function type, as 2.11 did; a lambda with a constant body extends the specialized AbstractFunction0$mcI$sp again, which changes one existing check file). WS2 fixed (#779, stacked on #459: type parameters bound in the checked type count as bound; the finding's program checks in 6 s). Both drafts until read"
+    ],
+    [
+      "w4 rework #773",
+      "Opus",
+      "Rework of retronym/scala#773 after diff review",
+      "done",
+      "The new typing path now applies only to Java-defined annotation classes, so Scala annotations used from Java sources are typed as on the base; a constant that Java's assignment conversion rejects is a type-mismatch error again. Pushed as a commit on top"
+    ],
+    [
+      "w4 fix WP3",
+      "Opus",
+      "Fix for WP3: value-class box around an unlifted try",
+      "done",
+      "WP3 fixed (retronym/scala#777, draft until read): when the expression boxed into a value class contains a try with a catch, erasure evaluates it into a local first. The reviewer's account was confirmed with javap. The whole standard library and 51 value-class and try tests compile to byte-identical class files with the fix. Also found on the base: a lambda inside such a try crashes the back end; the fix covers it"
+    ],
+    [
+      "w4 fix campaign 2",
+      "Opus",
+      "Fixes for WX1, WP1, WP2",
+      "done",
+      "WX1 fixed (retronym/scala#774: a null from a void method becomes () when the refinement's result type is Any, AnyVal or an unbounded type parameter; bytecode for AnyRef-bounded results unchanged), WP1 fixed in part (#775: the default label takes the match's type; one variant still fails -Ycheck), WP2 fixed (#776: the Select is rebound to the new refinement's member). All three are drafts until read"
+    ],
+    [
+      "w4 diff review java annotations",
+      "Opus",
+      "Independent read of the annotation element-value fix",
+      "done",
+      "#773: defect, low risk. On about 6,300 real Java files (eight JDK modules, jackson, guava, jmh, bsp4j) errors and annotations are the same as the base except 45 jdk.jfr annotations with constant-expression arguments that are now kept; 1,500 generated constant fields get identical types. The defect: a Scala ConstantAnnotation used from Java source with an array argument is now unmappable. Also, arguments javac rejects are now dropped silently where the base reported a type mismatch"
+    ],
+    [
+      "w4 review campaign 3",
+      "Opus",
+      "Independent review of WS1, WS2",
+      "done",
+      "Both real. WS1 medium, a regression from 2.12: it also fails without the flag for a lambda in a super-constructor argument, and mdoc and Scastie set -Ydelambdafy:inline for every compile; the anonymous class takes its type argument from the body where 2.11 took it from the function type. WS2 low: slow, not a hang; the tree checker falsely reports type parameters bound inside the inferred lub type (scala/bug#10908) and renders an 834 KB signature per report; not a defect of any draft fix"
+    ],
+    [
+      "w4c programs2",
+      "Opus",
+      "Campaign 2: generated programs, constructs combining, up to six rounds",
+      "done",
+      "6 rounds, 1,709 programs, about 23,000 compilations, compile rate 98.9% or more. 6 findings: two compiler crashes (WP5: a return in a method argument inside try/finally with another return crashes frame computation; WP7: (if (c) V0(b) else V0(7)) == V0(5) crashes erasure) and four -Ycheck reports (WP4, WP6, WP8, WP9). 2.13.18 differs on 292 programs, 285 of them already fixed by earlier waves. -Ydelambdafy:inline and separate compilation never differed. Rounds 5 and 6 found nothing new but still added coverage."
+    ],
+    [
+      "w4 review campaign 2",
+      "Opus",
+      "Independent review of WX1, WP1, WP2, WP3",
+      "done",
+      "4 real: WP3 critical, WX1 medium, WP1 and WP2 low. WP3 is a regression in 2.13.9 and 2.12.17 from scala/scala#10028 and needs no partial function: xs.collect { case x => x match { ...; case s: String => try Meters(s.toDouble) catch {...} } } fails to verify; an older route through a type ascription fails back to 2.11. The fix belongs in erasure, separate from #605. WX1: the specification says (). WP1 and WP2 are real ill-typed trees, not checker false positives"
+    ],
+    [
+      "w4 diff review library 2",
+      "Opus",
+      "Independent read of #770 and #771",
+      "done",
+      "#770 and #771 ok, low risk. #770: the snapshot of a read-only map is sound and a four-thread stress showed the read-only view never changes; two minor points (some no-op bulk calls return normally where single-key ones throw; getOrElseUpdate runs its default before throwing). #771: no library path indexes an accumulator through apply or update, so the check costs one comparison on random access only"
+    ],
+    [
+      "w4 fix library 2",
+      "Opus",
+      "Fixes for WL1, WL2, WL3",
+      "done",
+      "WL1 fixed (retronym/scala#770: mutators on a read-only TrieMap snapshot throw UnsupportedOperationException, snapshot copies), WL2 fixed (#771: bounds checks in the four accumulators, cost not benchmarked), WL3 test only as a design question (#772). The two fixes are drafts until read"
+    ],
+    [
+      "w4 fix java annotations",
+      "Opus",
+      "One fix for WJ1, GJ3 and J5: Java annotation element values",
+      "done",
+      "One fix for WJ1, GJ3 and J5: the Java parser reads every annotation element value with the constant-expression parser, including primitive, void and array class literals, and the typer folds them with Java semantics. A JUnit test compares annotations read from source with those read from javac's class files over every element-value form. It replaces the approach of #288 and includes the tests of #757 and #288"
+    ],
+    [
+      "w4 review campaign 1",
+      "Opus",
+      "Independent review of WJ1, WL1, WL2, WL3",
+      "done",
+      "4 real, none reported before: WL1 and WL3 medium, WJ1 and WL2 low. WL1 is worse than reported: every mutator on a read-only TrieMap snapshot other than clear spins forever. WL3 unboxes a null key in the collection's erasure bridge, and the hunter's fix sketch is wrong. One fix in JavaParsers.annotation covers WJ1, GJ3 and wave-one J5"
+    ],
+    [
+      "w4 diff review #750 (4)",
+      "Opus",
+      "Fourth diff review of retronym/scala#750",
+      "done",
+      "ok. Every earlier review input passes; the whole standard library, 366 run and pos tests containing a match, and a 55-method corpus of ordinary matches compile to byte-identical class files, and the selector wrap never fires on them. One addition asked for in the description, now made: a match on a narrowed if now gets exhaustivity warnings against the declared type"
+    ],
+    [
+      "w4 rework #750 (4)",
+      "Opus",
+      "Fourth pass on retronym/scala#750 with a structural approach",
+      "done",
+      "Fourth version pushed as a commit on top: no transformer state; the match wraps its selector when refchecks narrowed its type, and the if wraps only a Nothing branch or a null branch of an array-typed if"
+    ],
+    [
+      "w4 diff review rework 2",
+      "Opus",
+      "Re-read of the reworked #750 and #763",
+      "done",
+      "#763 ok (the new tie-break cannot change a program that compiled before; standard library and 113 specialization tests byte-identical to the base). #750 defect again: a scrutinee if that reduces to another constant if now fails to expand, a regression from the second version"
+    ],
+    [
+      "w4c javaparser",
+      "Opus",
+      "Campaign: Java sources against javac, constructs not yet generated",
+      "done",
+      "4 rounds, 700 cases, 1 finding (WJ1: a Java annotation read from source is dropped when an argument is a primitive or array class literal; same bail-out as GJ3). Rounds 3 and 4 found nothing new; what remains unreached in the Java parser is error handling, which needs invalid inputs and a both-reject oracle."
+    ],
+    [
+      "w4c programs",
+      "Opus",
+      "Campaign: generated Scala programs at volume, shared driver first",
+      "done",
+      "Shared in-process driver built (about 100 programs a minute, from 6). 4 rounds, 1,250 programs, compile rate 99% or more. 3 findings: WP3 (VerifyError for a partial function returning a value class with a try in a match arm; the compiler crashes with -opt:local), WP1 and WP2 (-Ycheck complaints on correct programs). Every added construct gave a new signature in its first round. In 68 programs 2.13.18 fails and the integration build is right."
+    ],
+    [
+      "w4c fold",
+      "Opus",
+      "Campaign: expressions and statements in new embedding contexts",
+      "done",
+      "3 rounds, about 8,100 cases over 170 embedding contexts, each filled four ways with the optimizer on and off and checked against a hand-written expected trace: no wrong value and no wrong evaluation order. 1 finding from a hand probe where coverage pointed (WX1: a structural call to a Unit method through a refinement member typed Any returns null instead of ()). CleanUp went from 131 to 278 of 346 lines, Fields from 113 to 260 of 276."
+    ],
+    [
+      "w4c library",
+      "Opus",
+      "Campaign: library files still unreached, ordinary usage against models",
+      "done",
+      "3 rounds, 9.7 million checks, 3 findings: WL1 (snapshot of a read-only TrieMap snapshot throws NullPointerException), WL2 (accumulators accept reads and writes at index == length), WL3 (asJava views of Int- and Long-keyed collections treat null as 0). 18 false alarms, all oracle mistakes fixed before the measured runs. Coverage of 31 library files rose each round. Iterator, LazyList evaluation counts, Sorting, BigInt and BigDecimal against java.math gave no difference."
+    ],
+    [
+      "w4c seeds",
+      "Sonnet",
+      "Campaign: existing run tests as seeds under rewrites",
+      "done",
+      "944 single-file run and jvm tests under optimizer, delambdafy, @specialized removed, separate compilation, -Xsource:3, the inliner, -Ycheck and against 2.13.18: no program result changed. 2 findings: WS1 (-Ydelambdafy:inline rejects a valid lambda whose body type is an existential over local classes), WS2 (-Ycheck:typer does not finish on if (b) LazyList.empty else Nil; needs a second look). Coverage of transform did not move across four rounds, so this corpus is exhausted for these rewrites."
+    ],
+    [
+      "w4 integration",
+      "Opus",
+      "Integration build with the wave-four fixes merged (w4-int)",
+      "done",
+      "w4-int: all 17 wave-four fix pull requests merged onto the wave-three integration build with no conflicts and built first time. Every fixed finding prints its expected output on it except GA1's ArrayBuffer.addAll lines, which still throw ConcurrentModificationException (no wave-four pull request touches ArrayBuffer.addAll). Partest, JUnit and MiMa were not run on the composed build"
+    ],
+    [
+      "w4 ci triage",
+      "Sonnet",
+      "Fork CI results for retronym/scala#747 to #768",
+      "done",
+      "Of 22, nine had finished: six pass (#748, #751, #752, #754, #755, #757), #749 and #761 fail only in the tests they add (no-fix, as intended), and #747 failed the fatal-warnings build on a deprecated Numeric.signum, fixed with a second commit. #757 passes because its test needs Java 9 and is skipped on JDK 8. Thirteen were still pending"
+    ],
+    [
+      "w4 rework #750",
+      "Opus",
+      "Second rework of retronym/scala#750; bodies of #758 and #759",
+      "done",
+      "#750 now sends a reduced branch through the transformer, so a match that is the surviving branch of another reduced if is handled; tests cover three levels of nesting, lambdas, by-name arguments, try and guards. The branch's own node now gets the checks the base skipped. Bodies of #758 and #759 name the cost of copying first"
+    ],
+    [
+      "w4 rework specialization",
+      "Opus",
+      "Rework of retronym/scala#763 after diff review",
+      "done",
+      "#763 now picks the specialized variant of a super call by symbol, with tests for overloads differing in arity and in parameter type under trait and class parents. The same commit also fixes a separate crash on the base for overloads that differ only in an unspecialized parameter type, which could be split out"
+    ],
+    [
+      "w4 diff review rework",
+      "Opus",
+      "Second read of the reworked #750, #756, #758, #759, #760",
+      "done",
+      "2 ok (#756, #760), 2 concern (#758, #759: a source whose termination depends on the receiver growing now never ends, which belongs in the choice between copying first and failing fast), 1 defect (#750: a match that is the surviving branch of another reduced if is still mis-handled). The bytecode concern on #750 is settled"
+    ],
+    [
+      "w4 diff review specialization",
+      "Opus",
+      "Independent read of #762, #763, #764, #766, #768",
+      "done",
+      "4 ok (#762, #764, #766, #768), 1 defect (#763: selecting the variant by name crashes in erasure when the method is overloaded). For all five, compiling the whole standard library and 113 existing specialization tests with the patched compiler gives class files byte-identical to the base. #764 adds an on-by-default warning that could break a -Werror build with def m[@specialized X](q: => X); no such signature exists in scala/scala"
+    ],
+    [
+      "w4 rework compiler",
+      "Opus",
+      "Rework of retronym/scala#750 and #756 after diff review",
+      "done",
+      "#756 now accepts unary operators on literals, with a pos test over every constant-expression form of SLS 6.24. #750 wraps only a Nothing branch or a match scrutinee whose type differs by more than a literal type; a bytecode test and javap comparison show ordinary constant ifs compile as before. Left open in #750: an if inside a block used as a scrutinee keeps the old narrowing"
+    ],
+    [
+      "w4 rework self-aliasing",
+      "Opus",
+      "Rework of retronym/scala#758, #759 and #760 after diff review",
+      "done",
+      "#758, #759 and #760 reworked to one rule that no longer trusts Stream, has no empty-receiver shortcut, and leaves Option, List and other strict disjoint sources uncopied (asserted with AllocationTest). Copy first against fail fast, and the type test in Growable.addAll, are stated as options for the owner"
+    ],
+    [
+      "w4 diff review compiler",
+      "Opus",
+      "Independent read of #750, #751, #752, #753, #756",
+      "done",
+      "3 ok (#751, #752, #753), 1 concern (#750: correct, but the Typed wrap changes bytecode of ordinary code), 1 defect (#756: rejects unary operators on literals such as !true and ~1, which 2.13.18 accepts)"
+    ],
+    [
+      "w4 diff review library",
+      "Opus",
+      "Independent read of #747, #748, #754, #755, #758, #759, #760",
+      "done",
+      "4 ok (#747, #748, #754, #755), 3 defect (#758, #759, #760: immutable.Stream passes the trusted-source rule, the empty-receiver shortcut is unsound for a lazily concatenated source, and Option is copied on safe hot paths)"
+    ],
+    [
+      "w4 fix java+expr",
+      "Opus",
+      "Fixes for GJ1 to GJ4, GF1, GF2",
+      "done",
+      "GJ1, GJ2, GJ4, GF1 and GF2 fixed, GJ3 test only (a sound fix needs the constant-expression parser in annotation element values and would replace retronym/scala#288). GF1 wraps the reduced branch in a Typed with the type of the if; the narrowing also broke match expansion on a String branch and gave a false unreachable-code warning. GF2 rejects non-constant annotation arguments that 2.13.0 to 2.13.18 accept, as 2.12 and Scala 3 do"
+    ],
+    [
+      "w4 fix programs",
+      "Opus",
+      "Fixes for GE1 to GE8: specialization and the inliner's frame limit",
+      "done",
+      "GE1, GE2, GE3 with GE8, GE5 and GE7 fixed; GE6 and GE4 test only. GE3 makes a by-name parameter count in neither view of specialization, since counting it would add variants old binaries lack; GE7 is a one-line change of owner for copied constructor statements and covers scala/bug#7574 and #10096; GE6 sets out three options for the ASM frame limit. Only the new tests and the specialization partests were run"
+    ],
+    [
+      "w4 fix ranges",
+      "Opus",
+      "Fixes for GC1 to GC6: range iterators, updateWith",
+      "done",
+      "GC1 and GC2 fixed in one pull request (knownSize counts in Long and reports unknown when it cannot fit), GC3, GC4 (stacked on retronym/scala#555) and GC5 fixed, GC6 test only as a design question: the worker also found that an absent key whose function grows the table lands in the wrong bucket"
+    ],
+    [
+      "w4 fix self-aliasing",
+      "Opus",
+      "Fixes for GC7 by collection class: ArrayDeque, UnrolledBuffer, ArrayBuffer.flatMapInPlace, sets and maps",
+      "done",
+      "GC7 fixed for buffers in three pull requests and written up as a design question for sets and maps; GA1 covered. A non-empty ArrayDeque now copies a view or iterator source once in addAll, and ArrayBuffer and ListBuffer return the right result where they threw ConcurrentModificationException. Cost of the extra copy not measured"
+    ],
+    [
+      "w4 review library",
+      "Fable",
+      "Independent review of GA1 and GC1 to GC7",
+      "done",
+      "6 real (GC1 to GC6), GC7 real and known (scala/bug#12121), GA1 a duplicate of GC7. High: GC7. Medium: GC1, GC2, GC6. Low: GC3, GC4, GC5. GC6 is a regression in 2.13.1 and worse than reported (size becomes -1 when the function removes the key and returns None); GC1 and GC2 are understated (a three-element Int range iterator gives an empty list)"
+    ],
+    [
+      "w4 review java+expr",
+      "Fable",
+      "Independent review of GJ1 to GJ4, GF1, GF2",
+      "done",
+      "6 real. GJ1 (medium, regression in unreleased 2.13.19 from scala/scala#11329): the Java parser tests the SEALED token number where Flags.SEALED is meant. GF1 (high, since 2.13.0): RefChecks replaces a constant-condition if by its branch without keeping its type; an ordinary feature-flag program crashes the back end. GJ2 medium and understated. GJ3, GJ4, GF2 low"
+    ],
+    [
+      "w4 review programs",
+      "Fable",
+      "Independent review of GE1 to GE8",
+      "done",
+      "5 real (GE1, GE2, GE3, GE5, GE6), GE4 and GE7 real and known (scala/bug#8633, #7574, #10096), GE8 a duplicate of GE3. GE6 is a regression in unreleased 2.13.19 from the ASM 9.11.1 upgrade (scala/scala#11327): a hand-written method of 220 try/catch lines crashes the inliner. GE1, GE3 and GE8 are regressions from 2.12. GE7 and GE8 shrunk by the reviewer"
+    ],
+    [
+      "w4 collections",
+      "Fable",
+      "Seq, buffer, set and map APIs against List and reference models",
+      "done",
+      "1 finding (GA1). Read-only Seq API: 89,103 calls on 30 implementations, no value difference. Sets and maps: only the known unfixed range-view defect LB2, which masks everything else on those views. Lines of scala.collection reached: 24.2% after round one, 55.3% after round two; the existing scalacheck suite reached 47.0% on 19 November"
+    ],
+    [
+      "w4 javaparser",
+      "Fable",
+      "Generated Java 21 sources: joint compilation against javac's class files",
+      "done",
+      "4 findings (GJ1 to GJ4): a sealed interface with record implementors loses its exhaustivity warning in joint compilation (regression since 2.13.18), a varargs record component is typed Int* from source, a @Deprecated with a constant-expression argument loses its warning, an enum body of a lone comma is rejected. 300 cases in 92 seconds; all findings within the first 70"
+    ],
+    [
+      "w4 collections3",
+      "Fable",
+      "Coverage-chosen library files under ordinary usage; Range against exact arithmetic",
+      "done",
+      "7 findings (GC1 to GC7), all from the Range model and the re-entrancy matrix built before the track was re-aimed: knownSize overflow in Range and NumericRange iterators, an empty Range iterator revived by drop, updateWith losing the update, and self-aliasing in sets and maps recorded as one open class with GA1. After re-aiming at coverage: about 20 million checks of ordinary usage of Vector, ArrayOps, StringOps, the string parsers and the hash tries per run, no signature; ArrayOps from 96 to 484 of 618 lines, StringParsers from 0 to all 139"
+    ],
+    [
+      "w4 erasure",
+      "Fable",
+      "Generated Scala programs compiled several ways that must agree",
+      "done",
+      "8 findings (GE1 to GE8): crashes and wrong rejections where @specialized meets super calls, by-name overrides, partial functions and local lazy vals; an inliner budget failure new since 2.13.18 (GE6); two unshrunk crashes (GE7, GE8). The generator compiles 17 of 17 programs without @specialized and 28 of 40 with it at ordinary weight; the general grammar ran only 17 programs. One round reaches 69% of transform, 68% of patmat, 69% of backend.jvm, 47% of typechecker"
+    ],
+    [
+      "w4 fold",
+      "Fable",
+      "Primitive expressions: constant-folded against evaluated at run time, boxed against unboxed, optimizer on against off",
+      "done",
+      "2 findings (GF1, GF2). About 3,100 expression trees, each printed in up to 22 forms with the optimizer on and off: no wrong value in primitive arithmetic, shifts, conversions, equality, hashing or concatenation. GF1 is a back-end crash on a match whose scrutinee is an if with a constant condition and a Nothing branch; GF2 is an annotation argument block whose statements are dropped. One 150-tree batch reaches 77% of the lines of ConstantFolder and BCodeBodyBuilder and 43% of CleanUp"
+    ]
+  ],
+  "log": [
+    [
+      "27 Nov 02:30",
+      "Overnight run complete. #784's CI failure was a lint error in its test, fixed on top; its new run and #785's were still in progress. Decisions waiting on the owner are listed in wave4/README.md."
+    ],
+    [
+      "27 Nov 02:29",
+      "#785 passed its second diff review and is out of draft. Fork CI: every open wave-four fix pull request passes except #784, whose failure is being looked at; #780 to #783 fail only as intended."
+    ],
+    [
+      "27 Nov 02:15",
+      "Rework of #785 pushed: the fix moved from the constructions to the lub of erased value types. A second reviewer is reading it."
+    ],
+    [
+      "27 Nov 01:59",
+      "#785 failed its diff review with a regression and stays a draft; the rework moves the fix from the constructions to the lub of the branches."
+    ],
+    [
+      "27 Nov 01:53",
+      "scala/scala#11426 (opened by another session from retronym/scala#769, which absorbed #747) fails its validate check on the deprecated Numeric.signum that came from the wave-four knownSize fix. The replacement, comparisons against zero, is the commit on top of the closed #747's branch review/w4-gc1-range-iterator-known-size; this session does not touch upstream."
+    ],
+    [
+      "27 Nov 01:53",
+      "#784, the fix for scala/bug#10183, passed its diff review and is out of draft."
+    ],
+    [
+      "27 Nov 01:52",
+      "Second CI pass: no failure outside deliberately failing tests. #747 and #748 were folded into retronym/scala#769 and #753 promoted upstream by another session; the follow-up commit for #747's deprecation warning sits on that closed pull request's branch."
+    ],
+    [
+      "27 Nov 01:49",
+      "WP10 is covered by #750, which now has a test for it. All 39 wave-four findings link to a pull request."
+    ],
+    [
+      "27 Nov 01:48",
+      "Third programs campaign done: one finding (WP10) in 1,692 programs. The campaign phase is complete; what remains is the diff reviews of #784 and #785 and the write-up."
+    ],
+    [
+      "27 Nov 01:46",
+      "retronym/scala#785 opened as a draft for WP7. Every reviewed wave-four finding now has a pull request."
+    ],
+    [
+      "27 Nov 01:42",
+      "retronym/scala#784 opened as a draft: a back-end fix for WP5, the 2017 ticket scala/bug#10183; with an independent reviewer. #779 out of draft after its rework."
+    ],
+    [
+      "27 Nov 01:38",
+      "#779 narrowed as its reviewer asked and out of draft."
+    ],
+    [
+      "27 Nov 01:26",
+      "retronym/scala#780 to #783 opened: failing tests for the four -Ycheck findings WP4, WP6, WP8, WP9."
+    ],
+    [
+      "27 Nov 01:23",
+      "#778 passed diff review and is out of draft; #779 is being narrowed so that only binders nested inside the checked type count as bound."
+    ],
+    [
+      "27 Nov 01:22",
+      "Review of WP4 to WP9: all real, two already known upstream. Fix workers started for the two crashes (WP7, WP5); the four -Ycheck findings get test-only branches."
+    ],
+    [
+      "27 Nov 01:11",
+      "#773 to #776 passed diff review and are out of draft. Second programs campaign done: WP4 to WP9, two of them compiler crashes on ordinary code; with an independent reviewer."
+    ],
+    [
+      "27 Nov 01:10",
+      "retronym/scala#778 and #779 opened as drafts for WS1 and WS2. Every reviewed wave-four finding now has a pull request."
+    ],
+    [
+      "27 Nov 01:08",
+      "#777, the fix for the critical WP3, passed its diff review and is out of draft."
+    ],
+    [
+      "27 Nov 00:56",
+      "retronym/scala#777 opened as a draft for WP3, the critical finding; an independent reviewer is trying to break the erasure change."
+    ],
+    [
+      "27 Nov 00:48",
+      "retronym/scala#774 to #776 opened as drafts for WX1, WP1 and WP2; a reviewer is reading them and re-reading #773."
+    ],
+    [
+      "27 Nov 00:42",
+      "Rework of #773 pushed. Fix worker for WS1 and WS2 started in the freed build slot."
+    ],
+    [
+      "27 Nov 00:38",
+      "Review of WS1 and WS2: both real. WS1 matters more than reported, since mdoc and Scastie set the flag and a lambda in a super-constructor argument fails without it. Its fix worker starts when a build slot frees."
+    ],
+    [
+      "27 Nov 00:31",
+      "Diff review of #773: sound on a corpus of real Java sources, one defect for Scala annotations used from Java source; being reworked. The machine is at its limit of three builds; nothing further starts until one finishes."
+    ],
+    [
+      "27 Nov 00:27",
+      "Review of WX1 and WP1 to WP3: all real. WP3 is the most severe finding of the wave: an ordinary collect with a nested match and a try returning a value class compiles and then fails to verify, a regression in 2.13.9. Two fix workers started."
+    ],
+    [
+      "27 Nov 00:19",
+      "retronym/scala#773 opened as a draft: one fix for WJ1, GJ3 and wave-one J5."
+    ],
+    [
+      "27 Nov 00:15",
+      "#770 and #771 read as ok and out of draft."
+    ],
+    [
+      "27 Nov 00:11",
+      "Programs track done with three findings including a miscompile (WP3); a second programs campaign started because every new construct paid. retronym/scala#770 to #772 opened for WL1 to WL3."
+    ],
+    [
+      "27 Nov 00:01",
+      "Review of the first campaign findings: WJ1 and WL1 to WL3 all real. Two fix workers started."
+    ],
+    [
+      "26 Nov 23:57",
+      "#750 passed its fourth diff review and is out of draft. Of the 17 wave-four fix pull requests, 15 are ready after review; #758 and #759 stay drafts on the copy-first or fail-fast decision."
+    ],
+    [
+      "26 Nov 23:49",
+      "Campaign: the Java-sources and library tracks are done (WJ1, WL1 to WL3) and their findings are with an independent reviewer. Fourth version of #750 pushed and under review."
+    ],
+    [
+      "26 Nov 23:26",
+      "#763 re-read as ok and out of draft. #750 has a new regression in its third version; a fourth pass replaces the stateful scrutinee tracking with a check at the match. w4-int was built with that third version."
+    ],
+    [
+      "26 Nov 23:18",
+      "Wave-four integration build ready (w4-int). GA1's ArrayBuffer.addAll of a view of itself still throws ConcurrentModificationException there: failing fast, and outside what #758 changes."
+    ],
+    [
+      "26 Nov 23:15",
+      "Third version of #750 and updated bodies of #758 and #759 pushed. First fork CI results: #747 failed on a deprecation under fatal warnings and has a follow-up commit; no other failure outside deliberately failing tests."
+    ],
+    [
+      "26 Nov 23:12",
+      "Owner approved the overnight plan: close out the 22 pull requests (reworks, fork CI, an integration build with the wave-four fixes), then a steered campaign of five tracks, mostly on Opus and Sonnet. Decisions that are the owner's are parked, not made."
+    ],
+    [
+      "26 Nov 23:06",
+      "Reworked #763 pushed over its pull request; it stays a draft until it is re-read."
+    ],
+    [
+      "26 Nov 23:06",
+      "Second read of the reworked pull requests: #756 and #760 ok and ready; #750 back to draft for a nested case; #758 and #759 stay drafts on an owner decision. Wave-four pull requests relabelled with the area of the compiler or library they touch (collections, java-sources, typechecker, specialization, optimizer). scala/scala#11427 was opened from #753 by another session."
+    ],
+    [
+      "26 Nov 22:58",
+      "Diff review of the specialization fixes: #762, #764, #766 and #768 ok and out of draft; #763 has a defect with overloaded methods and is being reworked."
+    ],
+    [
+      "26 Nov 22:56",
+      "Reworked self-aliasing fixes pushed over #758, #759 and #760. A second reviewer is reading all five reworked pull requests, and another the five specialization fixes."
+    ],
+    [
+      "26 Nov 22:54",
+      "Reworked #750 and #756 pushed over their pull requests after diff review; neither rework has been re-read by a reviewer."
+    ],
+    [
+      "26 Nov 22:40",
+      "Every wave-four finding now links to a pull request (retronym/scala#747 to #768). The five specialization fixes are drafts until an independent reviewer has read them."
+    ],
+    [
+      "26 Nov 22:35",
+      "Diff reviews of the first twelve fix pull requests: seven ok, one concern (#750), four defects (#756, #758, #759, #760). The four are converted to drafts and two rework workers are on all five."
+    ],
+    [
+      "26 Nov 22:26",
+      "More wave-four pull requests: retronym/scala#756 (GF2), #757 (GJ3, test only) and the four for self-aliasing (GC7, GA1). 16 of 22 findings now link to a pull request; the eight specialization and inliner findings are with the last worker."
+    ],
+    [
+      "26 Nov 22:22",
+      "First wave-four pull requests opened on the fork, retronym/scala#747 to #755: range iterator knownSize (GC1, GC2), Range drop, indexOf and BigDecimal count (GC3 to GC5), updateWith as a test with the options (GC6), the constant-if crash (GF1), and three Java parser fixes (GJ1, GJ2, GJ4). None has had a diff review yet."
+    ],
+    [
+      "26 Nov 22:13",
+      "All three independent reviews are in: 22 findings, none doubtful, wrong or by design; GA1 is a duplicate of GC7 and GE8 of GE3; GC7, GE4 and GE7 are known tickets. Three regressions in unreleased 2.13.19 or earlier 2.13 releases stand out: GJ1 (sealed Java types, scala/scala#11329), GE6 (ASM upgrade, scala/scala#11327), GC6 (updateWith, 2.13.1). Four fix workers are running."
+    ],
+    [
+      "26 Nov 22:00",
+      "Library review reported: all eight reproduce on the integration build, the base and 2.13.18. Owner asked for fix pull requests, not test-only ones: two fix workers started on the library findings in warm workspaces."
+    ],
+    [
+      "26 Nov 21:49",
+      "Owner asked for independent review and per-finding fork pull requests. Three reviewers started; test-only branches follow when they report."
+    ],
+    [
+      "26 Nov 21:47",
+      "All wave-four spike tracks reported and their findings are in wave4/findings (retronym/scala#745): GA1, GC1 to GC7, GE1 to GE8, GF1, GF2, GJ1 to GJ4. The coordinating session re-ran 20 of the 22 from their recorded commands; all match. Next is an independent review of each and a decision on which tracks get a steered campaign."
+    ],
+    [
+      "26 Nov 21:42",
+      "Expression and program tracks reported: GF1, GF2, GE1 to GE8. The coordinating session re-ran GA1, GE1 to GE6, GF1 and GF2 on the integration build; all reproduce as recorded. GE7 and GE8 are unshrunk and not re-run. The Java parser and collections tracks are converting their findings into finding directories (GJ, GC)."
+    ],
+    [
+      "26 Nov 21:41",
+      "Wave four started as a spike: design note and tools in retronym/scala#745. The first collections harness rediscovered wave-two LI5 on the unfixed base within 90 seconds and found self-aliasing cells in ArrayDeque and UnrolledBuffer that the draft fixes do not cover (GA1). Three of four parallel tracks have reported; their findings are being put into the usual finding directories."
+    ]
+  ],
+  "meta": [],
+  "verify": {
+    "GA1": {
+      "state": "verified",
+      "note": "cmd.sh re-run by the coordinating session on the integration build at 26 Nov 21:42; output matches actual.txt"
+    },
+    "GE1": {
+      "state": "verified",
+      "note": "cmd.sh re-run by the coordinating session on the integration build at 26 Nov 21:42; output matches actual.txt"
+    },
+    "GE2": {
+      "state": "verified",
+      "note": "cmd.sh re-run by the coordinating session on the integration build at 26 Nov 21:42; output matches actual.txt"
+    },
+    "GE3": {
+      "state": "verified",
+      "note": "cmd.sh re-run by the coordinating session on the integration build at 26 Nov 21:42; output matches actual.txt"
+    },
+    "GE4": {
+      "state": "verified",
+      "note": "cmd.sh re-run by the coordinating session on the integration build at 26 Nov 21:42; output matches actual.txt"
+    },
+    "GE5": {
+      "state": "verified",
+      "note": "cmd.sh re-run by the coordinating session on the integration build at 26 Nov 21:42; output matches actual.txt"
+    },
+    "GE6": {
+      "state": "verified",
+      "note": "cmd.sh re-run by the coordinating session on the integration build at 26 Nov 21:42; output matches actual.txt"
+    },
+    "GF1": {
+      "state": "verified",
+      "note": "cmd.sh re-run by the coordinating session on the integration build at 26 Nov 21:42; output matches actual.txt"
+    },
+    "GF2": {
+      "state": "verified",
+      "note": "cmd.sh re-run by the coordinating session on the integration build at 26 Nov 21:42; output matches actual.txt"
+    },
+    "GC1": {
+      "state": "verified",
+      "note": "cmd.sh re-run by the coordinating session on the integration build at 26 Nov 21:47; output matches actual.txt"
+    },
+    "GC2": {
+      "state": "verified",
+      "note": "cmd.sh re-run by the coordinating session on the integration build at 26 Nov 21:47; output matches actual.txt"
+    },
+    "GC3": {
+      "state": "verified",
+      "note": "cmd.sh re-run by the coordinating session on the integration build at 26 Nov 21:47; output matches actual.txt"
+    },
+    "GC4": {
+      "state": "verified",
+      "note": "cmd.sh re-run by the coordinating session on the integration build at 26 Nov 21:47; output matches actual.txt"
+    },
+    "GC5": {
+      "state": "verified",
+      "note": "cmd.sh re-run by the coordinating session on the integration build at 26 Nov 21:47; output matches actual.txt"
+    },
+    "GC6": {
+      "state": "verified",
+      "note": "cmd.sh re-run by the coordinating session on the integration build at 26 Nov 21:47; output matches actual.txt"
+    },
+    "GC7": {
+      "state": "verified",
+      "note": "cmd.sh re-run by the coordinating session on the integration build at 26 Nov 21:47; output matches actual.txt"
+    },
+    "GJ1": {
+      "state": "verified",
+      "note": "cmd.sh re-run by the coordinating session on the integration build at 26 Nov 21:47; output matches actual.txt"
+    },
+    "GJ2": {
+      "state": "verified",
+      "note": "cmd.sh re-run by the coordinating session on the integration build at 26 Nov 21:47; output matches actual.txt"
+    },
+    "GJ3": {
+      "state": "verified",
+      "note": "cmd.sh re-run by the coordinating session on the integration build at 26 Nov 21:47; output matches actual.txt"
+    },
+    "GJ4": {
+      "state": "verified",
+      "note": "cmd.sh re-run by the coordinating session on the integration build at 26 Nov 21:47; output matches actual.txt"
+    }
+  },
+  "fix": {
+    "GC1": {
+      "prs": [
+        747
+      ],
+      "state": "fixed",
+      "note": "Fix: RangeIterator.knownSize counts in Long and returns -1 above Int.MaxValue. Shares the branch with GC2."
+    },
+    "GC3": {
+      "prs": [
+        748
+      ],
+      "state": "fixed",
+      "note": "Fix: RangeIterator.drop returns early when the iterator is exhausted, covering empty ranges whose lastElement wraps and exhausted iterators of ranges ending at Int.MaxValue."
+    },
+    "GC6": {
+      "prs": [
+        749
+      ],
+      "state": "fixed",
+      "note": "Test only, no fix yet: Design question as the review says: support re-entrancy (re-check node and table after the call, second bucket walk) or reject with a modification count and CME as java.util.HashMap.compute does. Branch holds the failing test and the options."
+    },
+    "GF1": {
+      "prs": [
+        750
+      ],
+      "state": "fixed",
+      "note": "Fix (fourth version, judged ok by an independent diff review): The scrutinee-tracking field is gone. The Match case ascribes the selector's original type when the transformed selector's widened type differs from it, which covers a reduced if at any depth; the If case keeps the wrap for a Nothing branch and adds it for a null branch of an array-typed if."
+    },
+    "GJ2": {
+      "prs": [
+        751
+      ],
+      "state": "fixed",
+      "note": "Fix: recordDecl gives the generated accessor Array[T] when the header parameter's type tree is the repeated-parameter type; the canonical constructor keeps T*. An explicitly declared accessor is untouched."
+    },
+    "GJ4": {
+      "prs": [
+        752
+      ],
+      "state": "fixed",
+      "note": "Fix: enumDecl skips a leading comma when } or ; follows it; a comma followed by a constant is still an error, as in javac."
+    },
+    "GJ1": {
+      "prs": [
+        753
+      ],
+      "state": "fixed",
+      "note": "Fix: Two-site fix: Flags.SEALED instead of the token constant SEALED in classDecl and interfaceDecl."
+    },
+    "GC4": {
+      "prs": [
+        754
+      ],
+      "state": "fixed",
+      "note": "Fix (stacked on retronym/scala#555): posOf returns -1 when the Long position exceeds Int.MaxValue. One commit on top of #555."
+    },
+    "GC2": {
+      "prs": [
+        747
+      ],
+      "state": "fixed",
+      "note": "Fix (same pull request as GC1): Same branch as GC1. NumericRangeIterator.knownSize returns -1 when the difference wraps or the count does not round-trip through Int."
+    },
+    "GC5": {
+      "prs": [
+        755
+      ],
+      "state": "fixed",
+      "note": "Fix: NumericRange.count's first piece steps from a fractional start towards zero instead of away from it, so the last piece is no longer inflated past the Int.MaxValue check."
+    },
+    "GF2": {
+      "prs": [
+        756
+      ],
+      "state": "fixed",
+      "note": "Fix (reworked after independent diff review; the reworked version has not been re-read): isPrimitiveOrString now accepts a Literal receiver by its constant tag, so unary operators applied directly to a literal are constant expressions again; a pos test covers every form SLS 6.24 allows in an annotation argument."
+    },
+    "GJ3": {
+      "prs": [
+        757,
+        773
+      ],
+      "state": "fixed",
+      "note": "Fix in retronym/scala#773 (with WJ1), which includes this finding's test; #757 held the test alone and would be closed in its favour."
+    },
+    "GC7": {
+      "prs": [
+        758,
+        759,
+        760,
+        761
+      ],
+      "state": "fixed",
+      "note": "Fix, reworked after independent diff review (second read in progress), in four pull requests by collection class: retronym/scala#758 buffers (ArrayDeque addAll, patchInPlace, subtractAll), #759 UnrolledBuffer (stacked on #538), #760 ArrayBuffer.flatMapInPlace, #761 sets and maps as failing tests with the options. One rule: a source is used as it is only if it is an Option, an immutable collection other than LazyList or Stream, a mutable.ArraySeq, or an ArrayBuffer, ArrayDeque, ListBuffer, UnrolledBuffer, mutable.HashSet or LinkedHashSet other than the receiver; anything else is copied first. Stated cost on JDK 21: deque ++= iterator 32 to 208 bytes per call, ++= view 88 to 248."
+    },
+    "GA1": {
+      "prs": [
+        758,
+        759
+      ],
+      "state": "fixed",
+      "note": "Fix: covered by the GC7 pull requests for ArrayDeque and UnrolledBuffer."
+    },
+    "GE1": {
+      "prs": [
+        762
+      ],
+      "state": "fixed",
+      "note": "Fix: normalizeMember skips super accessors, as specializeMember already does, so the bodiless accessor gets no specialized variants."
+    },
+    "GE2": {
+      "prs": [
+        763
+      ],
+      "state": "fixed",
+      "note": "Fix (reworked after independent diff review; re-read and judged ok): The TypeApply case retypes the Super against the new parents and selects the member matching the variant by symbol (Symbol.matchingSymbol), so overloaded variant names resolve; specSym breaks ties between overloaded variants with the called method's own specialized overload. Body now states the super-from-another-method behaviour change."
+    },
+    "GE3": {
+      "prs": [
+        764
+      ],
+      "state": "fixed",
+      "note": "Fix: A by-name parameter no longer counts in specializedTypeVars after uncurry, so the names of variants and the decisions to create special overrides agree. Covers GE8."
+    },
+    "GE4": {
+      "prs": [
+        765
+      ],
+      "state": "fixed",
+      "note": "Test only, no fix yet: Known since 2.11 (scala/bug#8633); test-only as the brief directs unless the fix is plainly small."
+    },
+    "GE5": {
+      "prs": [
+        766
+      ],
+      "state": "fixed",
+      "note": "Fix: Duplicators.fixType widens the singleton type of a local lazy accessor to its underlying type, so the duplicated lifted lambda's declared result type matches the retyped call."
+    },
+    "GE6": {
+      "prs": [
+        767
+      ],
+      "state": "fixed",
+      "note": "Test only, no fix yet: Regression in unreleased 2.13.19 from ASM 9.11.1's allocation counter; design question how to bound the analysis. Branch holds a DirectTest with a generated 200-handler method; options in the PR body."
+    },
+    "GE7": {
+      "prs": [
+        768
+      ],
+      "state": "fixed",
+      "note": "Fix: mergeConstructors retypes copied constructor statements in a context owned by the specialized subclass's primary constructor, so their locals no longer become class members."
+    },
+    "GE8": {
+      "prs": [
+        764
+      ],
+      "state": "fixed",
+      "note": "Fix: covered by the GE3 pull request, whose test includes this shape."
+    },
+    "WL1": {
+      "prs": [
+        770
+      ],
+      "state": "fixed",
+      "note": "Fix: readOnlySnapshot returns this on a read-only map, snapshot copies the root into a new writable map without a root swap, and inserthc/insertifhc/removehc/clear throw UnsupportedOperationException on a read-only map."
+    },
+    "WL2": {
+      "prs": [
+        771
+      ],
+      "state": "fixed",
+      "note": "Fix: apply(Long) and update(Long, _) in the four accumulators check 0 <= ix < totalSize through a private checkIndex."
+    },
+    "WL3": {
+      "prs": [
+        772
+      ],
+      "state": "fixed",
+      "note": "Test only, no fix yet: Test-only. The wrapper cannot tell a primitive element type from one that holds null; options in the body are a null-only iteration fallback (correct for all collections, O(n) for null probes) or type tests for the known Int/Long keyed collections."
+    },
+    "WJ1": {
+      "prs": [
+        773
+      ],
+      "state": "fixed",
+      "note": "Fix (reworked after independent diff review; re-read and judged ok; also covers GJ3 and wave-one J5): Element values other than arrays and annotations go through constantExprOpt (now parameterized by terminators and able to read class literals through basicType/void/qualified names plus [] brackets); the typer folds Java-unit annotation arguments with JavaConstantFolder and Java assignment conversion (shared with the namer), handling the single-element array shorthand, and falls back to the old typing for class literals and enum constants. The old copyFrom/skipAhead bail-out is gone; a rejected argument is skipped by balanced tokens and still drops only its annotation. Rework: Java semantics apply only to Java-defined annotation classes; Scala annotations in Java sources keep Scala typing and are dropped for operator or cast arguments; unconvertible constants are a type mismatch error as on the base."
+    },
+    "WX1": {
+      "prs": [
+        774
+      ],
+      "state": "fixed",
+      "note": "Fix: When the refinement member's result type admits Unit, the call site keeps the looked-up Method in a local and maps a null result of a void method to BoxedUnit.UNIT; other result types generate unchanged bytecode."
+    },
+    "WP1": {
+      "prs": [
+        775
+      ],
+      "state": "fixed",
+      "note": "Fix: The switch's default label gets the match type pt, like matchEnd, except when its body is Nothing, so erasure boxes inside the label instead of retyping the LabelDef against a primitive label symbol."
+    },
+    "WP2": {
+      "prs": [
+        776
+      ],
+      "state": "fixed",
+      "note": "Fix: After substituting type parameters into the extension method body, Selects of refinement members are rebound to the matching member of the qualifier's rebuilt refinement."
+    },
+    "WP3": {
+      "prs": [
+        777
+      ],
+      "state": "fixed",
+      "note": "Fix (judged ok by an independent diff review): Erasure's box of a derived value class now stores an argument containing an un-lifted try/catch in a fresh local before `new C(local)` (for a Unit-underlying class, the expression is evaluated as a statement first); every other box is unchanged."
+    },
+    "WS1": {
+      "prs": [
+        778
+      ],
+      "state": "fixed",
+      "note": "Fix (judged ok by an independent diff review): expandFunction now takes the AbstractFunctionN type arguments from fun.tpe (dealiased), which typer builds from the parameter symbols and the packed body type, and which the generated apply method already used for its result type. The constant-type leak into the parent came with literal types and is fixed by the same change."
+    },
+    "WS2": {
+      "prs": [
+        779
+      ],
+      "state": "fixed",
+      "note": "Fix (stacked on retronym/scala#459; narrowed after independent diff review as the reviewer suggested, with a test that a genuine report still fires): Only PolyTypes nested inside the checked info bind their type parameters; the info's own outermost PolyType parameters go through the owner check, so a method whose info reuses another method's type parameters is reported again. New JUnit test mutates a typed tree to show that report and asserts no report for a lub and a refinement with a polymorphic member."
+    },
+    "WP4": {
+      "prs": [
+        780
+      ],
+      "state": "fixed",
+      "note": "Test only, no fix yet: Pos test with `//> using options -Ycheck:all -Werror`; belongs with retronym/scala#460."
+    },
+    "WP6": {
+      "prs": [
+        781
+      ],
+      "state": "fixed",
+      "note": "Test only, no fix yet: Pos test with `//> using options -Ycheck:all -Werror`; belongs with retronym/scala#460."
+    },
+    "WP8": {
+      "prs": [
+        782
+      ],
+      "state": "fixed",
+      "note": "Test only, no fix yet: Pos test with `//> using options -Ycheck:all -Werror`; belongs with retronym/scala#509."
+    },
+    "WP9": {
+      "prs": [
+        783
+      ],
+      "state": "fixed",
+      "note": "Test only, no fix yet: Pos test with `//> using options -Ycheck:all -Werror`; belongs with retronym/scala#509."
+    },
+    "WP5": {
+      "prs": [
+        784
+      ],
+      "state": "fixed",
+      "note": "Fix (judged ok by an independent diff review): Back-end fix (option a): after emitting a method, find the stack at each return-to-cleanup jump with an ASM analysis and pop it, so all jumps to a cleanup arrive with an empty stack; empty-stack returns are unchanged (library class files identical)."
+    },
+    "WP7": {
+      "prs": [
+        785
+      ],
+      "state": "fixed",
+      "note": "Fix (reworked after independent diff review; re-read and judged ok): Fixes the merge instead of the producers: lub gets a case for ErasedValueTypes of one class, so every shape (constants, narrower or wider injections, null/throw arguments, different instantiations of a generic class, if/switch/try/block receivers) compiles and matches Scala 3. The PR's retyping of every injection is reverted, so bytecode for code that compiled before is identical to the base; only an argument of type Nothing gets the class's underlying type, which also fixes a base VerifyError and backend crash for new St(???).x.length / new In(throw e).x + 1."
+    },
+    "WP10": {
+      "prs": [
+        750
+      ],
+      "state": "fixed",
+      "note": "Fix: covered by retronym/scala#750 (GF1), which now carries a test for this shape. Checked with that pull request's RefChecks over the base build: the program compiles and prints the expected output."
+    }
+  }
+}

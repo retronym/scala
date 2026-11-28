@@ -1,0 +1,1 @@
+Call the specialized variant from a super call with type arguments

@@ -1,0 +1,1 @@
+Take an expanded lambda's parent type from the function type

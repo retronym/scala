@@ -1,0 +1,22 @@
+{
+ "id": "WP9",
+ "theme": "generated",
+ "track": "programs2",
+ "area": "typechecker (List() to Nil rewrite) / TreeCheckers",
+ "area_code": "C",
+ "title": "-Ycheck reports a constructor pattern matched against List[T]() as erroneous: the typer rewrites the scrutinee to Nil and re-typing then finds :: incompatible with Nil.type",
+ "kind": "spurious warning",
+ "oracle": "-Ycheck:all against the reference compile",
+ "generator": "wave4/harness/programs/Gen.scala, round 2 (pattern-matching family) list patterns on a generated List[Int]() literal",
+ "signature": "ycheck|log|Caught java.lang.AssertionError: assertion failed: Tree has erroneous type: (head: Int, next: List[Int]): scala.collection.immutable.::[Int](...)",
+ "seed": "4000050 (programs2 round 4); first seen at 710070 in a smoke run",
+ "measure": "n/a",
+ "detail": "List[Int]() match { case a :: tl => 5L; case x => x.length.toLong } compiles and prints 0, but -Ycheck:all reports 'Tree has erroneous type' for the :: pattern at every phase from typer to patmat. The typer replaces an empty List.apply() by Nil (canTranslateEmptyListToNil in Typers), keeping the expected List[Int] as the tree's type; the checker re-types the Ident Nil as Nil.type, against which a :: constructor pattern is incompatible. On the base and 2.13.18 the checker also throws a NullPointerException and no class file is written. Ordinary code rarely matches on an empty list literal; generated or macro-expanded code may.",
+ "fix_sketch": "Have the rewrite produce a typed tree that keeps the widened type when re-typed (for example Typed(Ident(Nil), TypeTree(List[T]))), or have the checker accept a scrutinee whose re-typed type is narrower. No compatibility cost.",
+ "on_integration": "present",
+ "on_base": "same (and NullPointerException, no class file)",
+ "on_2_13_18": "same (and NullPointerException)",
+ "scala3": "n/a",
+ "prior": "none found",
+ "confidence": "confirmed"
+}

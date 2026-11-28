@@ -1,0 +1,15 @@
+{
+ "id": "GC7",
+ "outcome": "FIXED",
+ "branch": "sweep/w4-gc7-arraybuffer-flatmapinplace-alias",
+ "commit": "52609571e2",
+ "workspace": "/Users/jzaugg-virtus/code/.worktrees/scala/w4-fix-f",
+ "files": "src/library/scala/collection/mutable/Buffer.scala, test/junit/scala/collection/mutable/ArrayBufferTest.scala",
+ "failing_before": "On the unreworked branch (review/w4-gc7-arraybuffer-flatmapinplace-alias): ArrayBufferTest.flatMapInPlace_viewOfSelf: IndexOutOfBoundsException: 1 is out of bounds (min 0, max 0) (the reviewer's ArrayDeque(1,2,3).flatMapInPlace(_ => d.view.take(2).to(Stream))); flatMapInPlace_strictResultAllocatesNoCopy: allocating min = 448 allowed = 136 -- flatMapInPlace(Some).",
+ "ran_after": "sbt -java-home ~/.sdkman/candidates/java/21.0.12+1.1-tem \"junit/testOnly scala.collection.mutable.ArrayBufferTest scala.collection.mutable.ArrayDequeTest scala.collection.mutable.ListBufferTest scala.collection.mutable.QueueTest scala.collection.mutable.StackTest\" plus scratch probe: Passed 101, Failed 0; reviewer input gives ArrayDeque(1, 2, 1, 2, 1, 2). library/mimaReportBinaryIssues: success, no new filters. ArrayBufferTest again on JDK 25.0.4 with -XX:+UseCompactObjectHeaders: passed. git merge-tree: clean with the 758 and 759 sweep branches.",
+ "prior_work": "scala/bug#12121; retronym/scala#758, #759 (same rule for arguments), #534, #548. ListBuffer.flatMapInPlace already reads each result as produced.",
+ "stacked_on": "",
+ "unsure": "(1) Owner decision stated as options in the body, not decided: copy-first (snapshot) against fail-fast ConcurrentModificationException. (2) A result that is another mutable buffer which the function keeps changing between calls is still read after all calls, as on the base; ListBuffer reads it at once. Unchanged, not in scope. (3) Allocation bounds hard-coded with sizeFor(classic, compact).",
+ "note": "IndexedBuffer.flatMapInPlace copies each result as it is produced unless the shared rule trusts it: a source is read as it is only when it is an Option, an immutable collection other than LazyList/Stream, a mutable.ArraySeq, or an ArrayBuffer/ArrayDeque/ListBuffer/UnrolledBuffer/mutable.HashSet/mutable.LinkedHashSet other than the receiver; anything else is copied into an ArrayBuffer first, whatever the receiver's size.",
+ "sweep": "review-fix"
+}

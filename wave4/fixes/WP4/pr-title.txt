@@ -1,0 +1,1 @@
+Test -Ycheck on a by-name argument reading a trait lazy val

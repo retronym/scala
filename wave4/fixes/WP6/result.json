@@ -1,0 +1,15 @@
+{
+ "id": "WP6",
+ "outcome": "TEST ONLY",
+ "branch": "review/w4-wp6-pf-return",
+ "commit": "9a81e7ebf917ddf6055e5b76268d58b04bb2b56d",
+ "workspace": "/Users/jzaugg-virtus/code/.worktrees/scala/w4-fix-q",
+ "files": [
+  "test/files/pos/ycheck-return-in-partial-function.scala"
+ ],
+ "failing_before": "warning: [check: typer] Return symbol (method m} does not reference directly enclosing DefDef (method applyOrElse); Tree has erroneous type: scala.Option.apply[Double](0.5) (during phase superaccessors on the base used here)",
+ "ran_after": "n/a, test only",
+ "prior_work": "none checked beyond the review's links; retronym/scala#460",
+ "unsure": "Verified by hand with the w3-base build (older than 4a67cb8202, which lacks the fork's -Ycheck pull requests); on the base itself the test is unverified. With -Werror the compiler exits 1 for all four; without it WP4 and WP8 exit 0 and WP6 and WP9 exit 1 because of the destructive checker fixed by retronym/scala#459.",
+ "note": "Pos test with `//> using options -Ycheck:all -Werror`; belongs with retronym/scala#460."
+}

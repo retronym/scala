@@ -1,0 +1,22 @@
+{
+ "id": "WP2",
+ "theme": "generated",
+ "track": "programs",
+ "area": "transform/ExtensionMethods (types in moved bodies), seen through -Ycheck",
+ "area_code": "VCL",
+ "title": "After extmethods, a structural type in a generic value class method still refers to the class's type parameter; -Ycheck reports the call as erroneous",
+ "kind": "spurious warning",
+ "oracle": "-Ycheck:all on a sample of generated programs that compile and run correctly without it",
+ "generator": "wave4/harness/programs/Gen.scala, round-3 structural calls (a structural val in a method of a generic value class)",
+ "signature": "ycheck|log|Caught java.lang.AssertionError: assertion failed: Tree has erroneous type: s.get(N)",
+ "seed": "60010 and 70190",
+ "measure": "n/a",
+ "detail": "A method of a generic value class V0[T] that calls a method through a local val typed { def get(n: Int): List[T] } compiles and runs correctly, but -Ycheck:all reports 'Tree has erroneous type: s.get(1)' six times when checking pickler, the phase after extmethods. The checker's dump shows the refinement AnyRef{def get(n: Int): List[T]} still owned by class V0 and mentioning the class's T, inside m$extension[T]($this: V0[T]), which has its own T; retyping the call then fails. ExtensionMethods substitutes the class type parameters in the moved body's trees and symbols but not inside the refinement class of a structural type. Erasure removes the stale reference, so the bytecode is right; the effect is that -Ycheck cannot be used on such code, and a later phase that relied on the refinement's types before erasure would see the wrong T. The same method in an ordinary generic class is clean. On the base and 2.13.18 the checker also throws a NullPointerException and the compilation writes no class files.",
+ "fix_sketch": "In ExtensionMethods, clone refinement class symbols whose info mentions the class type parameters when substituting into the extension method (or substitute through RefinedType decls). No compatibility cost; extension method bodies are not pickled.",
+ "on_integration": "present",
+ "on_base": "different: fewer reports plus a NullPointerException, and no class files are written",
+ "on_2_13_18": "different: fewer reports plus a NullPointerException, and no class files are written",
+ "scala3": "n/a",
+ "prior": "none found (wave-one H11 is a different -Ycheck abort on value class methods, after erasure)",
+ "confidence": "needs a second look: whether the stale type parameter is observable anywhere other than -Ycheck is not established"
+}

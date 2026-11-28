@@ -1,0 +1,13 @@
+{
+ "id": "GE6",
+ "outcome": "DESIGN",
+ "branch": "review/w4-ge6-inliner-asm-frame-limit",
+ "commit": "ea462021ae",
+ "workspace": "/Users/jzaugg-virtus/code/.worktrees/scala/w4-fix-d",
+ "files": "test/files/run/opt-analysis-frame-limit.scala, test/files/run/opt-analysis-frame-limit.check",
+ "failing_before": "partest run/opt-analysis-frame-limit.scala on the branch (base compiler, workspace sbt): output 'error: Error while emitting C$ / Too many allocated bytes / false' instead of 'true', test duration 22.6 s on the loaded machine. With -Vdebug on a hand compile of the same generated source: LimitExceededException from ComputeLimits.checkNewBytes <- Frame.setLimits <- Analyzer.newFrameWithComputeLimits <- AsmAnalyzer.<init> <- ProdConsAnalyzer <- ProdConsCache.get <- CopyProp.eliminateStaleStoresAndRewriteSomeIntrinsics <- LocalOpt.methodOptimizations. By hand: 160 and 175 lines compile (22-25 s), 190 fails.",
+ "ran_after": "Test-only: 'partest test/files/run/opt-analysis-frame-limit.scala' in the workspace fails as above. No fix attempted.",
+ "prior_work": "None in scala/bug, scala/scala or scala/scala-asm (per the review). Cause: scala/scala#11327 (ASM 9.11.1). No open fork PR touches AsmAnalyzer; retronym/scala#461 touches CopyProp (stale stores) without overlap.",
+ "unsure": "Which option: catching LimitExceededException needs a point where no transformation of the method has begun (CopyProp and others request ProdCons lazily mid-transformation); a better size estimate needs a model of handler cost; widening the counter in scala-asm brings back 2.13.18's minute-long compile, which would also make this test slow. The test takes 10-20 s on the base on a loaded machine (DirectTest compile); a fix that skips analysis up front makes it fast.",
+ "note": "Regression in unreleased 2.13.19 from ASM 9.11.1's allocation counter; design question how to bound the analysis. Branch holds a DirectTest with a generated 200-handler method; options in the PR body."
+}

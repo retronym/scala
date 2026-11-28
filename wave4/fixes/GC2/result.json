@@ -1,0 +1,13 @@
+{
+ "id": "GC2",
+ "outcome": "FIXED",
+ "failing_before": "NumericRangeTest.iteratorKnownSizeWideRange: NumericRange -128 to 57 by 5 after 0: -13",
+ "unsure": "NumericRangeIterator returns -1 (not the exact count) whenever lastElement - next wraps in the element type, so a 3-element Long.MinValue to Long.MaxValue by Long.MaxValue iterator now reports -1 rather than 3. Exact would need a counter field (changes the serialVersionUID of a Serializable iterator) or type-specific arithmetic. The overflow check relies on two's-complement wrap-around for fixed-width Integrals, which is the same assumption NumericRange.count documents.",
+ "note": "Same branch as GC1. NumericRangeIterator.knownSize returns -1 when the difference wraps or the count does not round-trip through Int.",
+ "workspace": "/Users/jzaugg-virtus/code/.worktrees/scala/w4-fix-a",
+ "branch": "review/w4-gc1-range-iterator-known-size",
+ "commit": "f6563d5abb",
+ "files": "src/library/scala/collection/immutable/Range.scala, src/library/scala/collection/immutable/NumericRange.scala, test/junit/scala/collection/immutable/RangeTest.scala, test/junit/scala/collection/immutable/NumericRangeTest.scala",
+ "ran_after": "sbt \"junit/testOnly scala.collection.immutable.RangeTest scala.collection.immutable.NumericRangeTest scala.collection.immutable.RangeConsistencyTest scala.collection.IteratorTest\" (passed), \"scalacheck/testOnly scala.collection.immutable.NumericRangeProperties scala.collection.immutable.RangeProperties\" (passed), library/mimaReportBinaryIssues (success, no new filters). git merge-tree with the heads of retronym/scala#555, #558, #655 and the GC3/GC5 branches: clean.",
+ "prior_work": "None for iterator knownSize. Related open fork PRs on the same classes: retronym/scala#555 (Range.posOf), retronym/scala#558 (RangeIterator.drop), retronym/scala#655 (NumericRange count/length/take/drop; does not touch the iterator); no textual overlap with any of them."
+}

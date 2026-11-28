@@ -1,0 +1,13 @@
+{
+ "id": "WP1",
+ "outcome": "FIXED",
+ "branch": "review/w4-wp1-patmat-default-label-type",
+ "commit": "1ac14fd062",
+ "workspace": "/Users/jzaugg-virtus/code/.worktrees/scala/w4-fix-m",
+ "files": "src/compiler/scala/tools/nsc/transform/patmat/MatchOptimization.scala, test/files/pos/switch-default-label-boxed.scala",
+ "failing_before": "partest test/files/pos/switch-default-label-boxed.scala (-Ycheck:all) on the base: crashed, NullPointerException ('restpe' is null) after 'Tree has erroneous type: default4()' (7x) and 'Tree has erroneous type: scala.Double.box(2.0)' (2x) assertions at posterasure.",
+ "ran_after": "sbt partest of the new test, pos/t13060.scala, pos/t2683.scala and 'partest --grep switch' (31 tests): all ok. sbt 'partest --pos --run --jvm': success. A first attempt with plain pt broke pos/t13060 (erasure boxing a throw: key not found: class Nothing), hence the Nothing fallback. By hand with the workspace's own build/quick/classes: -Ycheck:all on Unit- and Any-typed variants clean.",
+ "prior_work": "none; scala/scala#10926 (2.13.16) typed the default body and introduced the current b1.tpe.deconst; fork -Ycheck PRs 419, 460, 509 are other causes.",
+ "unsure": "Partial: a match of primitive type with one arm erasing to Object (x match { case 1 => id(1.0); case 2 if e => 2.0; case _ => 3.0 } in statement position, generic id) still gives 'Tree has erroneous type: scala.Double.box(3.0)' under -Ycheck:all, because erasure lubs the cases to Object and boxes into the LabelDef without updating the label symbol; written up in the body as remaining. The label's type is now the match's type (wider than the body), check that the backend's switch emission is unaffected (pos/run/jvm suites pass).",
+ "note": "The switch's default label gets the match type pt, like matchEnd, except when its body is Nothing, so erasure boxes inside the label instead of retyping the LabelDef against a primitive label symbol."
+}

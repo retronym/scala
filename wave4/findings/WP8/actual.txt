@@ -1,0 +1,4 @@
+      2         during phase: fields
+      1 Caught java.lang.AssertionError: assertion failed: 
+      2 Caught java.lang.AssertionError: assertion failed: Tree has erroneous type: ex.value()
+List(Some(a), None)

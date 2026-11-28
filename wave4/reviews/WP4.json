@@ -1,0 +1,11 @@
+{
+ "id": "WP4",
+ "verdict": "real",
+ "severity": "low",
+ "reran": "cmd.sh on w4-int, w3-base, 2.13.18: 'Tree has erroneous type: C.this.lz()' at tailcalls with $anonfun$m(): C.this.lz.type; base and 2.13.18 also print 'no type ... (tpe = null)'; program prints List(a, a) on all three.",
+ "user_impact": "Only -Ycheck users; compiled code is correct because erasure drops the singleton type.",
+ "fixability": "clear cut: widen the by-name thunk's body type in UnCurry (or in typer when the expected type is abstract) so the lifted method's result is A. No compatibility cost.",
+ "regression": "no",
+ "links": "Belongs with retronym/scala#460, whose third part widens a constant result in the temp for a by-name named argument (same widening of a by-name thunk's type).",
+ "note": "A real ill-typed tree, not a checker false positive: after fields lz is an accessor method, so the declared result type C.this.lz.type is the singleton type of a non-stable member and its rhs has type A. Harmless outside -Ycheck."
+}

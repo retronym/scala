@@ -1,0 +1,13 @@
+{
+ "id": "GE3",
+ "outcome": "FIXED",
+ "branch": "review/w4-ge3-specialize-byname-param",
+ "commit": "2d9107e8cf",
+ "workspace": "/Users/jzaugg-virtus/code/.worktrees/scala/w4-fix-d",
+ "files": "src/compiler/scala/tools/nsc/transform/SpecializeTypes.scala, test/files/run/specialized-byname-param.scala, test/files/run/specialized-byname-param.check",
+ "failing_before": "partest run/specialized-byname-param.scala on the base: compile crash 'assertion failed: sym: AC2$mcII$sp.m$mcII$sp target: AC2.m$mcI$sp' (specialize); the GE3 class alone: 'double definition: override def m(p: Int, q: => Long): Int and override def m(p: Int, q: () => Long): Int have same type after erasure'; the getOrElseUpdate trait alone: 'sym: M$mcII$sp.getOrElseUpdate$mcII$sp target: M.getOrElseUpdate$mcI$sp'.",
+ "ran_after": "sbt (workspace): 'partest test/files/run/specialized-byname-param.scala' passed; 'partest --grep specializ' 191 passed, 0 failed. Hand run with the workspace's build/quick/classes on an explicit java -cp (scala.tools.nsc.Main): the test with -Ycheck:all compiles cleanly and prints the expected output. git merge-tree against the heads of the 31 open fork PRs touching SpecializeTypes, Duplicators, Constructors or the optimizer: no conflicts.",
+ "prior_work": "No ticket or fork PR for the by-name case. scala/bug#10018 and #4436 fail the same assertion from a bounded specialized method type parameter (different cause).",
+ "unsure": "(1) Chose to make the after-uncurry view agree with the typer view (by-name never counts) rather than the review's suggestion (count it in both): counting it would add specialized variants such as m$mcI$sp to traits compiled before, and a call site compiled by 2.13.19 against such a trait compiled by 2.13.18 would then call a variant that does not exist. (2) New warning 'type X is unused or used in non-specializable positions' for a class member def m[@specialized X](q: => X), because normalizeMember's unused check reads the info after uncurry; such a method never got variants. Could break a -Werror build that has one; the stdlib has none. (3) Why GE8's program compiled on 2.12.20 was not investigated.",
+ "note": "A by-name parameter no longer counts in specializedTypeVars after uncurry, so the names of variants and the decisions to create special overrides agree. Covers GE8."
+}

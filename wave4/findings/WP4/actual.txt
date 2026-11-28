@@ -1,0 +1,8 @@
+      2         during phase: tailcalls
+      2   Tree has erroneous type: C.this.lz()
+      1 Caught java.lang.AssertionError: assertion failed: 
+      3 Caught java.lang.AssertionError: assertion failed: Tree has erroneous type: C.this.lz()
+      2 final <artifact> def $anonfun$m(): C.this.lz.type = C.this.lz()
+      2 final <artifact> def $anonfun$n(): C.this.lz.type = C.this.lz()
+      3 java.lang.AssertionError: assertion failed: Tree has erroneous type: C.this.lz()
+List(a, a)

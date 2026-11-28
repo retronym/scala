@@ -1,0 +1,21 @@
+{
+  "id": "GF2",
+  "theme": "generated",
+  "track": "fold",
+  "area": "typer (annotations)",
+  "title": "A block ending in a literal is accepted as a Java annotation argument and its statements are discarded",
+  "kind": "missing error",
+  "oracle": "the whole expression as a Java annotation argument, read back by reflection, must equal the same expression evaluated in a method body, or be rejected as not constant",
+  "generator": "wave4/harness/fold/fold.py --evolved: form N (annotation argument) over the block production { val u_ = e; literal }",
+  "signature": "AA'BB'CC'DD'EE'FF'GG'HH'II'LL'MM'OO'PP'QQ'RR'TT'VV'WW'XX'YY'ZZ'|NN' !Z",
+  "seed": "--evolved --seed 6 --n 120, batch 2, case 7",
+  "measure": "n/a",
+  "detail": "@Ann(z = { println(\"side effect\"); false }, i = { val u = 1 / 0; 3 }) class A compiles, and reflection reads z = false and i = 3. The statements of each block are never run and are not in the class file; the same block in a method body or a default argument prints, or throws ArithmeticException. An annotation argument must be a constant expression, and other non-constant arguments get 'annotation argument needs to be a constant'. The check in typedAnnotation (Typers.scala around line 4210) looks at the argument's type, and a block whose last expression is a literal has that literal's constant type. This is the annotation-argument instance of the block-with-constant-type family: the fix for EO6 keeps the statements of such a block in ordinary code, but here the tree is replaced by the constant. Ordinary code is unlikely to write this on purpose; it matters where an argument is produced by a macro or an inline helper.",
+  "fix_sketch": "In the constant-argument check require the typed argument to be a literal or a pure constant-typed tree (treeInfo.isExprSafeToInline), else report the existing error. Source that passes an impure block as an annotation argument stops compiling.",
+  "on_integration": "present",
+  "on_base": "same",
+  "on_2_13_18": "same",
+  "scala3": "absent (3.7.4 reports 'Annotation argument is not a constant' twice)",
+  "prior": "EO6 and LZ2 (retronym/scala#606: Block { val r = ...; literal } folded to the literal) are the same family in ordinary code; no earlier finding covers annotation arguments",
+  "confidence": "confirmed"
+}

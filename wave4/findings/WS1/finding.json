@@ -1,0 +1,22 @@
+{
+  "id": "WS1",
+  "theme": "generated",
+  "track": "seeds",
+  "area": "scala.tools.nsc.transform.UnCurry",
+  "title": "-Ydelambdafy:inline rejects a valid lambda whose body has an existentially quantified local class type",
+  "kind": "wrong rejection",
+  "oracle": "the same program compiles and runs with the default -Ydelambdafy:method (baseline run of the existing test run/existentials3-new, which fails to compile under -Ydelambdafy:inline)",
+  "generator": "wave4/harness/seeds (Driver.scala, configuration delam): run/existentials3-new and run/existentials3-old re-compiled with -Ydelambdafy:inline",
+  "signature": "delam|ok/compile-error",
+  "seed": "run/existentials3-new, round 1",
+  "measure": "n/a",
+  "detail": "A method whose result type is inferred as an existential over local classes (a local trait A, an abstract class K extending A, a trait C extending K, returning (null: C), so the type is C forSome { type C <: AnyRef with A; type A <: AnyRef }) compiles, and so does a lambda () => f returning it. Under -Ydelambdafy:inline the lambda is expanded in UnCurry into an anonymous class extending AbstractFunction0[C] with Serializable, typed against the expected existential function type, and the typer reports 'type mismatch; found AbstractFunction0[C] with Serializable, required () => C forSome {...}'. The error is raised by a typer run inside the uncurry phase, so the source is accepted by the front end and rejected afterwards, with a position on the lambda. It needs a class between the trait and the leaf (without K it compiles). Ordinary code rarely returns such local types from a lambda, and -Ydelambdafy:inline is a legacy option, but it is what the existing test run/existentials3 exercises in other configurations.",
+  "fix_sketch": "Type the expanded anonymous class against the erased or skolemised function type instead of the existential pt, or skip the conformance check for the expansion. No compatibility cost.",
+  "on_integration": "present (w3-int and w4-int)",
+  "on_base": "same",
+  "on_2_13_18": "same",
+  "scala3": "n/a",
+  "prior": "none found (FO1, FT3 and PV5 are other delambdafy:inline defects; PR search for delambdafy inline existential found nothing)",
+  "confidence": "confirmed",
+  "area_code": "VCL"
+}

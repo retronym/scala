@@ -1,0 +1,13 @@
+{
+ "id": "GE8",
+ "outcome": "COVERED",
+ "branch": "review/w4-ge3-specialize-byname-param",
+ "commit": "2d9107e8cf",
+ "workspace": "/Users/jzaugg-virtus/code/.worktrees/scala/w4-fix-d",
+ "files": "",
+ "failing_before": "trait AC[@specialized(Int) A, @specialized(Int) B] { def m(q: => B): A }: java.lang.AssertionError: assertion failed: sym: AC$mcII$sp.m$mcII$sp target: AC.m$mcI$sp (during specialize)",
+ "ran_after": "See fixes/GE3/result.json; the GE3 test contains the M[K, V].getOrElseUpdate and AC2[A, B].m(q: => B) shapes, which crash on the base and pass with the fix.",
+ "prior_work": "see fixes/GE3/result.json",
+ "unsure": "nothing beyond GE3's",
+ "note": "Same cause as GE3, as the review judged: whether a by-name parameter's type counts depends on the phase at which a method's info is read. The GE3 branch carries GE8's program (and the review's getOrElseUpdate shape) in its test. Confirmed by the fix: the single change on the GE3 branch makes both programs compile and run correctly."
+}

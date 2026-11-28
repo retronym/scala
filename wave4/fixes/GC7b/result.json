@@ -1,0 +1,15 @@
+{
+ "id": "GC7",
+ "outcome": "FIXED",
+ "branch": "sweep/w4-gc7-unrolledbuffer-aliased-source",
+ "commit": "74bdd1ad98",
+ "workspace": "/Users/jzaugg-virtus/code/.worktrees/scala/w4-fix-f",
+ "files": "src/library/scala/collection/mutable/UnrolledBuffer.scala, src/library/scala/collection/mutable/Growable.scala, test/junit/scala/collection/mutable/UnrolledBufferTest.scala",
+ "failing_before": "On the unreworked branch (review/w4-gc7-unrolledbuffer-aliased-source): UnrolledBufferTestTest.bulkOperationsWithSourceReadingSelf: addAll(Stream) of List(6, -2, 3, 9, 4) expected:<UnrolledBuffer(6, -2, 3, 9, 4, 6, 3, 9, 4)> but was:<UnrolledBuffer(6, -2, 3, 9, 4, 6, 3, 9, 4, 6, 3, 9, 4, ...>; addAllOfStrictSourceAllocatesNoCopy: allocating min = 360 allowed = 200 -- UnrolledBuffer ++= Some. Reviewer inputs by scratch probe: UnrolledBuffer(5,-1).addAll(u.view.filter(_>0).to(Stream)) = (5, -1, 5, 5); UnrolledBuffer[Int]().addAll(Iterator(5,6) ++ u.iterator.take(10)) = 12 elements.",
+ "ran_after": "sbt -java-home ~/.sdkman/candidates/java/21.0.12+1.1-tem \"junit/testOnly scala.collection.mutable.* scala.collection.immutable.ArraySeqTest\" plus scratch probe: Passed 306, Failed 0; reviewer inputs give (5, -1, 5) and (5, 6). library/mimaReportBinaryIssues: success, no new filters. UnrolledBufferTestTest again on JDK 25.0.4 with -XX:+UseCompactObjectHeaders: passed. git merge-tree: clean with the 758 and 760 sweep branches.",
+ "prior_work": "retronym/scala#538 (this is stacked on it), retronym/scala#321 (node-boundary insert bug), scala/bug#12121, retronym/scala#758, #760.",
+ "stacked_on": "retronym/scala#538",
+ "unsure": "(1) Stacked on #538, so the base is a7ba69ff60 (that PR's base), not 4a67cb8202. (2) Owner decision stated as options in the body, not decided: copy-first (snapshot) against fail-fast ConcurrentModificationException. The isInstanceOf[UnrolledBuffer[_]] test in Growable.addAll is also stated as an owner option (override fails forward MiMa; bounded iterator changes iterate-while-appending). (3) The 'before' allocation numbers in the body were measured on 4a67cb8202 (same Growable/UnrolledBuffer.addAll code as #538's head), not on #538's head itself. (4) UnrolledBuffer is its own builder, so builder addAll of a view/iterator (flatMap) copies once; UnrolledBuffer.from now fills directly. (5) subtractAll of a view is fixed only with #758.",
+ "note": "unaliased and Growable.addAll on an UnrolledBuffer use the shared rule: a source is read as it is only when it is an Option, an immutable collection other than LazyList/Stream, a mutable.ArraySeq, or an ArrayBuffer/ArrayDeque/ListBuffer/UnrolledBuffer/mutable.HashSet/mutable.LinkedHashSet other than the receiver; anything else is copied into an ArrayBuffer first, whatever the receiver's size; UnrolledBuffer.from fills a fresh buffer without the copy.",
+ "sweep": "body-only"
+}

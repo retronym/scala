@@ -1,0 +1,10 @@
+ArrayBuffer(7)(1): IndexOutOfBoundsException
+ArrayBuffer(7)(1) = 5: IndexOutOfBoundsException
+IntAccumulator(7)(1): 0
+IntAccumulator(7)(1) = 5: ()
+  then length, toList: (1,List(7))
+AnyAccumulator(x)(1): null
+AnyAccumulator(x)(1) = y: ()
+IntAccumulator after += 8: List(7, 8)
+IntAccumulator(0 until 5000)(5000): 0
+IntAccumulator(0 until 5000)(-1): ArrayIndexOutOfBoundsException

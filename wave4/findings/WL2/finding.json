@@ -1,0 +1,22 @@
+{
+  "id": "WL2",
+  "theme": "generated",
+  "track": "library",
+  "area": "scala.jdk.IntAccumulator / LongAccumulator / DoubleAccumulator / AnyAccumulator",
+  "area_code": "K",
+  "title": "Accumulator apply and update do not check the index against the size: reading past the end returns 0 or null, writing past the end is silently accepted and later lost",
+  "kind": "wrong result",
+  "oracle": "mutable.ArrayBuffer given the same calls",
+  "generator": "wave4/harness/library/Streams.scala AccFam: apply/update with an index from -1 to size",
+  "signature": "IntAccumulator | apply | EX:IndexOutOfBounds -> val (and update, for all four accumulators)",
+  "seed": "seed=3 case=8 caseSeed=550039120288444364",
+  "measure": "n/a",
+  "detail": "The four accumulators are mutable.Seq implementations whose apply(ix) and update(ix, elem) index straight into the current chunk when ix falls in its range, and the current chunk has spare capacity beyond the size. So acc(acc.length) returns the default value of the spare slot (0, 0L, 0.0 or null) instead of throwing IndexOutOfBoundsException, and acc(acc.length) = x returns normally, changes nothing visible, and is overwritten by the next addOne. Indices further past the end throw ArrayIndexOutOfBoundsException only once they leave the chunk's array. Every other mutable.Seq in the library checks the index; code that relies on apply throwing (a loop that stops on IndexOutOfBoundsException, or a bounds bug in the caller) gets a silent wrong value instead. The defect is in IntAccumulator.scala, LongAccumulator.scala, DoubleAccumulator.scala and AnyAccumulator.scala, apply(ix: Long) and update(idx: Long, elem). Ordinary code reaches it only through an index bug of its own, so the cost is a missing error, not a wrong answer for correct code.",
+  "fix_sketch": "Begin apply and update with `if (ix < 0 || ix >= totalSize) throw new IndexOutOfBoundsException(s\"$ix is out of bounds (min 0, max ${totalSize - 1})\")`. Behavioural change only for out-of-range indices; no binary compatibility cost.",
+  "on_integration": "present",
+  "on_base": "same",
+  "on_2_13_18": "same",
+  "scala3": "n/a",
+  "prior": "none found",
+  "confidence": "confirmed"
+}

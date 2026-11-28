@@ -1,0 +1,13 @@
+FAIL ArrayDeque(6,-2).addAll(self.view.reverse)                 expected ArrayDeque(6, -2, -2, 6)   got ArrayDeque(6, -2, -2, -2)
+FAIL ArrayDeque(0,1,-1,-1).patchInPlace(3, self.view.map(_+1), 65) expected ArrayDeque(0, 1, -1, 1, 2, 0, 0) got ArrayDeque(0, 1, -1, 1, 2, 0, 2)
+FAIL ArrayDeque(1,4).subtractAll(self.view.slice(0,2))          expected ArrayDeque()               got IndexOutOfBoundsException
+FAIL UnrolledBuffer(1).prependAll(self.view.map(_+1))           expected UnrolledBuffer(2, 1)       got UnrolledBuffer(1)
+FAIL self.view.map(_+1) ++=: UnrolledBuffer(1)                  expected UnrolledBuffer(2, 1)       got UnrolledBuffer(1)
+FAIL UnrolledBuffer(3,4).addAll(self.iterator)                  expected UnrolledBuffer(3, 4, 3, 4) got OutOfMemoryError
+FAIL UnrolledBuffer(5,-1).addAll(self.view.filter(_ > 0))       expected UnrolledBuffer(5, -1, 5)   got UnrolledBuffer(5, -1, 5, 5)
+FAIL UnrolledBuffer(4,6).patchInPlace(2, self.view, 0)          expected UnrolledBuffer(4, 6, 4, 6) got OutOfMemoryError
+FAIL UnrolledBuffer(1,4).subtractAll(self.view.slice(0,2))      expected UnrolledBuffer()           got UnrolledBuffer(4)
+FAIL ArrayBuffer(-2).addAll(self.view.reverse)                  expected ArrayBuffer(-2, -2)        got ConcurrentModificationException
+FAIL ArrayBuffer(-2).addAll(self.view)   [control]              expected ArrayBuffer(-2, -2)        got ConcurrentModificationException
+FAIL ListBuffer(1,4).subtractAll(self.view.slice(0,2))          expected ListBuffer()               got ConcurrentModificationException
+ok   ListBuffer(6,-2).addAll(self.view.reverse)  [control]      expected ListBuffer(6, -2, -2, 6)   got ListBuffer(6, -2, -2, 6)

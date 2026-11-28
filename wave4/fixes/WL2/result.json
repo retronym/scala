@@ -1,0 +1,13 @@
+{
+ "id": "WL2",
+ "outcome": "FIXED",
+ "branch": "review/w4-wl2-accumulator-index-bounds",
+ "commit": "688f7c9c33",
+ "workspace": "/Users/jzaugg-virtus/code/.worktrees/scala/w4-fix-j",
+ "files": "src/library/scala/jdk/IntAccumulator.scala, src/library/scala/jdk/LongAccumulator.scala, src/library/scala/jdk/DoubleAccumulator.scala, src/library/scala/jdk/AnyAccumulator.scala, test/junit/scala/jdk/AccumulatorTest.scala",
+ "failing_before": "sbt junit/testOnly scala.jdk.AccumulatorTest on the base plus the test: indexBounds failed: java.lang.AssertionError: Expression did not throw! (acc(acc.length) on an IntAccumulator).",
+ "ran_after": "One sbt session (JDK 21): junit/testOnly scala.jdk.* (123 passed); scalacheck/testOnly *ccumulat* *tepper* (8 passed); library/mimaReportBinaryIssues (success, no new filters).",
+ "prior_work": "None in scala/bug, the branch index or fork pull requests.",
+ "unsure": "Judged clear cut rather than DESIGN: the check is one comparison, the same as ArrayBuffer.apply, and accumulators are read mainly through stepper/foreach, not apply. Out-of-range indices now throw IndexOutOfBoundsException with the CommonErrors message format instead of ArrayIndexOutOfBoundsException (a subclass) for indices past the chunk array. No benchmark run.",
+ "note": "apply(Long) and update(Long, _) in the four accumulators check 0 <= ix < totalSize through a private checkIndex."
+}

@@ -1,0 +1,3 @@
+scalac  repro/T.scala: exit 0 after 3s (124 means killed by the 30 s timeout)
+scalac -Ycheck:typer repro/T.scala: exit 124 after 30s (124 means killed by the 30 s timeout)
+scalac -Ycheck:all repro/t498.scala: exit 124 after 30s (124 means killed by the 30 s timeout)

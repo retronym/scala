@@ -1,0 +1,126 @@
+[
+ {
+  "round": 1,
+  "change": "New driver over 944 run and jvm seeds (single-file tests with a .check file, 269 excluded), configurations base, -opt:local and -Ydelambdafy:inline, each compile in a fresh Global and class loader. Run on w3-int and again on w4-int with JaCoCo (cases counted twice).",
+  "cases": 5664,
+  "seconds": 430,
+  "signatures_new": 1,
+  "signatures_known": 0,
+  "false_alarms": "9 of 2832 outcomes differed from base; 11 outputs differ only in lambda or local class names, reflection of own bytecode or JIT-elided exception messages (t6827)",
+  "coverage": {
+   "backend_jvm": {
+    "covered": 6567,
+    "total": 8225
+   },
+   "transform": {
+    "covered": 6714,
+    "total": 8729
+   },
+   "typechecker": {
+    "covered": 9361,
+    "total": 14385
+   }
+  },
+  "largest_unreached": [
+   "AnfTransform$AnfTransformer.$anonfun$transform$1",
+   "ExprBuilder$AsyncBlockBuilder.add",
+   "AliasingFrame.execute",
+   "AsyncPhase$AsyncTransformer$UseFields.transform",
+   "ProdConsAnalyzer.copyOperationProducedValueSlots"
+  ],
+  "next": "Add the @specialized-stripped rewrite and separate compilation of each top-level definition, which reach specialization and symbol loading from class files."
+ },
+ {
+  "round": 2,
+  "change": "Added the nospec rewrite (28 seeds contain @specialized) and separate compilation of top-level units in given order.",
+  "cases": 756,
+  "seconds": 520,
+  "signatures_new": 0,
+  "signatures_known": 1,
+  "false_alarms": "nospec: 8 differences, all reflection of specialized method names or counts; sepfwd: 58 differences, all not-found or sealed-inheritance errors from units that depend on later units, plus 3 differences in file names of messages",
+  "coverage": {
+   "backend_jvm": {
+    "covered": 6594,
+    "total": 8225
+   },
+   "transform": {
+    "covered": 6714,
+    "total": 8729
+   },
+   "typechecker": {
+    "covered": 9589,
+    "total": 14385
+   }
+  },
+  "largest_unreached": [
+   "AnfTransform$AnfTransformer.$anonfun$transform$1",
+   "ExprBuilder$AsyncBlockBuilder.add",
+   "AliasingFrame.execute",
+   "AsyncPhase$AsyncTransformer$UseFields.transform",
+   "ProdConsAnalyzer.copyOperationProducedValueSlots"
+  ],
+  "next": "Replace reverse order (346 of 366 fail by construction) with dependency-ordered retry, add -Xsource:3 and the 2.13.18 comparison."
+ },
+ {
+  "round": 3,
+  "change": "Replaced reverse order with dependency-ordered retry (sepdep), added -Xsource:3 and 2.13.18 runs (not instrumented).",
+  "cases": 2254,
+  "seconds": 400,
+  "signatures_new": 0,
+  "signatures_known": 1,
+  "false_alarms": "sepdep: 29 differences, 26 are cycles between units or sealed hierarchies, 3 file names in messages; xsource3: 1 compile error in run/collections; 2.13.18: 11 differences, all worse on 2.13.18 or noise",
+  "coverage": {
+   "backend_jvm": {
+    "covered": 6594,
+    "total": 8225
+   },
+   "transform": {
+    "covered": 6714,
+    "total": 8729
+   },
+   "typechecker": {
+    "covered": 9591,
+    "total": 14385
+   }
+  },
+  "largest_unreached": [
+   "AnfTransform$AnfTransformer.$anonfun$transform$1",
+   "ExprBuilder$AsyncBlockBuilder.add",
+   "AliasingFrame.execute",
+   "AsyncPhase$AsyncTransformer$UseFields.transform",
+   "ProdConsAnalyzer.copyOperationProducedValueSlots"
+  ],
+  "next": "Coverage of the transform and backend phases barely moves with these rewrites (transform 6714 of 8729 lines in all three rounds); unreached code is async (-Xasync) and optimizer internals, so add -opt:inline:** and -Ycheck:all configurations."
+ },
+ {
+  "round": 4,
+  "change": "Added -opt:inline:** with -opt:local, -Ycheck:all and -opt:local with -Ydelambdafy:inline, aimed at the unreached optimizer and check code.",
+  "cases": 2832,
+  "seconds": 400,
+  "signatures_new": 1,
+  "signatures_known": 1,
+  "false_alarms": "optdelam: 10, the same as delam; optinline: 1 (t10277, reflection of specialized method names, inlined away); ycheck: 2 differences are noise (t6827, t8047)",
+  "coverage": {
+   "backend_jvm": {
+    "covered": 6701,
+    "total": 8225
+   },
+   "transform": {
+    "covered": 6715,
+    "total": 8729
+   },
+   "typechecker": {
+    "covered": 9908,
+    "total": 14385
+   }
+  },
+  "largest_unreached": [
+   "AnfTransform$AnfTransformer.$anonfun$transform$1",
+   "ExprBuilder$AsyncBlockBuilder.add",
+   "AliasingFrame.execute",
+   "AsyncPhase$AsyncTransformer$UseFields.transform",
+   "ProdConsAnalyzer.copyOperationProducedValueSlots"
+  ],
+  "next": "Only typechecker coverage rose (9591 to 9908 lines, from -Ycheck); transform did not move in four rounds, so the seed corpus is exhausted for these rewrites. Stop."
+ }
+]

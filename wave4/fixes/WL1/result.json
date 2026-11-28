@@ -1,0 +1,13 @@
+{
+ "id": "WL1",
+ "outcome": "FIXED",
+ "branch": "review/w4-wl1-triemap-read-only-snapshot",
+ "commit": "ce98527601",
+ "workspace": "/Users/jzaugg-virtus/code/.worktrees/scala/w4-fix-j",
+ "files": "src/library/scala/collection/concurrent/TrieMap.scala, test/junit/scala/collection/concurrent/TrieMapTest.scala",
+ "failing_before": "sbt junit/testOnly scala.collection.concurrent.TrieMapTest on the base plus the test: readOnlySnapshotOfReadOnlySnapshot failed: java.lang.NullPointerException: Cannot invoke \"AtomicReferenceFieldUpdater.compareAndSet(...)\" because \"this.rootupdater\" is null; readOnlySnapshotRejectsMutation failed: AssertionError: did not return (10 s timeout, the put spun).",
+ "ran_after": "One sbt session (JDK 21): junit/testOnly scala.collection.concurrent.* scala.SerializationStabilityTest scala.collection.SetMapRulesTest scala.collection.IterableTest scala.collection.convert.EqualsTest (117 passed); scalacheck/testOnly CtrieTest (6 properties passed); library/mimaReportBinaryIssues (success, no new filters). Then scalacheck/testOnly ConcurrentMapTest (passed).",
+ "prior_work": "None in scala/bug or the branch index. retronym/scala#677 guards its snapshot calls with nonReadOnly because of this; not stacked (the fix does not need its code).",
+ "unsure": "(1) Mutators throw unconditionally on a read-only map, also when they would change nothing (remove of an absent key, putIfAbsent of a present key), as Collections.unmodifiableMap does; getOrElseUpdate of a present key still answers, since it only reads. (2) The check sits at the top of the three retry loops, one field read per update on writable maps. (3) Textual merge: the new tests append to the end of TrieMapTest like #673/#677; #715 edits the clear() line next to the new checkWritable() line. No semantic overlap with #673, #676, #715, #330. With this fix #677's nonReadOnly guards become unnecessary.",
+ "note": "readOnlySnapshot returns this on a read-only map, snapshot copies the root into a new writable map without a root swap, and inserthc/insertifhc/removehc/clear throw UnsupportedOperationException on a read-only map."
+}

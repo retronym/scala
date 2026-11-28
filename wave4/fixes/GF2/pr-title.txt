@@ -1,0 +1,1 @@
+Reject a non-constant annotation argument of literal type

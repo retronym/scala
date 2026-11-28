@@ -1,0 +1,13 @@
+{
+ "id": "WX1",
+ "outcome": "FIXED",
+ "branch": "review/w4-wx1-structural-unit-result-null",
+ "commit": "c83d00f741",
+ "workspace": "/Users/jzaugg-virtus/code/.worktrees/scala/w4-fix-m",
+ "files": "src/compiler/scala/tools/nsc/transform/CleanUp.scala, test/files/run/structural-unit-result.scala, test/files/run/structural-unit-result.check",
+ "failing_before": "partest test/files/run/structural-unit-result.scala on the base: output differs, lines for m(1): Any, n: Any, n: AnyVal and the type-parameter call print null instead of (); the Unit-result line and the three null-from-non-void lines already matched.",
+ "ran_after": "sbt partest test/files/run/structural-unit-result.scala: ok. sbt 'partest --grep reflectiveCalls' (52 tests: run/pos/neg/jvm using structural calls): all ok. By hand with the workspace's own build/quick/classes (java -cp library:reflect:compiler:scala-asm scala.tools.nsc.Main): -Xprint:cleanup and javap on Any/type-param/AnyRef/T<:AnyRef cases: the first two get method local + null/getReturnType test, the last two unchanged; -Ycheck:all on the test: no erroneous-tree reports (one pre-existing 'Out of scope symbol reference' warning for the refinement in the type-parameter method at typer).",
+ "prior_work": "none upstream; fork PRs 562 (arg evaluation order, different region of transformApplyDynamic, composes), 355, 394, 469, 437 touch structural calls but not the result; scala/bug#6199 runtime-reflection analogue.",
+ "unsure": "The fix keys on the pre-erasure result type not conforming to AnyRef (enteringErasure); an existential or abstract type member result also takes the new path, which is correct but costs the null test. A Scala class overriding def n: Any with def n: Unit has two methods n() (Object bridge and void); Class.getMethod may pick either, and either now yields (). Scala 3 not changed.",
+ "note": "When the refinement member's result type admits Unit, the call site keeps the looked-up Method in a local and maps a null result of a void method to BoxedUnit.UNIT; other result types generate unchanged bytecode."
+}

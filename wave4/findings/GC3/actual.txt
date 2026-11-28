@@ -1,0 +1,10 @@
+e = Int.MinValue until Int.MinValue; e.isEmpty                             = true
+e.iterator.drop(1).hasNext                                                 = true
+e.iterator.drop(1).take(3).toList                                          = List(-2147483647, -2147483646, -2147483645)
+e.indexWhere(_ => true, 1)                                                 = 1
+e.segmentLength(_ => true, 1)                                              = <no result after 1s>
+f = 4 until Int.MaxValue by -1; f.isEmpty                                  = true
+f.iterator.drop(2).hasNext                                                 = true
+f.segmentLength(_ != 0, 2)                                                 = 2
+(Int.MaxValue until Int.MaxValue by -1).iterator.drop(1).hasNext           = true
+(1 to 3).take(0).iterator.drop(1).hasNext   (control)                      = false

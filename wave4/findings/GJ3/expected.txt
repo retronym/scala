@@ -1,0 +1,5 @@
+Both orders report four deprecation warnings, the first being
+
+repro/Test.scala:2: warning: method a in class J is deprecated (since 12)
+
+and print 10. (A) reports three: the one for J.a(), annotated @Deprecated(since = "1" + "2", forRemoval = false), is missing.

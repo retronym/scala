@@ -1,0 +1,14 @@
+{
+ "id": "GF2",
+ "outcome": "FIXED",
+ "sweep": "review-fix",
+ "branch": "sweep/w4-gf2-annotation-argument-not-constant",
+ "commit": "5df1f5051a",
+ "workspace": "/Users/jzaugg-virtus/code/.worktrees/scala/w4-fix-e",
+ "files": "src/compiler/scala/tools/nsc/typechecker/Typers.scala, test/files/neg/annotation-argument-not-constant/Ann.java, test/files/neg/annotation-argument-not-constant/Test.scala, test/files/neg/annotation-argument-not-constant.check, test/files/pos/annotation-argument-constant/{Ann,Nested,Color,JK}.java, test/files/pos/annotation-argument-constant/{Test,pk}.scala",
+ "failing_before": "New pos/annotation-argument-constant on the unreworked PR branch: 9 errors 'annotation argument needs to be a constant; found: true.unary_$bang' / 'false.unary_$bang' / '1.unary_$tilde' / '1.unary_$minus' / '1.unary_$plus' / '1.5.unary_$minus' / '2L.unary_$tilde' / '3.unary_$minus' (inside Array) / 'true.unary_$bang' (parenthesised). The same file compiles with the golden base scalac (713241d).",
+ "ran_after": "sbt \"partest test/files/pos/annotation-argument-constant test/files/neg/annotation-argument-not-constant\" (both ok) and \"partest --pos --neg --jvm\" (3433 passed, 2 skipped, 0 failed; includes jvm/java-constant-impure-qualifier and -sep).",
+ "prior_work": "retronym/scala#606 (EO6/LZ2) folds blocks in ordinary code and does not touch tryConst. jvm/java-constant-impure-qualifier keeps passing.",
+ "unsure": "Owner decision kept open in the body: the change still rejects blocks and calls of literal-typed methods that 2.13.0-2.13.18 accept; the alternative is a warning. I did not establish why a literal receiver lacks a type in the original tree (only the top-level unary case failed; -(-(1)) passed); the fix decides a literal receiver from its constant value instead. The error message prints the typed original tree (K.three().+(1), a block with its accessor), not the source text. The full run category was not rerun on this branch.",
+ "note": "isPrimitiveOrString now accepts a Literal receiver by its constant tag, so unary operators applied directly to a literal are constant expressions again; a pos test covers every form SLS 6.24 allows in an annotation argument."
+}

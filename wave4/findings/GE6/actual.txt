@@ -1,0 +1,4 @@
+scalac failed:
+error: scala.tools.asm.LimitExceededException: Too many allocated bytes
+	at scala.tools.asm.tree.analysis.ComputeLimits.checkNewBytes(ComputeLimits.java:116)
+	at scala.tools.asm.tree.analysis.Frame.setLimits(Frame.java:124)

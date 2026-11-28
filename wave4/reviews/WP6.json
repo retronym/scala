@@ -1,0 +1,11 @@
+{
+ "id": "WP6",
+ "verdict": "real, known: retronym/scala#460 (remaining part)",
+ "severity": "low",
+ "reran": "cmd.sh on w4-int: eleven 'Tree has erroneous type' (Option.apply[Double](0.5) and the enclosing block) at typer..patmat, program prints List(Some(2.0), Some(1.0), Some(0.5)). w3-base and 2.13.18: same plus a NullPointerException and no class file.",
+ "user_impact": "Only -Ycheck users; on w4-int the program compiles and runs correctly. The no-class-file effect on base and 2.13.18 is the destructive checker, which retronym/scala#459 fixes.",
+ "fixability": "clear cut: when re-typing a Return in the checker, take the expected type from the Return symbol's result type rather than the innermost enclosing method. Checker only.",
+ "regression": "no",
+ "links": "retronym/scala#460: same situation (return in a partial function literal nested in the synthetic applyOrElse), which accepts the return target but not the re-typing of its expression; add it there. retronym/scala#459 for the destructive part.",
+ "note": "Checker false positive: the original typing is right (the program returns 0.5 from m); only the re-typing picks applyOrElse's B1 as the expected type."
+}

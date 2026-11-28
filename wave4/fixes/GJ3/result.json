@@ -1,0 +1,13 @@
+{
+ "id": "GJ3",
+ "outcome": "TEST ONLY",
+ "branch": "review/w4-gj3-java-deprecated-constant-expression",
+ "commit": "f0e6ac8577",
+ "workspace": "/Users/jzaugg-virtus/code/.worktrees/scala/w4-fix-c",
+ "files": "test/files/neg/java-annotation-operator-argument/J.java, test/files/neg/java-annotation-operator-argument/Test.scala, test/files/neg/java-annotation-operator-argument.check",
+ "failing_before": "neg/java-annotation-operator-argument on the base: output differs; only 'Test.scala:4: warning: method b in class J is deprecated (since 12)' (1 warning), the expected warning for J.a() is missing.",
+ "ran_after": "No fix. The test was run through sbt partest on the base and fails as above; the hand-written check holds the output of the separate compilation order (two warnings, both 'since 12'). It is also the one failure in the pos/neg/jvm runs of the GF1 and GF2 branches, where it was present untracked.",
+ "prior_work": "retronym/scala#288 (J5) changes the same bail-out in JavaParsers.annotation (parenthesised arguments) and still drops the annotation; not stacked, since the test needs no code from it. Constant-expression parser and JavaConstantFolder from scala/scala#11290.",
+ "unsure": "The check file is hand-written (expected-correct output), not produced by a fixed compiler; caret columns were taken from the base's output for J.b(). Needs Java 9+ (the since element of @Deprecated), hence the jvm line.",
+ "note": "Not fixed: a sound fix reuses constantExprOpt in elementValue (new terminators, class literals) and folds with JavaConstantFolder in typedAnnotation, which lives privately in Namers; that is a parser and typer change of moderate size that would replace retronym/scala#288 and is better done as one change with J5."
+}

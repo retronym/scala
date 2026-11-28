@@ -1,0 +1,22 @@
+{
+ "id": "WP6",
+ "theme": "generated",
+ "track": "programs2",
+ "area": "typechecker/TreeCheckers (re-typing a Return inside a partial function literal)",
+ "area_code": "C",
+ "title": "-Ycheck reports a return from the enclosing method inside a partial function literal as erroneous from typer to patmat; the return expression is re-typed against applyOrElse's result type",
+ "kind": "spurious warning",
+ "oracle": "-Ycheck:all against the reference compile",
+ "generator": "wave4/harness/programs/Gen.scala, round 5 (non-local return family): return inside { case x if ... => ... }: PartialFunction[Int, T] in a method",
+ "signature": "ycheck|log|Caught java.lang.AssertionError: assertion failed: Tree has erroneous type: <the return expression>  (at typer to patmat; 21 of 22 -Ycheck samples in the first smoke run)",
+ "seed": "500010 (programs2 smoke run of round 1)",
+ "measure": "n/a",
+ "detail": "def m(p: Int): Option[Double] = { val y: Int = ({ case x if x > 1 => if (x > 7) return Option(0.5) else 1 }: PartialFunction[Int, Int]).applyOrElse(p, ...); Some(y.toDouble) } compiles and runs correctly, but -Ycheck:all prints eleven 'Tree has erroneous type' assertions, for Option.apply[Double](0.5) and the enclosing block, at every phase from typer to patmat. Until uncurry the return sits in the applyOrElse method the typer synthesized for the partial function class, and the checker's re-typing takes the expected type of the return expression from the innermost enclosing method (Int, applyOrElse's B1) instead of the method the Return's symbol names. retronym/scala#460 made the checker accept the Return's target in that position ('does not reference directly enclosing DefDef'); the re-typing of its expression is the remaining report. On the base and 2.13.18 the checker also leaves the trees damaged and no class file is written. Any non-local return in a partial function literal (collect, recover, applyOrElse) hits it.",
+ "fix_sketch": "In the checker (or in typedReturn when retyping after typer), take the expected type from the Return's symbol's result type rather than from the enclosing method context. Checker-only, no compatibility cost.",
+ "on_integration": "present",
+ "on_base": "same (and no class file written)",
+ "on_2_13_18": "same (and no class file written)",
+ "scala3": "n/a",
+ "prior": "retronym/scala#460 (same situation, the other check); retronym/scala#419 (non-destructive checker)",
+ "confidence": "confirmed"
+}

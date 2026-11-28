@@ -1,0 +1,1 @@
+Type a varargs record component's accessor as an array

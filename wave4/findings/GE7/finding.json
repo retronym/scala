@@ -1,0 +1,21 @@
+{
+  "id": "GE7",
+  "theme": "generated",
+  "track": "erasure",
+  "area": "scala.tools.nsc.transform.Constructors",
+  "title": "FatalError \"EmptyScope.enter\" during constructors on a generated program",
+  "kind": "crash",
+  "oracle": "a typed program must compile",
+  "generator": "wave4/harness/erasure (Gen.scala, Driver.scala): widened grammar; the repro is the generated program, not shrunk",
+  "signature": "base crash CRASH scala.reflect.internal.FatalError: EmptyScope.enter",
+  "seed": "60054 (dump run, @specialized weight 0.25)",
+  "measure": "n/a",
+  "detail": "The compiler aborts with FatalError \"EmptyScope.enter\" in phase constructors on the integration build, the base and 2.13.18. The program was not minimised and the construct that triggers the crash is not established; the driver does not yet shrink crashes of the reference compilation. A second seed in the same run (60226) gave the same message on the integration build.",
+  "fix_sketch": "Not established.",
+  "on_integration": "present",
+  "on_base": "same",
+  "on_2_13_18": "same",
+  "scala3": "not run",
+  "prior": "none found for the message",
+  "confidence": "needs a second look: not minimised, cause unknown, whether it needs @specialized not checked"
+}

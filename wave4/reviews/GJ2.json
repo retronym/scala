@@ -1,0 +1,11 @@
+{
+  "id": "GJ2",
+  "verdict": "real",
+  "severity": "medium",
+  "reran": "cmd.sh on w3-int, w3-base and 2.13.18: joint order fails with 'no type parameters for method apply ... applied to arguments (Int*)'; separate order prints 2. Same on all three, as the finding says. Scala 3.7.4 was run by the hunter.",
+  "user_impact": "Anyone who compiles a Java record with a varargs component together with Scala that uses the accessor as an array. With `record Command(String name, String... args)`, `c.args.toList`, `c.args.map(...)`, `c.args.mkString`, `Option(c.args)`, `(c.name, c.args)` and `c.name +: c.args` are all rejected in joint compilation and accepted against the class file; only `.length`, passing to an Array parameter and ascription work. Varargs record components are uncommon, but when one exists nearly every use fails.",
+  "fixability": "clear cut: in JavaParsers.recordDecl give the generated accessor the array type when the component's type tree is the repeated-parameter type (the canonical constructor keeps T*). No compatibility cost.",
+  "regression": "no (present since records were supported in the Java parser, 2.13.7, commit f7ae7af0b3)",
+  "links": "none. No scala/bug ticket found (query: record varargs accessor java).",
+  "note": "The hunter understates it: the failure does not need type inference of a generic method. Any member selection that an array gets through an implicit view (toList, map, mkString, +:) fails with 'value toList is not a member of String*'. Cause confirmed by reading JavaParsers.scala:1019-1024: the accessor is DefDef(..., tpt.duplicate, ...) of the header parameter, whose type for a varargs component is the repeated type. JLS 8.10.3 gives the accessor the declared type of the component, which for a variable arity component is the array type."
+}

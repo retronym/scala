@@ -1,0 +1,13 @@
+{
+ "id": "GJ2",
+ "outcome": "FIXED",
+ "branch": "review/w4-gj2-java-record-varargs-accessor",
+ "commit": "d1a25a8a49",
+ "workspace": "/Users/jzaugg-virtus/code/.worktrees/scala/w4-fix-c",
+ "files": "src/compiler/scala/tools/nsc/javac/JavaParsers.scala, test/files/run/java-record-varargs-accessor/Command.java, test/files/run/java-record-varargs-accessor/Test.scala, test/files/run/java-record-varargs-accessor.check",
+ "failing_before": "run/java-record-varargs-accessor on the base: 'Test.scala:7: error: value toList is not a member of String*', 'value map is not a member of String*', and for List(c.args) 'no type parameters for method apply ... applied to arguments (String*)' (5 errors).",
+ "ran_after": "sbt partest of run/java-record-varargs-accessor plus every partest with a Java record (neg/t13176-exhaustive, pos/t11908, pos/t11908b, pos/t12474, run/t13175-macro-classfile, run/t13175-macro-nested, run/t13176-unloaded): all ok; pos/neg t12878 skipped (Java 25+ only).",
+ "prior_work": "None. No scala/bug ticket found by the review.",
+ "unsure": "nothing",
+ "note": "recordDecl gives the generated accessor Array[T] when the header parameter's type tree is the repeated-parameter type; the canonical constructor keeps T*. An explicitly declared accessor is untouched."
+}

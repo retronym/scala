@@ -1,0 +1,1 @@
+Widen a local lazy val's singleton type when duplicating a body

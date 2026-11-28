@@ -1,0 +1,22 @@
+{
+  "id": "WL1",
+  "theme": "generated",
+  "track": "library",
+  "area": "scala.collection.concurrent.TrieMap",
+  "area_code": "M",
+  "title": "snapshot() and readOnlySnapshot() of a read-only TrieMap snapshot throw NullPointerException",
+  "kind": "crash",
+  "oracle": "immutable.TreeMap model of each map and snapshot; any public read on a read-only snapshot must answer",
+  "generator": "wave4/harness/library/Maps.scala TrieMapFam: snapshot ops applied to any live target, including earlier read-only snapshots",
+  "signature": "concurrent.TrieMap[CK] | harness | NullPointerException",
+  "seed": "seed=1 case=7 caseSeed=-669528114487223426",
+  "measure": "n/a",
+  "detail": "readOnlySnapshot() returns a TrieMap whose rootupdater is null. Calling readOnlySnapshot() or snapshot() on that map runs RDCSS_ROOT, which calls CAS_ROOT through the null updater and throws NullPointerException (TrieMap.scala:729 via 769, 857). The rest of the read API works on the read-only map, because iterator, size, keySet and view test nonReadOnly first; the two snapshot methods do not. The static type of readOnlySnapshot() is collection.Map, so callers reach this only after a cast or through code that receives a TrieMap that happens to be read-only, for example a snapshot passed to a method that takes a TrieMap and snapshots its argument. Likelihood in ordinary code is low; the failure is an unexplained NPE rather than an UnsupportedOperationException.",
+  "fix_sketch": "In readOnlySnapshot, return this when !nonReadOnly (a read-only snapshot never changes); in snapshot, build a new writable TrieMap over r.copyToGen(new Gen, this) without the RDCSS when !nonReadOnly. No binary compatibility cost.",
+  "on_integration": "present",
+  "on_base": "same",
+  "on_2_13_18": "same",
+  "scala3": "n/a",
+  "prior": "none found (wave-three TrieMap findings KT1 to KT6, FW4, M9 are other causes; retronym/scala PR 677 guards its new clone path with nonReadOnly, so it does not hit this)",
+  "confidence": "confirmed"
+}

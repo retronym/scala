@@ -1,0 +1,11 @@
+{
+  "id": "GE4",
+  "verdict": "real, known: scala/bug#8633",
+  "severity": "medium",
+  "reran": "cmd.sh on the integration build, the base and 2.13.18: type mismatch, found x1.type, required A1, as recorded; 2.12.20 the same. Scala 3.7.4 compiles it and prints Some(1). The example in scala/bug#8633 (open since 2014) still fails with the same message on the integration build.",
+  "user_impact": "Every partial function literal inside a body that specialization duplicates is rejected: ys.collect { case x if x > 1 => p } or collectFirst in a method with a @specialized type parameter, or in a method of a specialized class whose signature mentions the parameter, with or without a guard (case 1 => p and case s: String => p fail too). Common in specialized code; users work around it by moving the literal out of the method.",
+  "fixability": "clear cut in principle: the ticket links the fix made in the miniboxing plugin (commit 8529025c) which Vlad Ureche said ports directly; Duplicators must keep or correctly retype the synthesized applyOrElse. No compatibility cost.",
+  "regression": "no (reported against 2.11.0)",
+  "links": "H66 (retronym/scala#431) is another Duplicators retyping rejection. scala/bug#8694 was closed as a duplicate of #8633.",
+  "note": "The finding says prior none found; it is scala/bug#8633 with the same message. The finding understates the trigger: a guard is not needed, and collect in a specialized method is enough."
+}

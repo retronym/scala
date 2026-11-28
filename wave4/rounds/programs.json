@@ -1,0 +1,166 @@
+[
+ {
+  "round": 1,
+  "change": "New shared in-process driver (concurrent configurations, in-memory output, 2.13.18 in the same JVM, -Ycheck complaints captured); @specialized off, Main split into one method per instance, numeric overloads made unambiguous.",
+  "cases": 130,
+  "seconds": 220,
+  "compile_rate": "100.0%",
+  "signatures_new": 0,
+  "signatures_known": 0,
+  "false_alarms": "0 in the round; 2 kinds fixed in the smoke runs before it (ambiguous numeric overloads in a subclass, 5 of 113 programs; -Ycheck output on a reference that did not compile)",
+  "coverage": {
+   "transform": [
+    3698,
+    5328
+   ],
+   "transform/patmat": [
+    1500,
+    2186
+   ],
+   "backend/jvm": [
+    2641,
+    3905
+   ],
+   "backend/jvm/opt": [
+    1801,
+    2955
+   ],
+   "typechecker": [
+    6530,
+    13867
+   ]
+  },
+  "largest_unreached": [
+   "CleanUp.transformApplyDynamic (47 lines)",
+   "CleanUp.transformStringSwitch",
+   "SwitchMaker.collapseGuardedCases (24)",
+   "UnCurry.addJavaVarargsForwarders (21)",
+   "PlainBodyBuilder.genStringConcat (18 of 38)"
+  ],
+  "next": "Add Int, Char and String literal switches with alternatives, guards and @switch, aimed at the switch emitter and CleanUp's string switch.",
+  "notes": "34 programs/min under JaCoCo (about 100 without); -opt:local took 5x the reference's compile time."
+ },
+ {
+  "round": 2,
+  "change": "Added Int, Char and String literal switches with alternatives, guards and @switch.",
+  "cases": 175,
+  "seconds": 220,
+  "compile_rate": "100.0%",
+  "signatures_new": 1,
+  "signatures_known": 1,
+  "false_alarms": "0 (the -opt:local timeout was the load on two JVMs pushing a known 15 s compilation past 60 s)",
+  "coverage": {
+   "transform": [
+    3746,
+    5328
+   ],
+   "transform/patmat": [
+    1566,
+    2186
+   ],
+   "backend/jvm": [
+    2659,
+    3905
+   ],
+   "backend/jvm/opt": [
+    1777,
+    2955
+   ],
+   "typechecker": [
+    6925,
+    13867
+   ]
+  },
+  "largest_unreached": [
+   "CleanUp.transformApplyDynamic (47 lines)",
+   "BTypes.PrimitiveBType.maxValueType (31 of 38)",
+   "PlainSkelBuilder.appendToStaticCtor (30)",
+   "Erasure.preEraseApply (26 of 51)",
+   "UnCurry.addJavaVarargsForwarders (21 of 23)"
+  ],
+  "next": "Add structural (reflective) calls and @varargs members, aimed at CleanUp.transformApplyDynamic and UnCurry's varargs forwarders; split Main's methods to at most 12 calls each so -opt:local stays off the GE6 cost curve.",
+  "notes": "New: WP1, -Ycheck reports the default label of a guarded switch with a boxed result as erroneous after erasure (10 of 17 -Ycheck samples). Known: GE6 reached by -opt:local alone (CopyProp's ProdConsAnalyzer), 15 s for one 83 KB program. Two JVMs: 32 and 13.5 (JaCoCo) programs/min."
+ },
+ {
+  "round": 3,
+  "change": "Added structural (reflective) calls on a generic class and on anonymous classes, and @varargs members; split Main's methods to at most 12 calls; excluded GE6 (-opt:local timeouts) and WP1.",
+  "cases": 390,
+  "seconds": 220,
+  "compile_rate": "99.2% (387 of 390; 3 double definitions from the generator treating a generic value class as erasing to Object, fixed after the round)",
+  "signatures_new": 1,
+  "signatures_known": 4,
+  "false_alarms": "0; 3 signatures where 2.13.18 throws VerifyError or ClassCastException and the integration build is correct also fail on the base, so are fixed by earlier waves (counted as known); WP1 10 hits",
+  "coverage": {
+   "transform": [
+    3897,
+    5328
+   ],
+   "transform/patmat": [
+    1566,
+    2186
+   ],
+   "backend/jvm": [
+    2690,
+    3905
+   ],
+   "backend/jvm/opt": [
+    1774,
+    2955
+   ],
+   "typechecker": [
+    7239,
+    13867
+   ]
+  },
+  "largest_unreached": [
+   "PlainSkelBuilder.appendToStaticCtor (30)",
+   "Erasure.preEraseApply (26 of 51)",
+   "CleanUp.transformApplyDynamic (26 of 47)",
+   "PlainBodyBuilder.genStringConcat lambda (26)",
+   "BTypes.PrimitiveBType.maxValueType (31 of 38, round 2)"
+  ],
+  "next": "Add Byte, Short, Char and Float operands, ##, getClass and isInstanceOf on boxed primitives, aimed at maxValueType, preEraseApply and string concatenation of mixed primitives.",
+  "notes": "New: WP2, a structural type in a generic value class method keeps the class's type parameter after extmethods (-Ycheck). Two JVMs: 77.7 and 27.9 (JaCoCo) programs/min."
+ },
+ {
+  "round": 4,
+  "change": "Added Byte, Short, Char and Float operands, ##, getClass and isInstanceOf on boxed primitives, and mixed string concatenation; fixed generic value class erasure in the overload generator; excluded WP2.",
+  "cases": 555,
+  "seconds": 220,
+  "compile_rate": "99.8% (554 of 555; one anonymous class inside a value class)",
+  "signatures_new": 1,
+  "signatures_known": 5,
+  "false_alarms": "0; 5 v18 signatures (2.13.18 throws ClassCastException or VerifyError in 64 programs, the integration build is correct) also fail on the base, so are fixed by earlier waves; 2 new -Ycheck signatures not triaged; WP1 19 and WP2 3 hits",
+  "coverage": {
+   "transform": [
+    3916,
+    5328
+   ],
+   "transform/patmat": [
+    1566,
+    2186
+   ],
+   "backend/jvm": [
+    2792,
+    3905
+   ],
+   "backend/jvm/opt": [
+    2422,
+    2955
+   ],
+   "typechecker": [
+    7291,
+    13867
+   ]
+  },
+  "largest_unreached": [
+   "PlainSkelBuilder.appendToStaticCtor (30)",
+   "CleanUp.transformApplyDynamic (26 of 47)",
+   "PlainBodyBuilder.genStringConcat lambda (26)",
+   "BCJGenSigGen.getGenericSignature (25 of 36)",
+   "CleanUp.transformApply (24 of 66)"
+  ],
+  "next": "Stop here (budget). Next: triage the two -Ycheck signatures; Java-facing members (generic signatures, @varargs called from Java) and symbol/array literals for CleanUp.transformApply.",
+  "notes": "New: WP3, a try arm in a partial function with a value class result fails verification (crash under -opt:local). Two JVMs: 120.7 and 29.9 (JaCoCo) programs/min."
+ }
+]

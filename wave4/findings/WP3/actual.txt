@@ -1,0 +1,4 @@
+-- scalac 
+Exception in thread "main" java.lang.VerifyError: Inconsistent stackmap frames at branch target 48
+-- scalac -opt:local
+error: scala.tools.asm.tree.analysis.AnalyzerException: While processing Test$$anonfun$m$1.applyOrElse

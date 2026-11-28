@@ -1,0 +1,21 @@
+{
+  "id": "GC7",
+  "theme": "generated",
+  "track": "collections3",
+  "area": "scala.collection.mutable (bulk operations with a source derived from the receiver)",
+  "title": "Open class: bulk operations of mutable sets, maps and ArrayBuffer read a lazy source derived from the receiver while they modify it (addAll and subtractAll of a mapped view or iterator, ArrayBuffer.flatMapInPlace returning a view of the buffer)",
+  "kind": "wrong result",
+  "oracle": "the argument is read as it was before the call: the same call with the source derived from a second, equal instance",
+  "generator": "wave4/harness/collections3/AliasMatrix.scala: every mutable collection class x every bulk method x sources derived from the receiver (itself, view, mapped, filtered, sliced, reversed view, iterator, LazyList, keySet and values derivatives), with 3 and with 40 elements",
+  "signature": "Set | HashSet | addAll | view.map | WRONG and 172 further WRONG cells",
+  "seed": "not random: exhaustive matrix",
+  "measure": "1,312 cells on the integration build: 780 equal to the model, 222 ConcurrentModificationException, 173 return a different state without an exception, 28 another exception, 7 do not terminate, 102 not applicable. Against 2.13.18 only 30 buffer cells differ (28 wrong there, equal to the model here); no Set or Map cell differs. Cells: wave4/harness/collections3/alias-integration-build.tsv",
+  "detail": "The buffers were repaired cell by cell in earlier waves (LB5, LM2, LM3); the matrix shows the same defect in the classes not yet visited. addAll of a mapped view or iterator of the receiver keeps consuming what it adds: HashSet(1, 2, 3).addAll(s.view.map(_ + 1)) ends with 8 elements, and HashMap, LinkedHashMap, TreeMap, CollisionProofHashMap, LongMap, AnyRefMap and the java.util map wrappers differ likewise. subtractAll of a mapped view skips or over-removes because the iteration runs over the structure being unlinked: wrong on HashSet, on LinkedHashSet and TreeSet at 40 elements, and on every Scala map except ListMap, TrieMap and WeakHashMap (which throws ConcurrentModificationException). ArrayBuffer.flatMapInPlace collects the function's results, clears the buffer and only then reads them, so a function returning a view of the buffer empties it; ArrayDeque throws IndexOutOfBoundsException for an iterator of itself. Not counted here as defects: in-place methods whose function reads the receiver (mapInPlace, filterInPlace, mapValuesInPlace), and the cells that throw ConcurrentModificationException. Passing a view of a collection to its own bulk method is uncommon but legal, and nothing documents it as unsupported.",
+  "fix_sketch": "One rule in one place rather than per class: when the argument is not a strict collection distinct from the receiver, materialise it first (as ArrayBuffer.addAll already does for itself), or fail fast with the mutation count where one exists. Costs a copy for lazy arguments.",
+  "on_integration": "present",
+  "on_base": "same",
+  "on_2_13_18": "same",
+  "scala3": "not run (the 2.13 library is shared)",
+  "prior": "LB5 (retronym/scala#534), LB6 (retronym/scala#535), LM2 (retronym/scala#548), LM3 (retronym/scala#538); wave-four first collections spike (wave4/harness/collections)",
+  "confidence": "confirmed"
+}

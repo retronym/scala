@@ -1,0 +1,1 @@
+Accept a lone comma in a Java enum body

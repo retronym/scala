@@ -1,0 +1,11 @@
+{
+ "id": "WP9",
+ "verdict": "real",
+ "severity": "low",
+ "reran": "cmd.sh on w4-int: four 'Tree has erroneous type' for the :: pattern from typer to patmat, program prints 0. w3-base and 2.13.18: same plus a NullPointerException and no class file.",
+ "user_impact": "Only -Ycheck users matching on the literal List[T](); ordinary code does not match an empty list literal.",
+ "fixability": "clear cut: in the checker, accept a re-typed Nil narrower than its original type (or have the typer's rewrite keep the type with Typed(Nil, List[T])). No compatibility cost.",
+ "regression": "no",
+ "links": "Belongs with retronym/scala#509, which accepts re-typings that differ for a known compiler rewrite (the renamed field); retronym/scala#459 for the lost class file on base.",
+ "note": "Checker false positive: the tree is well typed as the typer left it (gen.mkNil.setType(List[Int]) at Typers.scala line 3930, canTranslateEmptyListToNil); re-typing the Ident Nil gives Nil.type, against which :: is not a possible pattern."
+}

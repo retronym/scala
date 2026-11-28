@@ -1,0 +1,5 @@
+scalac failed:
+error:
+  EmptyScope.enter
+     while compiling: repro/Test.scala
+        during phase: constructors

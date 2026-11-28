@@ -1,0 +1,5 @@
+scalac failed:
+error: java.lang.AssertionError: assertion failed:
+  sym: AC$mcII$sp.m$mcII$sp target: AC.m$mcI$sp
+     while compiling: repro/Test.scala
+        during phase: globalPhase=specialize, enteringPhase=explicitouter

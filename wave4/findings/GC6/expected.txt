@@ -1,0 +1,6 @@
+HashMap(1 -> 2): (m.updateWith(1)(_ => { m.remove(1); Some(7) }), m)       = (Some(7),HashMap(1 -> 7))
+HashMap(1 -> 2): (m.updateWith(1)(_ => { m.clear(); Some(7) }), m)         = (Some(7),HashMap(1 -> 7))
+LinkedHashMap(1 -> 2): (m.updateWith(1)(_ => { m.remove(1); Some(7) }), m) = (Some(7),LinkedHashMap(1 -> 7))
+LinkedHashMap(1 -> 2): then (m.size, m.contains(1))                        = (1,true)
+TreeMap(1 -> 2): (m.updateWith(1)(_ => { m.remove(1); Some(7) }), m)   (control) = (Some(7),TreeMap(1 -> 7))
+HashMap(1 -> 2): (m.updateWith(1)(_ => { m.put(9, 9); Some(7) }), m)   (control) = (Some(7),HashMap(1 -> 7, 9 -> 9))

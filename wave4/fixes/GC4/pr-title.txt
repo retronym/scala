@@ -1,0 +1,1 @@
+Return -1 from Range.indexOf for a position beyond Int indices

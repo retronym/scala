@@ -1,0 +1,72 @@
+base:compile-error 5
+base:ok 937
+base:throw 2
+delam:DIFF 10
+delam:same 929
+nospec:DIFF 8
+nospec:same 16
+nospec:skip 915
+optdelam:DIFF 10
+optdelam:same 928
+optdelam:same-after-norm 1
+optinline:DIFF 1
+optinline:same 937
+optinline:same-after-norm 1
+optlocal:DIFF 2
+optlocal:same 937
+v18:DIFF 11
+v18:same 927
+v18:same-after-norm 1
+xsource3:DIFF 1
+xsource3:same 937
+xsource3:same-after-norm 1
+ycheck:DIFF 3
+ycheck:same 935
+ycheck:same-after-norm 1
+
+run/collections	xsource3	base=ok	variant=compile-error
+run/copy-cycle-producers	v18	base=ok	variant=throw:java.lang.VerifyError
+run/escaped-space	v18	base=ok	variant=compile-error
+run/existentials3-new	delam	base=ok	variant=compile-error
+run/existentials3-new	optdelam	base=ok	variant=compile-error
+run/existentials3-old	delam	base=ok	variant=compile-error
+run/existentials3-old	optdelam	base=ok	variant=compile-error
+run/mixin-outer-accessor-in-ctor	v18	base=ok	variant=compile-error
+run/programmatic-main	v18	base=ok	variant=ok
+run/reflection-valueclasses-magic	v18	base=ok	variant=ok
+run/sammy_restrictions_LMF	delam	base=ok	variant=throw:java.lang.AssertionError
+run/sammy_restrictions_LMF	nospec	base=ok	variant=throw:java.lang.AssertionError
+run/sammy_restrictions_LMF	optdelam	base=ok	variant=throw:java.lang.AssertionError
+run/seqlike-kmp	v18	base=ok	variant=timeout-run
+run/t10277	nospec	base=ok	variant=ok
+run/t10277	optinline	base=ok	variant=ok
+run/t10277b	nospec	base=ok	variant=ok
+run/t12002	delam	base=ok	variant=ok
+run/t12002	optdelam	base=ok	variant=ok
+run/t13142	v18	base=ok	variant=throw:java.lang.BootstrapMethodError
+run/t13203	v18	base=ok	variant=ok
+run/t13205	v18	base=ok	variant=ok
+run/t3575	nospec	base=ok	variant=ok
+run/t4794	nospec	base=ok	variant=ok
+run/t498	ycheck	base=ok	variant=timeout-compile
+run/t5488-fn	nospec	base=ok	variant=ok
+run/t5488	nospec	base=ok	variant=ok
+run/t6223	nospec	base=ok	variant=ok
+run/t6260-delambdafy	delam	base=ok	variant=ok
+run/t6260-delambdafy	optdelam	base=ok	variant=ok
+run/t6260c	delam	base=ok	variant=ok
+run/t6260c	optdelam	base=ok	variant=ok
+run/t6344	v18	base=ok	variant=ok
+run/t6827	delam	base=ok	variant=ok
+run/t6827	optdelam	base=ok	variant=ok
+run/t6827	optlocal	base=ok	variant=ok
+run/t6827	ycheck	base=ok	variant=ok
+run/t8047	delam	base=ok	variant=ok
+run/t8047	optdelam	base=ok	variant=ok
+run/t8047	optlocal	base=ok	variant=ok
+run/t8047	ycheck	base=ok	variant=ok
+run/t9375	delam	base=ok	variant=ok
+run/t9375	optdelam	base=ok	variant=ok
+run/tailcalls-throw-assign	v18	base=ok	variant=compile-error
+jvm/t9105	delam	base=ok	variant=ok
+jvm/t9105	optdelam	base=ok	variant=ok

@@ -1,0 +1,1 @@
+Read a source that may view a buffer before changing the buffer

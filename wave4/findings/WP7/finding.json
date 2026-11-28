@@ -1,0 +1,22 @@
+{
+ "id": "WP7",
+ "theme": "generated",
+ "track": "programs2",
+ "area": "transform/Erasure (InjectDerivedValue retyping)",
+ "area_code": "VCL",
+ "title": "An if or match whose branches construct a value class, one from a literal, crashes erasure when the result is used as a receiver (mergePrefixAndArgs: unsupported tps)",
+ "kind": "crash",
+ "oracle": "reference compile of a valid program",
+ "generator": "wave4/harness/programs/Gen.scala, value classes in switch arms of a guard (round 5 program, constructs of rounds 2 and the value class grammar meeting)",
+ "signature": "ref|crash|CRASH scala.reflect.internal.FatalError: mergePrefixAndArgs(List(ErasedValueType(class N, Int), ErasedValueType(class N, Int(7))), covariant, Depth(1)): unsupported tps @ Typers$Typer.typedMatch",
+ "seed": "1000051 (programs2 round 1)",
+ "measure": "n/a",
+ "detail": "With case class V0(u: Int) extends AnyVal, (if (a > 0) V0(b) else V0(7)) == V0(5) and (if (a > 0) V0(b) else V0(7)).u do not compile: FatalError 'mergePrefixAndArgs(List(ErasedValueType(class V0, Int), ErasedValueType(class V0, Int(7))), covariant, Depth(1)): unsupported tps' during erasure. When erasure retypes a value class injection it gives it ErasedValueType(V0, result.tpe) with the argument's type unwidened (Erasure.scala, the InjectDerivedValue case of the erasure typer), so V0(7) gets ErasedValueType(V0, Int(7)). Where the conditional is a receiver its type is recomputed as a lub of the branches, and lub cannot merge two ErasedValueTypes that differ only in that constant. Both branches literal (V0(3) / V0(7)) crashes as well; a match instead of an if too; assigning the conditional to a val of type V0 first does not. Ordinary code with a default value class value in one branch reaches it.",
+ "fix_sketch": "Widen the argument type when retyping the injection: ErasedValueType(tref.sym, result.tpe.widen) (or use argPt). No compatibility cost.",
+ "on_integration": "present",
+ "on_base": "same",
+ "on_2_13_18": "same",
+ "scala3": "absent (prints List(true, false, 4, 7))",
+ "prior": "none found",
+ "confidence": "confirmed"
+}

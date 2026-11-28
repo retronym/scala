@@ -1,0 +1,21 @@
+{
+  "id": "GE8",
+  "theme": "generated",
+  "track": "erasure",
+  "area": "scala.tools.nsc.transform.SpecializeTypes",
+  "title": "Assertion \"sym: AC$mcBI$sp.m42$mcIB$sp target: AC.m42$mcI$sp\" fails during specialize on a generated program",
+  "kind": "crash",
+  "oracle": "a typed program must compile",
+  "generator": "wave4/harness/erasure (Gen.scala, Driver.scala): abstract class specialized in two type parameters with a method that has its own @specialized type parameter; the repro is the generated program, not shrunk",
+  "signature": "base crash CRASH java.lang.AssertionError: assertion failed: sym: AC$mcBI$sp.N$mcIB$sp target: AC.N$mcI$sp",
+  "seed": "60211 (dump run, @specialized weight 0.25)",
+  "measure": "n/a",
+  "detail": "The compiler fails an assertion in phase specialize on the integration build, the base and 2.13.18. The symbols in the message are the variant of a method m42, itself specialized in a method type parameter, inside the Byte/Int variant of a class specialized in two parameters, and the target it should forward to. The program was not minimised; the driver does not yet shrink crashes of the reference compilation.",
+  "fix_sketch": "Not established.",
+  "on_integration": "present",
+  "on_base": "same",
+  "on_2_13_18": "same",
+  "scala3": "not run",
+  "prior": "none found",
+  "confidence": "needs a second look: not minimised"
+}

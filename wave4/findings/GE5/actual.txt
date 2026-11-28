@@ -1,0 +1,5 @@
+scalac failed:
+repro/Test.scala:4: error: type mismatch;
+ found   : Int
+ required: x.type
+    def loc(q: Int): B => B = (y: B) => x

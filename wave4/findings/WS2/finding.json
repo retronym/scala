@@ -1,0 +1,22 @@
+{
+  "id": "WS2",
+  "theme": "generated",
+  "track": "seeds",
+  "area": "scala.tools.nsc.typechecker.TreeCheckers / scala.reflect.internal.Scopes",
+  "title": "-Ycheck does not terminate on a lub of LazyList and List (-Ycheck:typer on if (b) LazyList.empty else Nil; -Ycheck:all on run/t498 on the integration builds)",
+  "kind": "non-termination",
+  "oracle": "the same programs compile in 2 to 3 s without -Ycheck; run/t498 with -Ycheck:all finishes in 3 s on the base and in 6 s on 2.13.18",
+  "generator": "wave4/harness/seeds (Driver.scala, configuration ycheck): run/t498 with -Ycheck:all timed out at 60 s",
+  "signature": "ycheck|ok/timeout-compile",
+  "seed": "run/t498, round 4",
+  "measure": "n/a",
+  "detail": "def f(b: Boolean) = if (b) LazyList.empty else Nil has an inferred result type that is a refinement over the common parents of LazyList[Nothing] and Nil.type. With -Ycheck:typer scalac prints '[Now checking: typer]' and does not finish within 30 s (and not within 100 s); a thread dump shows Scope.addString calling Symbol.defString for each member of that type, with isStructuralRefinement and allOverriddenSymbols repeated for each. Vector(1) in place of LazyList.empty finishes in 3 s. The existing test run/t498 (LazyList.from(1).flatMap(i => if (i < 3000) LazyList.empty else List(1))) hangs at -Ycheck:uncurry, which is also hit by -Ycheck:all on w3-int and w4-int; on the base -Ycheck:uncurry hangs the same way but -Ycheck:all does not reach the hang, so the integration builds only moved where -Ycheck:all gets to. Whether the two hangs are one cause is not shown. Only -Ycheck, a debug option, is affected.",
+  "fix_sketch": "Find the quadratic or exponential step in the check (likely a type or scope that is printed or compared once per member of a lub refinement) and cache it; not diagnosed past the thread dump.",
+  "on_integration": "present (w3-int and w4-int)",
+  "on_base": "same for repro/T.scala; run/t498 hangs with -Ycheck:uncurry on the base too, only -Ycheck:all differs",
+  "on_2_13_18": "same",
+  "scala3": "n/a",
+  "prior": "none found",
+  "confidence": "needs a second look: the loop is not shown to be infinite (killed at 100 s), the cause is read from one thread dump, and the two programs may have different causes",
+  "area_code": "T"
+}

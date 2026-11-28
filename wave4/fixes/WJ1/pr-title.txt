@@ -1,0 +1,1 @@
+Parse Java annotation arguments as constant expressions

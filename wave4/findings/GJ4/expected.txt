@@ -1,0 +1,5 @@
+Both orders compile and print:
+
+1
+
+`enum E0 { , }` and `enum E1 { ,; ... }` are valid Java (JLS 8.9.1: EnumBody is { [EnumConstantList] [,] [EnumBodyDeclarations] }); javac accepts both.
