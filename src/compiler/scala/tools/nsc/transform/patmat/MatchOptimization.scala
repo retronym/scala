@@ -482,10 +482,13 @@ trait MatchOptimization extends MatchTreeMaking with MatchApproximation {
               def wrapInDefaultLabelDef(cd: CaseDef): CaseDef =
                 if (needDefaultLabel) deriveCaseDef(cd){ b =>
                   // If `b` is synthesized in SwitchMaker (by `collapseGuardedCases` or by `defaultCase`)
-                  // it is not yet typed. In order to assign the correct type to the label, type the case body.
-                  // See scala/scala#10926, pos/t13060.scala.
+                  // it is not yet typed. See scala/scala#10926, pos/t13060.scala.
                   val b1 = if (b.tpe == null) typer.typed(b, pt) else b
-                  defaultLabel setInfo MethodType(Nil, b1.tpe.deconst)
+                  // The label has the type of the match, like `matchEnd`, as erasure may box a primitive body
+                  // and the jumps to the label without changing the label's type. A body that does not
+                  // complete keeps its type `Nothing`, which needs no boxing (pos/t13060.scala).
+                  val labelTpe = if (b1.tpe.typeSymbol == NothingClass) b1.tpe else pt
+                  defaultLabel setInfo MethodType(Nil, labelTpe)
                   LabelDef(defaultLabel, Nil, b1)
                 } else cd
 
