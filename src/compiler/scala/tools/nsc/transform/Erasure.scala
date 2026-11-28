@@ -1037,13 +1037,21 @@ abstract class Erasure extends InfoTransform
       new EnterBridges(unit, lambdaClass).computeAndEnter()
     }
 
-    /**  Rewrite trees, at phase erasure, before they are retyped with erased types.
-     *   This entails the following:
+    /** Erases a compilation unit in one traversal, without a `Typer`.
+     *
+     *  On entering a tree, it pre-erases it (`preEraseNode`). On leaving, the tree gets its erased
+     *  type from the erased info of its symbol and the types of its children, as `Eraser` (a
+     *  `Typer` with an overridden `adapt`) would compute it, and is adapted to its expected type
+     *  with `TypeAdapter.adaptToType`, where boxing, unboxing and casts are inserted; the trees that
+     *  adaptation synthesises are typed by `adaptAssigner`. `localTyper`, an `Eraser`, types only
+     *  what the assigner falls back on and the null test of an unboxing cast.
+     *
+     *  Pre-erasure (`preErase`) rewrites a tree before it is typed with erased types:
      *
      *   - Remove all type parameters in class and method definitions.
-     *   - Remove all abstract and alias type definitions.
+     *   - Remove all abstract and alias type definitions (the assigner drops the empty trees left in
+     *     their place).
      *   - Remove all type applications other than those involving a type test or cast.
-     *   - Remove all empty trees in statements and definitions in a PackageDef.
      *   - Check that there are no double definitions in a template.
      *   - Add bridge definitions to a template.
      *   - Replace all types in type nodes and the EmptyTree object by their erasure.
@@ -1051,10 +1059,12 @@ abstract class Erasure extends InfoTransform
      *   - Remove all instance creations new C(arg) where C is an inlined class.
      *   - Reset all other type attributes to null, thus enforcing a retyping.
      *
-     *   `ErasureRetyper` applies this to each tree as it enters it (`preEraseNode`), and to whole
-     *   subtrees that `preErase` synthesises (`transform`).
+     *  Subtrees that `preErase` synthesises, and those the assigner falls back on, are pre-erased
+     *  whole by `transform`, this class's `Transformer` traversal; the erasure pass itself is `typed`.
+     *
+     *  Must be created and run `exitingErasure`.
      */
-    class PreEraseTransformer(initLocalTyper: analyzer.Typer) extends TypingTransformer(initLocalTyper) {
+    final class ErasureRetyper(root: Tree) extends TypingTransformer(null: analyzer.Typer) {
       // Work around some incomplete path unification :( there are similar casts in SpecializeTypes
       def context: Context = localTyper.context.asInstanceOf[Context]
 
@@ -1506,21 +1516,7 @@ abstract class Erasure extends InfoTransform
       def preEraseChildren(tree: Tree): Tree = enteringErasure(super.transform(tree))
 
       override def transform(tree: Tree): Tree = preEraseTree(tree, deep = true)
-    }
 
-    /** Erases a compilation unit in one traversal, without a `Typer`.
-     *
-     *  On entering a tree, it pre-erases it (`preEraseNode`). On leaving, the tree gets its erased
-     *  type from the erased info of its symbol and the types of its children, as `Eraser` (a
-     *  `Typer` with an overridden `adapt`) would compute it, and is adapted to its expected type
-     *  with `TypeAdapter.adaptToType`, where boxing, unboxing and casts are inserted; the trees that
-     *  adaptation synthesises are typed by `adaptAssigner`. `localTyper`, an `Eraser`, types only
-     *  what the assigner falls back on and the null test of an unboxing cast.
-     *
-     *  Must be created and run `exitingErasure`.
-     */
-    final class ErasureRetyper(root: Tree)
-        extends PreEraseTransformer(null) {
       override protected def initialTyper(): analyzer.Typer = newTyper(rootContextPostTyper(unit, root)).asInstanceOf[global.analyzer.Typer]
       // Types the trees that adaptation synthesises, which `typed` here would erase again.
       private object adaptAssigner extends TypeAssigner {
