@@ -1,0 +1,4 @@
+J: A(value = classOf[java.lang.String])
+K: A(value = classOf[scala.Int])
+L: A(value = classOf[[Ljava.lang.String;])
+V: A(value = classOf[scala.Unit])

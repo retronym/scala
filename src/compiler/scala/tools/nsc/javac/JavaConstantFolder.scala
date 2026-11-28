@@ -15,11 +15,11 @@ package javac
 
 import scala.util.control.ControlThrowable
 
-/** Evaluates the constant expressions (JLS 15.29) in initializers of `final` fields in Java sources,
- *  as parsed by `JavaParsers.constantExprOpt`, with the semantics of Java rather than of Scala.
+/** Evaluates the constant expressions (JLS 15.29) in initializers of `final` fields and in annotation arguments
+ *  in Java sources, as parsed by `JavaParsers.constantExprOpt`, with the semantics of Java rather than of Scala.
  *
- *  This gives such fields the same constant type as they get when read from the `ConstantValue` attribute
- *  of the classfile that javac emits.
+ *  This gives such fields and annotations the same constant types and values as they get when read from
+ *  the classfile that javac emits.
  */
 abstract class JavaConstantFolder {
   val global: Global
@@ -51,6 +51,16 @@ abstract class JavaConstantFolder {
       case _                              => notConstant()
     }
     loop(tree)
+  }
+
+  /** Assignment conversion (JLS 5.2) of a constant to `tpe`, or `null` if it does not apply: for example an `int`
+   *  constant to `byte` if it is in range. Unlike Scala, Java allows widening an `int` or `long` to `float` or `double`
+   *  with loss of precision.
+   */
+  def assignmentConversion(const: Constant, tpe: Type): Constant = tpe.typeSymbol match {
+    case FloatClass if const.isNumeric && const.tag <= FloatTag => Constant(const.floatValue)
+    case DoubleClass if const.isNumeric                          => Constant(const.doubleValue)
+    case _                                                       => const.convertTo(tpe)
   }
 
   private def checked(c: Constant): Constant =

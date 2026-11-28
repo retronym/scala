@@ -395,68 +395,56 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
      *  NormalAnnotation     ::= `@` TypeName `(` [ElementValuePairList] `)`
      *  ElementValuePairList ::= ElementValuePair {`,` ElementValuePair}
      *  ElementValuePair     ::= Identifier = ElementValue
-     *  ElementValue         ::= ConditionalExpressionSubset
+     *  ElementValue         ::= ConditionalExpression
      *                         | ElementValueArrayInitializer
      *                         | Annotation
      *
-     *  // We only support a subset of the Java syntax that can form constant expressions.
-     *  //   https://docs.oracle.com/javase/specs/jls/se14/html/jls-15.html#jls-15.29
-     *  //
-     *  // Luckily, we can just parse matching `(` and `)` to find our way to the end of the argument list.
-     *  // and drop the arguments until we implement full support for Java constant expressions
-     *  //
-     *  ConditionalExpressionSubset := Literal
-     *                               | Identifier
-     *                               | QualifiedName
-     *                               | ClassLiteral
-     *
      * ElementValueArrayInitializer ::= `{` [ElementValueList] [`,`] `}`
      * ElementValueList             ::= ElementValue {`,` ElementValue}
+     *
+     * A valid ConditionalExpression is a constant expression, a class literal or an enum constant (JLS 9.7.1),
+     * parsed by `constantExprOpt` and evaluated by the typer. An annotation with an argument that is none of
+     * these is dropped.
      */
     def annotation(): Tree = {
-      object LiteralK { def unapply(@unused token: Token) = tryLiteral() }
-
       def elementValue(): Tree = in.token match {
-        case LiteralK(k) => in.nextToken(); atPos(in.currentPos)(Literal(k))
-        case IDENTIFIER  => qualId(orClassLiteral = true)
-        case LBRACE      => accept(LBRACE); elementArray()
-        case AT          => accept(AT); annotation()
-        case _           => in.nextToken(); EmptyTree
+        case LBRACE => accept(LBRACE); elementArray()
+        case AT     => accept(AT); annotation()
+        case _      => constantExprOpt(COMMA, RPAREN, RBRACE).getOrElse(EmptyTree)
       }
 
       def elementArray(): Tree = atPos(in.pos) {
         val ts = new ListBuffer[Tree]
-        while (in.token != RBRACE) {
-          ts += elementValue()
+        var ok = true
+        while (ok && in.token != RBRACE) {
+          val t = elementValue()
+          ts += t
+          ok = t.nonEmpty && (in.token == COMMA || in.token == RBRACE)
           if (in.token == COMMA) in.nextToken() // done this way trailing commas are supported
         }
-        val ok = !ts.contains(EmptyTree)
-        in.token match {
-          case RBRACE if ok => accept(RBRACE); Apply(ArrayModule_overloadedApply, ts.toList: _*)
-          case _            => skipTo(RBRACE); EmptyTree
+        if (ok) { accept(RBRACE); Apply(ArrayModule_overloadedApply, ts.toList: _*) }
+        else {
+          skipTo(RBRACE, RPAREN)
+          if (in.token == RBRACE) in.nextToken()
+          EmptyTree
         }
       }
 
       // 1) name = value
-      // 2) implicit `value` arg with constant value
-      // 3) implicit `value` arg
+      // 2) implicit `value` arg
       def annArg(): Tree = {
         def mkNamedArg(name: Ident, value: Tree) = if (value.isEmpty) EmptyTree else gen.mkNamedArg(name, value)
-        in.token match {
-          case IDENTIFIER => qualId(orClassLiteral = true) match {
-            case name: Ident if in.token == EQUALS => accept(EQUALS); mkNamedArg(name, elementValue())
-            case rhs                               =>                 mkNamedArg(Ident(nme.value), rhs)
-          }
-          case _ => mkNamedArg(Ident(nme.value), elementValue())
-        }
+        if (in.token == IDENTIFIER && in.lookaheadToken == EQUALS) {
+          val name = atPos(in.currentPos)(Ident(ident()))
+          accept(EQUALS)
+          mkNamedArg(name, elementValue())
+        } else mkNamedArg(Ident(nme.value), elementValue())
       }
 
       atPos(in.pos) {
         val id = convertToTypeId(qualId())
         in.token match {
           case LPAREN =>
-            // TODO: fix copyFrom+skipAhead; CharArrayReaderData missing
-            val saved = new JavaTokenData {}.copyFrom(in) // prep to bail if non-literals/identifiers
             accept(LPAREN)
             val args = in.token match {
               case RPAREN => Nil
@@ -465,7 +453,7 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
             val ok = !args.contains(EmptyTree)
             in.token match {
               case RPAREN if ok => accept(RPAREN); New(id, List(args))
-              case _            => in.copyFrom(saved); skipAhead(); accept(RPAREN); EmptyTree
+              case _            => skipTo(RPAREN); accept(RPAREN); EmptyTree
             }
           case _ => New(id, ListOfNil)
         }
@@ -791,7 +779,7 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
           case Ident(tpnme.String) | Select(_, tpnme.String) => true // resolved by the namer
           case _ => false
         }
-        if (mods.isFinal && mayBeConstantTyped) constantExprOpt().foreach(constantInitializer = _)
+        if (mods.isFinal && mayBeConstantTyped) constantExprOpt(COMMA, SEMI).foreach(constantInitializer = _)
         else skipTo(COMMA, SEMI)
       }
 
@@ -802,15 +790,17 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
       }
     }
 
-    /** Parses a field initializer that may be a constant expression (JLS 15.29): literals, (qualified) names,
-     *  casts to primitive types or `String`, and unary, binary and conditional operators. Whether names
-     *  refer to constants, and the value of the expression, is determined by the namer.
+    /** Parses a field initializer or annotation argument that may be a constant expression (JLS 15.29): literals,
+     *  (qualified) names, casts to primitive types or `String`, and unary, binary and conditional operators;
+     *  and class literals. Whether names refer to constants, and the value of the expression, is determined
+     *  by the namer or, for annotation arguments, the typer.
      *
-     *  Unary and binary operators are represented as `Apply(Select(x, op), args)`, casts as `Typed(x, tpt)`.
+     *  Unary and binary operators are represented as `Apply(Select(x, op), args)`, casts as `Typed(x, tpt)`,
+     *  class literals as `classOf[T]`.
      *
-     *  Returns `None` if the initializer contains anything else, skipping to the next `,` or `;`.
+     *  Returns `None` if the expression contains anything else, skipping to the next of the `terminators`.
      */
-    def constantExprOpt(): Option[Tree] = {
+    def constantExprOpt(terminators: Int*): Option[Tree] = {
       import ConstantExprOps._
       def unsupported(): Nothing = throw Unsupported
       var depth = 0 // number of open parentheses
@@ -863,7 +853,7 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
             depth -= 1
           }
           in.token match {
-            case BOOLEAN | BYTE | SHORT | CHAR | INT | LONG | FLOAT | DOUBLE =>
+            case BOOLEAN | BYTE | SHORT | CHAR | INT | LONG | FLOAT | DOUBLE if in.lookaheadToken == RPAREN =>
               val tpt = basicType()
               closeParen()
               atPos(pos)(Typed(unary(), tpt))
@@ -877,16 +867,36 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
                 case _                                              => t
               }
           }
+        case BOOLEAN | BYTE | SHORT | CHAR | INT | LONG | FLOAT | DOUBLE =>
+          classLiteral(basicType())
+        case VOID =>
+          classLiteral(atPos(in.pos) { in.nextToken(); TypeTree(UnitTpe) })
         case IDENTIFIER =>
           var t: Tree = atPos(in.currentPos)(Ident(ident().toTermName))
-          while (in.token == DOT) {
+          while (in.token == DOT && in.lookaheadToken != CLASS) {
             in.nextToken()
             if (in.token != IDENTIFIER) unsupported()
             t = atPos(t.pos)(Select(t, ident().toTermName))
           }
-          t
+          if (in.token == DOT || in.token == LBRACKET) classLiteral(convertToTypeId(t))
+          else t
         case _ =>
           literal(negate = false)
+      }
+
+      // `T.class` or `T[].class`, where `T` has been parsed
+      def classLiteral(tpt: Tree): Tree = {
+        var tpt1 = tpt
+        while (in.token == LBRACKET) {
+          if (in.lookaheadToken != RBRACKET) unsupported() // an array access
+          in.nextToken()
+          in.nextToken()
+          tpt1 = atPos(tpt.pos)(arrayOf(tpt1))
+        }
+        if (in.token != DOT || in.lookaheadToken != CLASS) unsupported()
+        in.nextToken()
+        in.nextToken()
+        atPos(tpt.pos)(TypeApply(Select(gen.mkAttributedRef(definitions.PredefModule), nme.classOf), tpt1 :: Nil))
       }
 
       def literal(negate: Boolean): Tree = {
@@ -899,9 +909,9 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
 
       try {
         val t = expr()
-        if (in.token == COMMA || in.token == SEMI) Some(t)
+        if (terminators.contains(in.token)) Some(t)
         else {
-          skipTo(COMMA, SEMI)
+          skipTo(terminators: _*)
           None
         }
       } catch {
@@ -911,7 +921,7 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
             if (in.token == RPAREN) in.nextToken()
             depth -= 1
           }
-          skipTo(COMMA, SEMI)
+          skipTo(terminators: _*)
           None
       }
     }

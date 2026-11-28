@@ -52,7 +52,7 @@ trait Namers extends MethodSynthesis {
     case _                 => false
   }
 
-  private object javaConstantFolder extends javac.JavaConstantFolder {
+  private[typechecker] object javaConstantFolder extends javac.JavaConstantFolder {
     val global: Namers.this.global.type = Namers.this.global
   }
 
@@ -1849,30 +1849,11 @@ trait Namers extends MethodSynthesis {
      */
     private def javaConstantType(expr: Tree, declared: Type): Type =
       if (!(isPrimitiveValueType(declared) || declared.typeSymbol == StringClass)) declared
-      else {
-        def resolve(ref: Tree): Constant =
-          try typer.silent(_.typed(ref.duplicate, EXPRmode, WildcardType)) match {
-            case SilentResultValue(typed) => typed.tpe match {
-              case ConstantType(c) => c
-              case _               => null
-            }
-            case _ => null
-          } catch {
-            // fields whose initializers refer to each other, which javac does not treat as constants either
-            case _: CyclicReference => null
-          }
-        javaConstantFolder(expr, resolve) match {
-          case null  => declared
-          case const =>
-            // assignment conversion (JLS 5.2), e.g. an `int` constant to a `byte` field if it is in range.
-            // Unlike Scala, Java allows widening an `int` or `long` to `float` or `double` with loss of precision.
-            val converted = declared.typeSymbol match {
-              case FloatClass if const.isNumeric && const.tag <= FloatTag => Constant(const.floatValue)
-              case DoubleClass if const.isNumeric                          => Constant(const.doubleValue)
-              case _                                                       => const.convertTo(declared)
-            }
-            if (converted == null) declared else ConstantType(converted)
-        }
+      else javaConstantFolder(expr, typer.javaConstantRef) match {
+        case null  => declared
+        case const =>
+          val converted = javaConstantFolder.assignmentConversion(const, declared)
+          if (converted == null) declared else ConstantType(converted)
       }
 
     // Pretend we're an erroneous symbol, for now, so that we match while finding the overridden symbol,
