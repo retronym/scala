@@ -26,10 +26,17 @@ import scala.runtime.AbstractFunction2
   * This class is optimal when range queries will be performed,
   * or when traversal in order of an ordering is desired.
   * If you only need key lookups, and don't care in which order key-values
-  * are traversed in, consider using * [[scala.collection.immutable.HashMap]],
+  * are traversed in, consider using [[scala.collection.immutable.HashMap]],
   * which will generally have better performance. If you need insertion order,
-  * consider a * [[scala.collection.immutable.SeqMap]], which does not need to
+  * consider a [[scala.collection.immutable.SeqMap]], which does not need to
   * have an ordering supplied.
+  *
+  * Keys are considered equal iff `ordering.compare(x, y) == 0`. If the ordering
+  * is not consistent with `equals`, `contains`, `==` and `hashCode` may disagree
+  * with those of hash-based collections. Bulk operations (`++`, `diff`, `intersect`,
+  * `==`) use an O(m log(n/m + 1)) fast path only when both operands have `==`
+  * orderings; `implicit val` orderings guarantee this, `implicit def` ones that
+  * create a new instance per call do not.
   *
   *  @example {{{
   *  import scala.collection.immutable.TreeMap
@@ -58,7 +65,7 @@ import scala.runtime.AbstractFunction2
   *
   *  @tparam K         the type of the keys contained in this tree map.
   *  @tparam V         the type of the values associated with the keys.
-  *  @param ordering   the implicit ordering used to compare objects of type `A`.
+  *  @param ordering   the implicit ordering used to compare objects of type `K`.
   *
   *  @see [[https://docs.scala-lang.org/overviews/collections-2.13/concrete-immutable-collection-classes.html#red-black-trees "Scala's Collection Library overview"]]
   *  section on `Red-Black Trees` for more information.

@@ -23,6 +23,13 @@ import scala.runtime.AbstractFunction1
 
 /** This class implements immutable sorted sets using a tree.
   *
+  *  Elements are considered equal iff `ordering.compare(x, y) == 0`. If the ordering
+  *  is not consistent with `equals`, `contains`, `==` and `hashCode` may disagree
+  *  with those of hash-based collections. Bulk operations (`++`, `diff`, `intersect`,
+  *  `==`) use an O(m log(n/m + 1)) fast path only when both operands have `==`
+  *  orderings; `implicit val` orderings guarantee this, `implicit def` ones that
+  *  create a new instance per call do not.
+  *
   *  @tparam A         the type of the elements contained in this tree set
   *  @param ordering   the implicit ordering used to compare objects of type `A`
   *
@@ -164,7 +171,7 @@ final class TreeSet[A] private[immutable] (private[immutable] val tree: RB.Tree[
 
   /** Creates a new `TreeSet` with the entry removed.
     *
-    *  @param elem    a new element to add.
+    *  @param elem    the element to remove.
     *  @return        a new $coll containing all the elements of this $coll except `elem`.
     */
   def excl(elem: A): TreeSet[A] =

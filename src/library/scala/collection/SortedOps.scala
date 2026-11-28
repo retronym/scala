@@ -29,8 +29,12 @@ trait SortedOps[A, +C] {
   @deprecatedOverriding("Use ordering.compare instead", "2.13.0")
   @inline def compare(k0: A, k1: A): Int = ordering.compare(k0, k1)
 
-  /** Creates a ranged projection of this collection. Any mutations in the
-    *  ranged projection will update this collection and vice versa.
+  /** Creates a ranged projection of this collection. For an immutable
+    *  collection, this is a new collection containing the elements in the
+    *  range. For a mutable collection, this is a view backed by this
+    *  collection: changes to this collection within the range are visible in
+    *  the projection, and elements added to or removed from the projection
+    *  are added to or removed from this collection.
     *
     *  Note: keys are not guaranteed to be consistent between this collection
     *  and the projection. This is the case for buffers where indexing is
