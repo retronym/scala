@@ -796,12 +796,18 @@ final class TrieMap[K, V] private (r: AnyRef, rtupd: AtomicReferenceFieldUpdater
     } else false
   }
 
+  // A read-only snapshot cannot be updated: GCAS always fails on it, so an update would retry forever.
+  private def checkWritable(): Unit =
+    if (isReadOnly) throw new UnsupportedOperationException("read-only snapshot of a TrieMap")
+
   @tailrec private def inserthc(k: K, hc: Int, v: V): Unit = {
+    checkWritable()
     val r = RDCSS_READ_ROOT()
     if (!r.rec_insert(k, v, hc, 0, null, r.gen, this)) inserthc(k, hc, v)
   }
 
   @tailrec private def insertifhc(k: K, hc: Int, v: V, cond: AnyRef, fullEquals: Boolean): Option[V] = {
+    checkWritable()
     val r = RDCSS_READ_ROOT()
 
     val ret = r.rec_insertif(k, v, hc, cond, fullEquals, 0, null, r.gen, this)
@@ -832,6 +838,7 @@ final class TrieMap[K, V] private (r: AnyRef, rtupd: AtomicReferenceFieldUpdater
     * @return an `Option[V]` indicating the previous value
     */
   @tailrec private def removehc(k: K, v: V, removalPolicy: Int, hc: Int): Option[V] = {
+    checkWritable()
     val r = RDCSS_READ_ROOT()
     val res = r.rec_remove(k, v, removalPolicy, hc, 0, null, r.gen, this)
     if (res ne null) res
@@ -856,12 +863,16 @@ final class TrieMap[K, V] private (r: AnyRef, rtupd: AtomicReferenceFieldUpdater
     *  TrieMap is distributed across all the threads doing updates or accesses
     *  subsequent to the snapshot creation.
     */
-  @tailrec def snapshot(): TrieMap[K, V] = {
-    val r = RDCSS_READ_ROOT()
-    val expmain = r.gcasRead(this)
-    if (RDCSS_ROOT(r, expmain, r.copyToGen(new Gen, this))) new TrieMap(r.copyToGen(new Gen, this), rootupdater, hashing, equality)
-    else snapshot()
-  }
+  @tailrec def snapshot(): TrieMap[K, V] =
+    if (isReadOnly)
+      // a read-only snapshot never changes, so the new map can share its trie without a generation change here
+      new TrieMap(RDCSS_READ_ROOT().copyToGen(new Gen, this), AtomicReferenceFieldUpdater.newUpdater(classOf[TrieMap[K, V]], classOf[AnyRef], "root"), hashing, equality)
+    else {
+      val r = RDCSS_READ_ROOT()
+      val expmain = r.gcasRead(this)
+      if (RDCSS_ROOT(r, expmain, r.copyToGen(new Gen, this))) new TrieMap(r.copyToGen(new Gen, this), rootupdater, hashing, equality)
+      else snapshot()
+    }
 
   /** Returns a read-only snapshot of this TrieMap.
     *  This operation is lock-free and linearizable.
@@ -871,18 +882,23 @@ final class TrieMap[K, V] private (r: AnyRef, rtupd: AtomicReferenceFieldUpdater
     *  the snapshot is thus distributed across subsequent updates
     *  and accesses on this TrieMap by all threads.
     *  Note that the snapshot itself is never rewritten unlike when calling
-    *  the `snapshot` method, but the obtained snapshot cannot be modified.
+    *  the `snapshot` method, but the obtained snapshot cannot be modified:
+    *  its update methods throw `UnsupportedOperationException`.
+    *  The read-only snapshot of a read-only snapshot is the map itself.
     *
     *  This method is used by other methods such as `size` and `iterator`.
     */
-  @tailrec def readOnlySnapshot(): scala.collection.Map[K, V] = {
-    val r = RDCSS_READ_ROOT()
-    val expmain = r.gcasRead(this)
-    if (RDCSS_ROOT(r, expmain, r.copyToGen(new Gen, this))) new TrieMap(r, null, hashing, equality)
-    else readOnlySnapshot()
-  }
+  @tailrec def readOnlySnapshot(): scala.collection.Map[K, V] =
+    if (isReadOnly) this
+    else {
+      val r = RDCSS_READ_ROOT()
+      val expmain = r.gcasRead(this)
+      if (RDCSS_ROOT(r, expmain, r.copyToGen(new Gen, this))) new TrieMap(r, null, hashing, equality)
+      else readOnlySnapshot()
+    }
 
   @tailrec override def clear(): Unit = {
+    checkWritable()
     val r = RDCSS_READ_ROOT()
     if (!RDCSS_ROOT(r, r.gcasRead(this), INode.newRootNode[K, V](equality))) clear()
   }

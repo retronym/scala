@@ -1,7 +1,7 @@
 package scala.collection.concurrent
 
 import org.junit.Test
-import org.junit.Assert.assertEquals
+import org.junit.Assert.{assertEquals, assertFalse, assertSame, assertTrue, fail}
 
 import scala.util.hashing.Hashing
 import scala.tools.testkit.AssertUtil.assertThrows
@@ -704,5 +704,63 @@ class TrieMapTest {
     assert(!TrieMap.from((1 to 5).map(x => x -> x)).isEmpty)
     assert(!TrieMap.from((1 to 10).map(x => x -> x)).isEmpty)
     assert(!TrieMap.from((1 to 100).map(x => x -> x)).isEmpty)
+  }
+
+  // Runs `body` on a daemon thread, failing if it does not finish in time: a mutator on a read-only snapshot used to spin forever.
+  private def withTimeout[A](body: => A): A = {
+    var result: Either[Throwable, A] = null
+    val t = new Thread(() => result = try Right(body) catch { case e: Throwable => Left(e) })
+    t.setDaemon(true)
+    t.start()
+    t.join(10000)
+    if (t.isAlive) fail("did not return")
+    result.fold(throw _, identity)
+  }
+
+  @Test
+  def readOnlySnapshotOfReadOnlySnapshot(): Unit = {
+    val m = TrieMap(1 -> "a", 2 -> "b")
+    val ro = m.readOnlySnapshot().asInstanceOf[TrieMap[Int, String]]
+    assertTrue(ro.isReadOnly)
+    // a read-only snapshot never changes, so it is its own read-only snapshot
+    assertSame(ro, withTimeout(ro.readOnlySnapshot()))
+    val s = withTimeout(ro.snapshot())
+    assertTrue(s.nonReadOnly)
+    assertEquals(Map(1 -> "a", 2 -> "b"), s.toMap)
+    s.put(3, "c"); s.remove(1); s(2) = "B"
+    assertEquals(Map(2 -> "B", 3 -> "c"), s.toMap)
+    assertEquals(Map(1 -> "a", 2 -> "b"), ro.toMap)
+    m.put(4, "d")
+    assertEquals(Map(1 -> "a", 2 -> "b"), ro.toMap)
+    assertEquals(Map(2 -> "B", 3 -> "c"), s.toMap)
+    // and a snapshot of that snapshot is independent of it
+    val ss = s.snapshot()
+    s.put(5, "e")
+    assertEquals(Map(2 -> "B", 3 -> "c"), ss.toMap)
+  }
+
+  @Test
+  def readOnlySnapshotRejectsMutation(): Unit = {
+    val ro = TrieMap(1 -> "a", 2 -> "b").readOnlySnapshot().asInstanceOf[TrieMap[Int, String]]
+    def rejects(op: TrieMap[Int, String] => Any): Unit =
+      withTimeout(assertThrows[UnsupportedOperationException](op(ro)))
+    rejects(_.put(3, "c"))
+    rejects(_.update(3, "c"))
+    rejects(_ += (3 -> "c"))
+    rejects(_ ++= List(3 -> "c"))
+    rejects(_.remove(1))
+    rejects(_.remove(3))
+    rejects(_ -= 1)
+    rejects(_.remove(1, "a"))
+    rejects(_.putIfAbsent(3, "c"))
+    rejects(_.replace(1, "x"))
+    rejects(_.replace(1, "a", "x"))
+    rejects(_.getOrElseUpdate(3, "c"))
+    rejects(_.updateWith(1)(_ => None))
+    rejects(_.filterInPlace((k, _) => k == 1))
+    rejects(_.mapValuesInPlace((_, v) => v * 2))
+    rejects(_.clear())
+    assertEquals(Map(1 -> "a", 2 -> "b"), ro.toMap)
+    assertFalse(ro.isEmpty)
   }
 }
