@@ -282,15 +282,14 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
     }
 
     private def newModuleAccessor(module: Symbol, site: Symbol, moduleVar: Symbol) = {
-      val accessor = site.newMethod(module.name.toTermName, site.pos, STABLE | MODULE | NEEDS_TREES)
+      // the accessor of a private module was expanded in the trait (see `synthFieldsAndAccessors`), share its name
+      val accessor = site.newMethod(module.name.toTermName, site.pos, STABLE | MODULE | NEEDS_TREES | (module.flags & EXPANDEDNAME))
 
       moduleOrLazyVarOf(accessor) = moduleVar
 
       // we're in the same prefix as module, so no need for site.thisType.memberType(module)
       accessor setInfo MethodType(Nil, moduleVar.info)
       accessor.setModuleClass(module.moduleClass)
-
-      if (module.isPrivate) accessor.expandName(module.owner)
 
       accessor
     }
@@ -360,6 +359,10 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
                 newDecls += newTraitSetter(member, clazz)
             }
           } else if (member.hasFlag(MODULE)) {
+            // The accessor has to be implemented in a subclass, so it can't be private. Expand its name now, rather
+            // than leaving it to `publicizeTraitMethod` in mixin: the accessor in the subclass is named below, and
+            // by mixin, lambdalift has renamed a local trait, which changes the expanded name.
+            if (member hasFlag PRIVATE) member makeNotPrivate clazz
             nonStaticModuleToMethod(member)
 
             member setFlag NEEDS_TREES
@@ -392,7 +395,7 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
 
         def newModuleVarMember(module: Symbol): TermSymbol = {
           val moduleVar =
-            (clazz.newVariable(nme.moduleVarName(module.name.toTermName), module.pos.focus, MODULEVAR | ModuleOrLazyFieldFlags)
+            (clazz.newVariable(nme.moduleVarName(module.unexpandedName.toTermName), module.pos.focus, MODULEVAR | ModuleOrLazyFieldFlags)
              setInfo resultTypeMemberOfDeconst(site, module)
              addAnnotation VolatileAttr)
 
