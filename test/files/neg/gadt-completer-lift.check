@@ -1,0 +1,54 @@
+gadt-completer-lift.scala:17: error: type mismatch;
+ found   : Int(1)
+ required: T
+    def h = { val x: T = 1; x }
+                         ^
+gadt-completer-lift.scala:23: error: type mismatch;
+ found   : Int(1)
+ required: T
+    lazy val v = { val x: T = 1; x }
+                              ^
+gadt-completer-lift.scala:29: error: type mismatch;
+ found   : Int(1)
+ required: T
+    def h[U] = { val x: T = 1; x }
+                            ^
+gadt-completer-lift.scala:36: error: type mismatch;
+ found   : Int(1)
+ required: T
+    def k = { val x: T = 1; x }
+                         ^
+gadt-completer-lift.scala:42: error: type mismatch;
+ found   : Int(1)
+ required: T
+    class L { def g = { val x: T = 1; x } }
+                                   ^
+gadt-completer-lift.scala:48: error: type mismatch;
+ found   : Int(1)
+ required: T
+    object O { def g = { val x: T = 1; x } }
+                                    ^
+gadt-completer-lift.scala:54: error: type mismatch;
+ found   : Int(1)
+ required: T
+    def h(a: T = { val x: T = 1; x }) = a
+                              ^
+gadt-completer-lift.scala:60: error: type mismatch;
+ found   : Int(1)
+ required: T
+    def h = { val x: T = 1; x }
+                         ^
+gadt-completer-lift.scala:67: error: type M is not a member of type parameter T
+    trait L { self: t.M => }
+                      ^
+gadt-completer-lift.scala:75: error: type mismatch;
+ found   : Int(2)
+ required: U
+      def h = { val x: T = 1; val y: U = 2; y }
+                                         ^
+gadt-completer-lift.scala:83: error: type mismatch;
+ found   : Int(1)
+ required: T
+    def h = { val x: T = 1; x }
+                         ^
+11 errors
