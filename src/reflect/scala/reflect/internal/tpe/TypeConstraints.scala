@@ -228,8 +228,9 @@ private[internal] trait TypeConstraints {
     *  @param getVariance Function to extract variances of type parameters; we need to reverse
     *                    solution direction for all contravariant variables.
     *  @param upper    When `true` search for max solution else min.
+    *  @param depth    The depth at which to lub or glb two or more bounds, or `AnyDepth` to use the depth of the bounds.
     */
-  def solve(tvars: List[TypeVar], tparams: List[Symbol], getVariance: Variance.Extractor[Symbol], upper: Boolean, depth: Depth): Boolean = {
+  def solve(tvars: List[TypeVar], tparams: List[Symbol], getVariance: Variance.Extractor[Symbol], upper: Boolean, depth: LazyDepth): Boolean = {
     assert(tvars.corresponds(tparams)((tvar, tparam) => tvar.origin.typeSymbol eq tparam), (tparams, tvars.map(_.origin.typeSymbol)))
     val areContravariant: BitSet = BitSet.empty
     foreachWithIndex(tparams)((tparam, ix) => if (getVariance(tparam).isContravariant) areContravariant += ix)
@@ -289,9 +290,11 @@ private[internal] trait TypeConstraints {
 
         val newInst =
           if (up || tvar.constr.hiBounds.exists(isSingleType)) { // If we have a singleton upper bound then we should use it.
-            if (depth.isAnyDepth) glb(tvar.constr.hiBounds) else glb(tvar.constr.hiBounds, depth)
+            val bounds = tvar.constr.hiBounds
+            if (bounds.lengthCompare(1) <= 0 || depth.value.isAnyDepth) glb(bounds) else glb(bounds, depth.value)
           } else {
-            if (depth.isAnyDepth) lub(tvar.constr.loBounds) else lub(tvar.constr.loBounds, depth)
+            val bounds = tvar.constr.loBounds
+            if (bounds.lengthCompare(1) <= 0 || depth.value.isAnyDepth) lub(bounds) else lub(bounds, depth.value)
           }
 
         // debuglog(s"$tvar setInst $newInst")

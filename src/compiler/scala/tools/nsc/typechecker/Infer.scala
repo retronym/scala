@@ -14,7 +14,7 @@ package scala.tools.nsc
 package typechecker
 
 import scala.collection.{immutable, mutable}, mutable.ListBuffer
-import scala.reflect.internal.Depth
+import scala.reflect.internal.LazyDepth
 import scala.tools.nsc.Reporting.WarningCategory
 import scala.util.control.ControlThrowable
 import symtab.Flags._
@@ -92,7 +92,7 @@ trait Infer extends Checkable {
       funTp <:< functionType(samInfoWithTVars.paramTypes, samInfoWithTVars.finalResultType)
 
       // solve constraints tracked by tvars
-      val targs = solvedTypes(tvars, tparams, variances.varianceInType(sam.info), upper = false, lubDepth(sam.info :: Nil))
+      val targs = solvedTypes(tvars, tparams, variances.varianceInType(sam.info), upper = false, () => lubDepth(sam.info :: Nil))
 
       debuglog(s"sam infer: $samTp --> ${appliedType(samTyCon, targs)} by ${funTp} <:< $samInfoWithTVars --> $targs for $tparams")
 
@@ -183,7 +183,7 @@ trait Infer extends Checkable {
    *  @param upper      When `true` search for max solution else min.
    *  @throws NoInstance
    */
-  def solvedTypes(tvars: List[TypeVar], tparams: List[Symbol], getVariance: Variance.Extractor[Symbol], upper: Boolean, depth: Depth): List[Type] = {
+  def solvedTypes(tvars: List[TypeVar], tparams: List[Symbol], getVariance: Variance.Extractor[Symbol], upper: Boolean, depth: LazyDepth): List[Type] = {
     if (tvars.isEmpty) Nil else {
       printTyping("solving for " + parentheses(map2(tparams, tvars)((p, tv) => s"${p.name}: $tv")))
       // !!! What should be done with the return value of "solve", which is at present ignored?
@@ -428,7 +428,7 @@ trait Infer extends Checkable {
           case _                                                     => restpe
         }
 
-        try solvedTypes(tvars, tparams, variances.varianceInType(variance), upper = false, lubDepth(restpe :: pt :: Nil))
+        try solvedTypes(tvars, tparams, variances.varianceInType(variance), upper = false, () => lubDepth(restpe :: pt :: Nil))
         catch { case _: NoInstance => null }
       } else
         null
@@ -582,7 +582,7 @@ trait Infer extends Checkable {
           throw new DeferredNoInstance(() =>
             "argument expression's type is not compatible with formal parameter type" + foundReqMsg(tp1, pt1))
       }
-      val targs = solvedTypes(tvars, tparams, variances.varianceInTypes(formals), upper = false, lubDepth(formals) max lubDepth(argtpes))
+      val targs = solvedTypes(tvars, tparams, variances.varianceInTypes(formals), upper = false, () => lubDepth(formals) max lubDepth(argtpes))
       // Any "top type" in the constraint mitigates the warning, instead of a precise match such as:
       // !tvar.constr.loBounds.contains(targ)
       // For example, don't require this arg, where the lub of `AnyRef` and `V` yields the `Any`.
@@ -1127,7 +1127,7 @@ trait Infer extends Checkable {
 
             // Note: this is the only place where solvedTypes (or, indirectly, solve) is called
             // with upper = true.
-            val targs = solvedTypes(tvars, undetparams, varianceFun, upper = true, lubDepth(resTp :: pt :: Nil))
+            val targs = solvedTypes(tvars, undetparams, varianceFun, upper = true, () => lubDepth(resTp :: pt :: Nil))
             // checkBounds(tree, NoPrefix, NoSymbol, undetparams, targs, "inferred ")
             // no checkBounds here. If we enable it, test bug602 fails.
             // TODO: reinstate checkBounds, return params that fail to meet their bounds to undetparams
@@ -1182,7 +1182,7 @@ trait Infer extends Checkable {
       val tvars1 = tvars map (_.cloneInternal)
       // Note: right now it's not clear that solving is complete, or how it can be made complete!
       // So we should come back to this and investigate.
-      solve(tvars1, tvars1.map(_.origin.typeSymbol), (_ => Variance.Covariant), upper = false, Depth.AnyDepth)
+      solve(tvars1, tvars1.map(_.origin.typeSymbol), (_ => Variance.Covariant), upper = false, LazyDepth.AnyDepth)
     }
 
     // this is quite nasty: it destructively changes the info of the syms of e.g., method type params
