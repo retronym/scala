@@ -382,9 +382,12 @@ private[collection] object JavaCollectionWrappers extends Serializable {
         if (present) Some(result) else None
       } else {
         var result: Option[V] = None
+        // assigns `result` on every call: a map may apply the function again after a failed attempt
         def recompute(k0: K, v0: V): V = v.tap(_ =>
-          if (v0 != null) result = Some(v0)
-          else if (underlying.containsKey(k0)) result = Some(null.asInstanceOf[V])
+          result =
+            if (v0 != null) Some(v0)
+            else if (underlying.containsKey(k0)) Some(null.asInstanceOf[V])
+            else None
         )
         underlying.compute(k, recompute)
         result
@@ -408,9 +411,12 @@ private[collection] object JavaCollectionWrappers extends Serializable {
     // support Some(null) if currently bound to null
     override def remove(k: K): Option[V] = {
       var result: Option[V] = None
+      // assigns `result` on every call: a map may apply the function again after a failed attempt
       def recompute(k0: K, v0: V): V = {
-        if (v0 != null) result = Some(v0)
-        else if (underlying.containsKey(k0)) result = Some(null.asInstanceOf[V])
+        result =
+          if (v0 != null) Some(v0)
+          else if (underlying.containsKey(k0)) Some(null.asInstanceOf[V])
+          else None
         null.asInstanceOf[V]
       }
       underlying.compute(k, recompute)
@@ -487,6 +493,13 @@ private[collection] object JavaCollectionWrappers extends Serializable {
     override def isEmpty: Boolean = underlying.isEmpty
     override def knownSize: Int = if (underlying.isEmpty) 0 else super.knownSize
     override def empty: JConcurrentMapWrapper[K, V] = new JConcurrentMapWrapper(new juc.ConcurrentHashMap[K, V])
+
+    // As in `get`, null is not a value here. The inherited `put` and `remove` tell a null value from an absent key
+    // with a second lookup from inside `compute`, which is not atomic on a map that does not lock around the function
+    // (`ConcurrentSkipListMap`, the default `ConcurrentMap.compute`).
+    override def put(k: K, v: V): Option[V] = Option(underlying.put(k, v))
+
+    override def remove(k: K): Option[V] = Option(underlying.remove(k))
 
     def putIfAbsent(k: K, v: V): Option[V] = Option(underlying.putIfAbsent(k, v))
 
