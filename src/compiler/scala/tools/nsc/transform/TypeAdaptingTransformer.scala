@@ -14,6 +14,7 @@ package scala.tools.nsc
 package transform
 
 import scala.annotation.tailrec
+import scala.reflect.internal.Flags.SYNTHETIC
 import scala.tools.nsc.ast.TreeDSL
 
 /**
@@ -25,6 +26,23 @@ trait TypeAdaptingTransformer { self: TreeDSL =>
     import definitions._
 
     def typedPos(pos: Position)(tree: Tree): Tree
+
+    /** The owner of a local value introduced while adapting a tree at the current position. */
+    def localOwner: Symbol
+
+    /** Whether `tree` has a `try` with a handler that resumes evaluation of the enclosing method. */
+    private def hasTryCatch(tree: Tree): Boolean = {
+      var found = false
+      val traverser = new Traverser {
+        override def traverse(t: Tree): Unit = if (!found) t match {
+          case Try(_, catches, _) if catches.nonEmpty => found = true
+          case _: DefDef | _: ImplDef | _: Function   => // evaluated in another method
+          case _                                      => super.traverse(t)
+        }
+      }
+      traverser.traverse(tree)
+      found
+    }
 
     /**
      * scala/bug#4148: can't always replace box(unbox(x)) by x because
@@ -63,7 +81,20 @@ trait TypeAdaptingTransformer { self: TreeDSL =>
         })
       case _ =>
         val tree1 = tree.tpe match {
-          case ErasedValueType(clazz, _) => New(clazz, cast(tree, underlyingOfValueClass(clazz)))
+          case ErasedValueType(clazz, _) =>
+            val arg = cast(tree, underlyingOfValueClass(clazz))
+            // The new instance is on the operand stack while the constructor argument is evaluated, and the
+            // JVM empties the stack on entry to a handler, so evaluate an argument with a `try` first. UnCurry
+            // lifts a `try` out of positions where the stack is not empty, but it cannot see this one, which
+            // depends on the erasure of the enclosing position.
+            if (!hasTryCatch(tree)) New(clazz, arg)
+            else if (arg.tpe.typeSymbol == UnitClass) BLOCK(arg, New(clazz, UNIT))
+            else {
+              val owner = localOwner
+              val tmp = owner.newValue(currentUnit.freshTermName("ev$"), tree.pos.makeTransparent, SYNTHETIC) setInfo arg.tpe
+              arg.changeOwner(owner, tmp)
+              BLOCK(ValDef(tmp, arg), New(clazz, REF(tmp)))
+            }
           case _ => tree.tpe.typeSymbol match {
             case UnitClass =>
               preservingSideEffects(tree, REF(BoxedUnit_UNIT))

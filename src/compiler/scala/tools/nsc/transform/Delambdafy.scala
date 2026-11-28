@@ -179,7 +179,10 @@ abstract class Delambdafy extends Transform with TypingTransformers with ast.Tre
           if (resTpOk && erasure.isReferenceType(samResultType) && functionResultType <:< samResultType) functionResultType
           else postErasure.elimErasedValueType(samResultType)
 
-        val typeAdapter = new TypeAdapter { def typedPos(pos: Position)(tree: Tree): Tree = localTyper.typedPos(pos)(tree) }
+        val typeAdapter = new TypeAdapter {
+          def typedPos(pos: Position)(tree: Tree): Tree = localTyper.typedPos(pos)(tree)
+          def localOwner: Symbol = localTyper.context.owner
+        }
         import typeAdapter.{adaptToType, unboxValueClass}
 
         val targetParams = target.paramss.head
