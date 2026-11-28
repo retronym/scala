@@ -357,7 +357,7 @@ class ArrayBufferTest {
     val b = ArrayBuffer(1,2,3)
     assertEquals(16, b.array.length)
     b ++= (1 to 1000)
-    assertEquals(1024, b.array.length)
+    assertEquals(1003, b.array.length)
     b.remove(200, 803)
     b.trimToSize()
     assertEquals(200, b.array.length)
@@ -531,5 +531,50 @@ class ArrayBufferTest {
     assertEquals(2, it.next().size)
     b(2) = 42
     assertThrows[java.util.ConcurrentModificationException](it.hasNext)
+  }
+
+  // a sized source that counts how it is read
+  final class Probe(n: Int) extends scala.collection.AbstractIterable[Integer] {
+    val elems: Array[Integer] = Array.tabulate(n)(Integer.valueOf)
+    var nexts, copies = 0
+    override def knownSize: Int = n
+    def iterator: Iterator[Integer] = elems.iterator.map { e => nexts += 1; e }
+    override def copyToArray[B >: Integer](xs: Array[B], start: Int, len: Int): Int = {
+      copies += 1
+      val k = len min n min (xs.length - start)
+      System.arraycopy(elems, 0, xs, start, k)
+      k
+    }
+  }
+
+  @Test def `addAll of a sized source copies it in bulk into a presized array`(): Unit = {
+    val p = new Probe(1000)
+    class Sized extends ArrayBuffer[Integer] { def capacity = array.length }
+    val b = new Sized
+    b ++= p
+    assertEquals(p.elems.toList, b.toList)
+    assertEquals((0, 1, 1000), (p.nexts, p.copies, b.capacity))
+  }
+
+  @Test def `addAll of a sized view of the buffer appends its elements before the call`(): Unit = {
+    def check(expected: List[Int])(op: ArrayBuffer[Int] => Unit): Unit = {
+      val buf = ArrayBuffer(1, 2, 3)
+      op(buf)
+      assertSameElements(expected, buf)
+    }
+    check(List(1, 2, 3, 1, 2, 3))(b => b ++= b.view)
+    check(List(1, 2, 3, 10, 20, 30))(b => b ++= b.view.map(_ * 10))
+    check(List(1, 2, 3, 3, 2, 1))(b => b ++= b.view.reverse)
+    check(List(1, 2, 3, 2))(b => b ++= b.view.slice(1, 2))
+    check(List(1, 2, 3, 1, 2, 3))(b => b ++= b.iterator)
+    // a source that fails part way, or whose knownSize is wrong, leaves the buffer as it was
+    val b = ArrayBuffer(1, 2, 3)
+    assertThrows[RuntimeException](b ++= Vector(4, 5, 6).view.map(x => if (x == 6) throw new RuntimeException else x))
+    assertSameElements(List(1, 2, 3), b)
+    val liar = new scala.collection.AbstractIterable[Int] { def iterator = Iterator(4, 5); override def knownSize = 3 }
+    assertThrows[IllegalStateException](b ++= liar)
+    assertSameElements(List(1, 2, 3), b)
+    b += 4
+    assertSameElements(List(1, 2, 3, 4), b)
   }
 }

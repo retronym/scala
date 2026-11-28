@@ -135,7 +135,15 @@ class ArrayDeque[A] protected (
     elems.knownSize match {
       case srcLength if srcLength > 0 =>
         ensureSize(srcLength + length)
-        elems.iterator.foreach(appendAssumingCapacity)
+        if (end + srcLength <= array.length) {
+          // the free slots after `end` are contiguous: copy in bulk, as `ArrayDeque.from` does
+          var actual = -1
+          try actual = IterableOnce.copyElemsToArray(elems, array.asInstanceOf[Array[Any]], end, srcLength)
+          finally if (actual != srcLength) java.util.Arrays.fill(array, end, end + srcLength, null)
+          if (actual != srcLength) throw new IllegalStateException(s"Copied $actual of $srcLength")
+          end = end_+(srcLength)
+        }
+        else elems.iterator.foreach(appendAssumingCapacity)
       case _ => elems.iterator.foreach(+=)
     }
     this
