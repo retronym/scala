@@ -466,7 +466,10 @@ abstract class LambdaLift extends InfoTransform {
     private def liftDef(tree: Tree): Tree = {
       val sym = tree.symbol
       val oldOwner = sym.owner
-      if (sym.isMethod && isUnderConstruction(sym.owner.owner)) { // # bug 1909
+      // The member that `sym` is local to, looking through enclosing local methods and values. A method nested in
+      // another local definition in a self- or super-constructor call can't be an instance method either.
+      @tailrec def enclMember(owner: Symbol): Symbol = if (owner.isLocalToBlock) enclMember(owner.owner) else owner
+      if (sym.isMethod && isUnderConstruction(enclMember(sym.owner).owner)) { // # bug 1909
          if (sym.isModule) { // Yes, it can be a module and a method, see comments on `isModuleNotMethod`!
            // TODO promote to an implementation restriction if we can reason that this *always* leads to VerifyError.
            // See neg/t1909-object.scala
