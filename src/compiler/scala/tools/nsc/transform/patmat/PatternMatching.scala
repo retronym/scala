@@ -15,7 +15,7 @@ package scala.tools.nsc.transform.patmat
 import scala.annotation.tailrec
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
-import scala.reflect.internal.{Mode, Types}
+import scala.reflect.internal.Types
 import scala.reflect.internal.util.{SourceFile, Statistics}
 import scala.tools.nsc.Global
 import scala.tools.nsc.ast
@@ -93,7 +93,7 @@ trait PatternMatching extends Transform
           // Keep 2.12 behaviour of using wildcard expected type, recomputing the LUB, then throwing it away for the continuations plugins
           // but for the rest of us pass in top as the expected type to avoid waste.
           val pt = if (origTp <:< definitions.AnyTpe) definitions.AnyTpe else WildcardType
-          localTyper.typed(translated, pt) match {
+          typed(translated, pt) match {
             case b @ Block(_, m: Match) =>
               b.setType(origTp)
               m.setType(origTp)
@@ -113,17 +113,23 @@ trait PatternMatching extends Transform
     }
 
     def translator(selectorPos: Position): MatchTranslator with CodegenCore = {
-      new OptimizingMatchTranslator(localTyper, selectorPos, inForceDesugar)
+      new OptimizingMatchTranslator(this, enclosingOwner, selectorPos, inForceDesugar)
     }
+
+    def typedStableRef(tree: Tree): Tree = typedQualifier(tree)
 
   }
 
 
-  class OptimizingMatchTranslator(val typer: analyzer.Typer, val selectorPos: Position, val inForceDesugar: Boolean)
+  /** Translates a match in the current owner of `transformer`, taking its typer only when needed. */
+  class OptimizingMatchTranslator(transformer: MatchTransformer, val matchOwner: Symbol, val selectorPos: Position, val inForceDesugar: Boolean)
     extends MatchTranslator
       with MatchOptimizer
       with MatchAnalyzer
-      with Solver
+      with Solver {
+    lazy val typer: analyzer.Typer = transformer.localTyper
+    protected def typedStableRef(tree: Tree): Tree = transformer.typedStableRef(tree)
+  }
 }
 
 trait Debugging {
@@ -145,8 +151,11 @@ trait Interface extends ast.TreeDSL {
   import analyzer.Typer
 
   trait MatchMonadInterface {
-    val typer: Typer
-    val matchOwner = typer.context.owner
+    def typer: Typer
+    val matchOwner: Symbol
+
+    /** `tree`, a stable reference substituted for a binder, typed with its singleton type. */
+    protected def typedStableRef(tree: Tree): Tree
 
     def reportUnreachable(pos: Position) = typer.context.warning(pos, "unreachable code", WarningCategory.OtherMatchAnalysis)
     def reportMissingCases(pos: Position, counterExamples: List[String]) = {
@@ -176,7 +185,7 @@ trait Interface extends ast.TreeDSL {
     class Substitution(val from: List[Symbol], val to: List[Tree]) {
       import global.{AstTransformer, Ident, NoType, TypeTree, SingleType}
 
-      private def typedStable(t: Tree) = typer.typed(t.shallowDuplicate, Mode.MonoQualifierModes | Mode.TYPEPATmode)
+      private def typedStable(t: Tree) = typedStableRef(t.shallowDuplicate)
       lazy val toTypes: List[Type] = to map (tree => typedStable(tree).tpe)
 
       // We must explicitly type the trees that we replace inside some other tree, since the latter may already have been typed,
@@ -212,7 +221,10 @@ trait Interface extends ast.TreeDSL {
             if (origTp == null || origTp == NoType) to
             // important: only type when actually substituting and when original tree was typed
             // (don't need to use origTp as the expected type, though, and can't always do this anyway due to unknown type params stemming from polymorphic extractors)
-            else typer.typed(to)
+            else to.tpe match {
+              case _: SingleType | _: ThisType => to // a stable reference from `typedStable`: `adapt` would keep it
+              case _ => typer.typed(to)
+            }
 
 
           override def transform(tree: Tree): Tree = {

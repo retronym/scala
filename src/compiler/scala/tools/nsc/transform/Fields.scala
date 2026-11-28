@@ -14,7 +14,6 @@ package scala.tools.nsc
 package transform
 
 import scala.annotation._
-import scala.reflect.internal.util.ListOfNil
 import symtab.Flags._
 
 
@@ -244,9 +243,9 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
      *
      * TODO: optimize using local variable?
      */
-    val computeName = nme.newLazyValSlowComputeName(module.name)
-    val computeMethod = DefDef(NoMods, computeName, Nil, ListOfNil, TypeTree(UnitTpe), gen.mkSynchronized(monitorHolder)(If(needsInit, init, EmptyTree)))
-    Block(computeMethod :: If(needsInit, Apply(Ident(computeName), Nil), EmptyTree) :: Nil,
+    val computeSym = module.newMethod(nme.newLazyValSlowComputeName(module.name), module.pos.focus) setInfo MethodType(Nil, UnitTpe)
+    val computeMethod = DefDef(computeSym, gen.mkSynchronized(monitorHolder)(If(needsInit, init, EmptyTree)))
+    Block(computeMethod :: If(needsInit, Apply(Ident(computeSym), Nil), EmptyTree) :: Nil,
       gen.mkCast(moduleVarRef, module.info.resultType))
   }
 
@@ -557,9 +556,7 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
   // TODO: could we rebind more aggressively? consider overriding in type equality?
   def castHack(tree: Tree, pt: Type) = gen.mkAsInstanceOf(tree, pt)
 
-  class FieldsTransformer(unit: CompilationUnit) extends TypingTransformer(unit) with CheckedAccessorTreeSynthesis {
-    protected def typedPos(pos: Position)(tree: Tree): Tree = localTyper.typedPos(pos)(tree)
-
+  class FieldsTransformer(unit: CompilationUnit) extends TypeAssigner with CheckedAccessorTreeSynthesis {
     def mkTypedUnit(pos: Position) = typedPos(pos)(CODE.UNIT)
     // TODO: clean up. this method is not used
     def deriveUnitDef(stat: Tree)  = deriveDefDef(stat)(_ => mkTypedUnit(stat.pos))

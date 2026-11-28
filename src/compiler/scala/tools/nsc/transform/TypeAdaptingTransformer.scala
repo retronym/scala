@@ -26,6 +26,9 @@ trait TypeAdaptingTransformer { self: TreeDSL =>
 
     def typedPos(pos: Position)(tree: Tree): Tree
 
+    /** `tree`, typed, cast to `pt`: `gen.mkAttributedCast`, which types the cast with a `Typer`. */
+    protected def typedCast(tree: Tree, pt: Type): Tree = gen.mkAttributedCast(tree, pt)
+
     /**
      * scala/bug#4148: can't always replace box(unbox(x)) by x because
      *   - unboxing x may lead to throwing an exception, e.g. in "aah".asInstanceOf[Int]
@@ -63,7 +66,10 @@ trait TypeAdaptingTransformer { self: TreeDSL =>
         })
       case _ =>
         val tree1 = tree.tpe match {
-          case ErasedValueType(clazz, _) => New(clazz, cast(tree, underlyingOfValueClass(clazz)))
+          case ErasedValueType(clazz, _) =>
+            // The constructor of a value class over `Unit` takes it boxed.
+            val arg = cast(tree, underlyingOfValueClass(clazz))
+            New(clazz, if (arg.tpe.typeSymbol == UnitClass) box(arg) else arg)
           case _ => tree.tpe.typeSymbol match {
             case UnitClass =>
               preservingSideEffects(tree, REF(BoxedUnit_UNIT))
@@ -101,7 +107,8 @@ trait TypeAdaptingTransformer { self: TreeDSL =>
               case ArrayClass => assert(pt.typeSymbol != ArrayClass, "array") ; tree
               case _          =>
                 val unboxer = currentRun.runDefinitions.unboxMethod(pt.typeSymbol)
-                if (settings.isDeveloper) assert(boxedClass(pt.typeSymbol).tpe <:< tree.tpe, s"${tree.tpe} is not a boxed ${pt}")
+                // `null.asInstanceOf[Int]` unboxes `null`, to the zero of the primitive type.
+                if (settings.isDeveloper) assert(tree.tpe <:< NullTpe || boxedClass(pt.typeSymbol).tpe <:< tree.tpe, s"${tree.tpe} is not a boxed ${pt}")
                 Apply(unboxer, tree)  // don't `setType pt` the Apply tree, as the Apply's fun won't be typechecked if the Apply tree already has a type
             }
         }
@@ -140,7 +147,7 @@ trait TypeAdaptingTransformer { self: TreeDSL =>
         // See scala/bug#2386 for one example of when this might be necessary.
         val needsExtraCast = isPrimitiveValueType(tree.tpe.typeArgs.head) && !isPrimitiveValueType(pt.typeArgs.head)
         val tree1 = if (needsExtraCast) gen.mkRuntimeCall(nme.toObjectArray, List(tree)) else tree
-        gen.mkAttributedCast(tree1, pt)
+        typedCast(tree1, pt)
       } else {
         tree match {
           case ld: LabelDef =>
@@ -151,7 +158,7 @@ trait TypeAdaptingTransformer { self: TreeDSL =>
             }
             deriveLabelDef(ld)(rhs => cast(rhs, pt)).setType(pt)
           case _ =>
-            gen.mkAttributedCast(tree, pt)
+            typedCast(tree, pt)
         }
       }
     }
@@ -162,9 +169,15 @@ trait TypeAdaptingTransformer { self: TreeDSL =>
      *  @param pt   the expected type
      *  @return     the adapted tree
      */
+    /** Erased value types of one class, whose underlying types are the same type written differently. */
+    private def isSameErasedValueType(tp: Type, pt: Type): Boolean = (tp, pt) match {
+      case (ErasedValueType(c1, u1), ErasedValueType(c2, u2)) => (c1 eq c2) && u1 =:= u2
+      case _ => false
+    }
+
     @tailrec final def adaptToType(tree: Tree, pt: Type): Tree = {
       val tpe = tree.tpe
-      if ((tpe eq pt) || tpe <:< pt) tree
+      if ((tpe eq pt) || tpe <:< pt || isSameErasedValueType(tpe, pt)) tree
       else if (tpe.isInstanceOf[ErasedValueType]) adaptToType(box(tree), pt) // what if pt is an erased value type?
       else if (pt.isInstanceOf[ErasedValueType])  adaptToType(unbox(tree, pt), pt)
       // See corresponding case in `Eraser`'s `adaptMember`

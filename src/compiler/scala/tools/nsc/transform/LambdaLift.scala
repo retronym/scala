@@ -57,7 +57,7 @@ abstract class LambdaLift extends InfoTransform {
   protected def newTransformer(unit: CompilationUnit): AstTransformer =
     new LambdaLifter(unit)
 
-  class LambdaLifter(unit: CompilationUnit) extends explicitOuter.OuterPathTransformer(unit) {
+  class LambdaLifter(unit: CompilationUnit) extends explicitOuter.TypeAssigner with explicitOuter.OuterPaths {
 
     private type SymSet = LinkedHashSet[Symbol]
 

@@ -19,7 +19,7 @@ package scala
 package tools.nsc
 package typechecker
 
-import scala.collection.{immutable, mutable}, mutable.ListBuffer
+import scala.collection.mutable, mutable.ListBuffer
 import scala.tools.nsc.Reporting.WarningCategory
 import symtab.Flags._
 
@@ -91,7 +91,7 @@ abstract class SuperAccessors extends transform.Transform with transform.TypingT
 
     private def storeAccessorDefinition(clazz: Symbol, tree: Tree) = {
       val buf = accDefs.getOrElse(clazz, abort(s"no acc def buf for $clazz"))
-      buf += typers(clazz) typed tree
+      buf += typerOf(clazz) typed tree
     }
     private def ensureAccessor(sel: Select, mixName: TermName = nme.EMPTY) = {
       val Select(qual, name) = sel
@@ -414,24 +414,27 @@ abstract class SuperAccessors extends transform.Transform with transform.TypingT
       }
     }
 
-    /** a typer for each enclosing class */
-    private var typers = immutable.Map[Symbol, analyzer.Typer]()
+    // `validCurrentOwner` from before each frame was entered, restored when the frame exits.
+    private[this] var savedValidCurrentOwner = new Array[Boolean](16)
 
-    /** Specialized here for performance; the previous blanked
-     *  introduction of typers in TypingTransformer caused a >5%
-     *  performance hit for the compiler as a whole.
-     */
-    override def atOwner[A](tree: Tree, owner: Symbol)(trans: => A): A = {
-      val savedValid = validCurrentOwner
+    override protected def enterOwner(tree: Tree, owner: Symbol): Int = {
+      val i = super.enterOwner(tree, owner)
+      if (i == savedValidCurrentOwner.length) savedValidCurrentOwner = java.util.Arrays.copyOf(savedValidCurrentOwner, i * 2)
+      savedValidCurrentOwner(i) = validCurrentOwner
       if (owner.isClass) validCurrentOwner = true
-      val savedLocalTyper = localTyper
-      localTyper = localTyper.atOwner(tree, if (owner.isModuleNotMethod) owner.moduleClass else owner)
-      typers = typers.updated(owner, localTyper)
-      val result = super.atOwner(tree, owner)(trans)
-      localTyper = savedLocalTyper
-      validCurrentOwner = savedValid
-      typers -= owner
-      result
+      i
+    }
+
+    override protected def exitOwner(i: Int): Unit = {
+      super.exitOwner(i)
+      validCurrentOwner = savedValidCurrentOwner(i)
+    }
+
+    /** A typer for the enclosing class `clazz`, made when an accessor is stored there. */
+    private def typerOf(clazz: Symbol): analyzer.Typer = {
+      val context = enclosingContext(clazz)
+      if (context eq analyzer.NoContext) abort(s"no typer for $clazz")
+      analyzer.newTyper(context)
     }
 
     private def withInvalidOwner[A](trans: => A): A = {

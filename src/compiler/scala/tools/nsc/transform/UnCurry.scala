@@ -234,10 +234,10 @@ abstract class UnCurry extends InfoTransform
       } else {
         val mustExpand = mustExpandFunction(fun)
         // method definition with the same arguments, return type, and body as the original lambda
-        val liftedMethod = gen.mkLiftedFunctionBodyMethod(localTyper)(fun.symbol.owner, fun)
+        val liftedMethod = gen.mkLiftedFunctionBodyMethod(fun.symbol.owner, fun)
 
         // new function whose body is just a call to the lifted method
-        val newFun = deriveFunction(fun)(_ => localTyper.typedPos(fun.pos)(
+        val newFun = deriveFunction(fun)(_ => typedPos(fun.pos)(
           gen.mkForwarder(gen.mkAttributedRef(liftedMethod.symbol), (fun.vparams map (_.symbol)) :: Nil)
         ))
 
@@ -246,7 +246,7 @@ abstract class UnCurry extends InfoTransform
           liftedMethod.updateAttachment(DelambdafyTarget)
         }
 
-        val typedNewFun = localTyper.typedPos(fun.pos)(Block(liftedMethod :: Nil, super.transform(newFun)))
+        val typedNewFun = typedPos(fun.pos)(Block(liftedMethod :: Nil, super.transform(newFun)))
         if (mustExpand) {
           val Block(stats, expr : Function) = typedNewFun: @unchecked
           treeCopy.Block(typedNewFun, stats, gen.expandFunction(localTyper)(expr, inConstructorFlag))
@@ -265,7 +265,7 @@ abstract class UnCurry extends InfoTransform
         // when calling into scala varargs, make sure it's a sequence.
         def arrayToSequence(tree: Tree, elemtp: Type, copy: Boolean): Tree = {
           exitingUncurry {
-            localTyper.typedPos(pos) {
+            typedPos(pos) {
               val pt = arrayType(elemtp)
               val adaptedTree = // might need to cast to Array[elemtp], as arrays are not covariant
                 if (tree.tpe <:< pt) tree
@@ -335,7 +335,7 @@ abstract class UnCurry extends InfoTransform
         exitingUncurry {
           if (isJava && !isReferenceArray(suffix.tpe) && isArrayOfSymbol(fun.tpe.params.last.tpe, ObjectClass)) {
             // The array isn't statically known to be a reference array, so call ScalaRuntime.toObjectArray.
-            suffix = localTyper.typedPos(pos) {
+            suffix = typedPos(pos) {
               gen.mkRuntimeCall(nme.toObjectArray, List(suffix))
             }
           }
@@ -362,7 +362,7 @@ abstract class UnCurry extends InfoTransform
             // a Function0. We can then remove the application and use the existing Function0.
             case Apply(Select(qual, nme.apply), Nil) if canUseDirectly(qual) => qual
             case body =>
-              val thunkFun = localTyper.typedPos(body.pos)(Function(Nil, body)).asInstanceOf[Function]
+              val thunkFun = typedPos(body.pos)(Function(Nil, body)).asInstanceOf[Function]
               log(s"Change owner from $currentOwner to ${thunkFun.symbol} in ${thunkFun.body}")
               thunkFun.body.changeOwner(currentOwner, thunkFun.symbol)
               transformFunction(thunkFun)
@@ -429,7 +429,7 @@ abstract class UnCurry extends InfoTransform
         val sym = currentOwner.newMethod(unit.freshTermName(nme.LIFTED_TREE), tree.pos, Flag.ARTIFACT)
         sym.setInfo(MethodType(List(), tree.tpe))
         tree.changeOwner(currentOwner, sym)
-        localTyper.typedPos(tree.pos)(Block(
+        typedPos(tree.pos)(Block(
           List(DefDef(sym, ListOfNil, tree)),
           Apply(Ident(sym), Nil)
         ))
@@ -555,7 +555,7 @@ abstract class UnCurry extends InfoTransform
               val tree2 = tree1 setType functionType(Nil, tree1.tpe)
               return {
                 if (noApply contains tree2) tree2
-                else localTyper.typedPos(tree1.pos)(Apply(Select(tree2, nme.apply), Nil))
+                else typedPos(tree1.pos)(Apply(Select(tree2, nme.apply), Nil))
               }
             }
             tree1
@@ -593,9 +593,9 @@ abstract class UnCurry extends InfoTransform
          * - synthetic Java varargs forwarders for repeated parameters
          */
         case Template(_, _, _) =>
-          localTyper = typer.atOwner(tree, currentClass)
           useNewMembers(currentClass) {
             newMembers =>
+              if (newMembers.nonEmpty) localTyper = typer.atOwner(tree, currentClass)
               deriveTemplate(tree)(transformTrees(newMembers) ::: _)
           }
 

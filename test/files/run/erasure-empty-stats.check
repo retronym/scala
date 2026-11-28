@@ -1,0 +1,10 @@
+[[syntax trees at end of                   erasure]] // newSource1.scala
+package <empty> {
+  abstract trait T extends Object {
+    def /*T*/$init$(): Unit = {
+      ()
+    };
+    def f(): Int = 1
+  }
+}
+
