@@ -249,6 +249,29 @@ trait BitSetOps[+C <: BitSet with BitSetOps[C]]
       for (idx <- 0 until len)
         words(idx) = this.word(idx) | otherBitset.word(idx)
       fromBitMaskNoCopy(words)
+    case _ if coll.isInstanceOf[immutable.BitSet] =>
+      // `immutable.BitSet.incl` copies the words, so add the elements to a single copy, made when the
+      // first element changes the set, rather than folding `incl` over them as `super.concat` does
+      var words: Array[Long] = null
+      val it = other.iterator
+      while (it.hasNext) {
+        val elem = it.next()
+        require(elem >= 0, "bitset element must be >= 0")
+        val idx = elem >> LogWL
+        val w = if (words eq null) word(idx) else if (idx < words.length) words(idx) else 0L
+        val w1 = w | (1L << elem)
+        if (w1 != w) {
+          if (words eq null) words = toBitMask
+          if (idx >= words.length) words = java.util.Arrays.copyOf(words, math.max(idx + 1, words.length * 2))
+          words(idx) = w1
+        }
+      }
+      if (words eq null) coll
+      else {
+        var len = words.length
+        while (len > 0 && words(len - 1) == 0L) len -= 1
+        fromBitMaskNoCopy(if (len == words.length) words else java.util.Arrays.copyOf(words, len))
+      }
     case _ => super.concat(other)
   }
 
