@@ -274,4 +274,15 @@ class HashMapTest {
     for ((k, v) <- m) m.addOne(k -> (v + 1))
     assertEquals(List.fill(11)(4), m.values.toList)
   }
+
+  // scala/bug#12121: a mapped view of the map is read as it was before the call
+  @Test
+  def bulkOperationsWithMappedViewOfSelf(): Unit = {
+    val a = mutable.HashMap(1 -> 2, 2 -> 3, 3 -> 4)
+    a.addAll(a.view.map { case (k, v) => (k + 1, v + 10) })
+    assertEquals(Map(1 -> 2, 2 -> 12, 3 -> 13, 4 -> 14), a)
+    val s = mutable.HashMap(1 -> 2, 2 -> 3, 3 -> 4)
+    s.subtractAll(s.keySet.view.map(_ + 1))
+    assertEquals(Map(1 -> 2), s)
+  }
 }

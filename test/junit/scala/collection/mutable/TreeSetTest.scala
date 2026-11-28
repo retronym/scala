@@ -53,4 +53,12 @@ class TreeSetTest {
       assertEquals(expected, src filter set)
     }
   }
+
+  // scala/bug#12121: a mapped view of the set is read as it was before the call
+  @Test
+  def subtractAllMappedViewOfSelf(): Unit = {
+    val s = mutable.TreeSet(1 to 40: _*)
+    s.subtractAll(s.view.map(_ + 1))
+    assertEquals(Set(1), s)
+  }
 }

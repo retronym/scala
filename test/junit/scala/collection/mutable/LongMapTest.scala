@@ -50,4 +50,15 @@ class LongMapTest {
 
     assertEquals(None, m.put(999L, 1))
   }
+
+  // scala/bug#12121: a mapped view of the map is read as it was before the call
+  @Test
+  def bulkOperationsWithMappedViewOfSelf(): Unit = {
+    val a = LongMap(1L -> 2, 2L -> 3, 3L -> 4)
+    a.addAll(a.view.map { case (k, v) => (k + 1, v + 10) })
+    assertEquals(Map(1L -> 2, 2L -> 12, 3L -> 13, 4L -> 14), a)
+    val s = LongMap((1L to 40L).map(k => k -> k): _*)
+    s.subtractAll(s.keySet.view.map(_ + 1))
+    assertEquals(Map(1L -> 1L), s)
+  }
 }
