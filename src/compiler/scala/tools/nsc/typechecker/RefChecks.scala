@@ -239,6 +239,19 @@ abstract class RefChecks extends Transform {
 
 // Override checking ------------------------------------------------------------
 
+    private def uncurryAndErase(sym: Symbol, tp: Type): Type = erasure.erasure(sym)(uncurry.transformInfo(sym, tp))
+
+    /** Is `sym` a varargs bridge created by `erasedVarargBridge`, whose type is the erased type `erased`? */
+    private def isErasedVarargBridge(sym: Symbol, erased: Type): Boolean =
+      sym.hasFlag(VBRIDGE) && sym.isArtifact && exitingErasure(sym.tpe =:= erased)
+
+    /** Does `clazz` have an erased varargs bridge that implements the Java method `javaMember`? */
+    private def hasErasedVarargBridge(clazz: Symbol, javaMember: Symbol): Boolean =
+      isJavaVarArgsMethod(javaMember) && {
+        val erased = uncurryAndErase(javaMember, javaMember.info)
+        clazz.info.nonPrivateMemberAdmitting(javaMember.name, VBRIDGE).alternatives.exists(isErasedVarargBridge(_, erased))
+      }
+
     /** Add bridges for vararg methods that extend Java vararg methods
      */
     def addVarargBridges(clazz: Symbol): List[Tree] = {
@@ -267,6 +280,44 @@ abstract class RefChecks extends Transform {
           localTyper typed DefDef(bridge, body)
         }
 
+        // A varargs bridge whose type is `javaErased`, the erased type of the overridden Java method, for when that differs
+        // from the erasure of the bridge type seen from `clazz`. For `class JV<T> { String g(T... xs) }`, an override
+        // in `class C extends JV[String]` must implement `g(Object[])`, and Java callers pass an `Object[]`, so the
+        // array is wrapped as is and the arguments are cast to the types `member` expects.
+        def erasedVarargBridge(member: Symbol, javaErased: Type): Tree = {
+          log(s"Generating erased varargs bridge for ${member.fullLocationString} of type $javaErased")
+
+          val newFlags = (member.flags | VBRIDGE | ARTIFACT) & ~(PRIVATE | OVERRIDE | ABSOVERRIDE)
+          val bridge   = member.cloneSymbolImpl(clazz, newFlags) setPos clazz.pos
+          // An erased type refers to a generic class without type arguments (`Array[Comparable]` for a parameter
+          // bounded by `Comparable<T>`), which is not a type that a tree can have. Apply such classes to wildcards.
+          val applied = javaErased.map {
+            case tp @ TypeRef(pre, sym, Nil) if tp.isHigherKinded => classExistentialType(pre, sym)
+            case tp => tp
+          }
+          bridge.setInfo(applied.cloneInfo(bridge))
+          clazz.info.decls enter bridge
+
+          val memberTpe = self.memberType(member)
+          def castTo(tp: Type)(tree: Tree, from: Type) =
+            if (from <:< tp) tree else gen.mkAsInstanceOf(tree, existentialAbstraction(memberTpe.typeParams, tp), wrapInApply = false)
+          val params  = bridge.paramss.head
+          val args    = map2(params.init, memberTpe.params.init)((p, mp) => castTo(mp.tpe)(Ident(p), p.tpe))
+          val elemtp  = memberTpe.params.last.tpe.typeArgs.head
+          val array   = Ident(params.last)
+          val arrElem = params.last.tpe.typeArgs.head
+          // `wrapRefArray[T <: AnyRef]` can't be applied to a class that is a universal trait in Scala (`Comparable`,
+          // `Serializable`). The array is one of references all the same.
+          val wrapped =
+            if (isPrimitiveValueType(arrElem) || arrElem <:< AnyRefTpe) gen.mkWrapVarargsArray(array, arrElem)
+            else gen.mkWrapVarargsArray(gen.mkAsInstanceOf(array, arrayType(AnyRefTpe), wrapInApply = false), AnyRefTpe)
+          val lastarg = gen.wildcardStar(gen.mkAsInstanceOf(wrapped, existentialAbstraction(memberTpe.typeParams, seqType(elemtp)), wrapInApply = false))
+          val call    = localTyper typed Apply(Select(This(clazz), member), args :+ lastarg)
+          val body    = castTo(bridge.tpe.resultType)(call, call.tpe)
+
+          localTyper typed DefDef(bridge, body)
+        }
+
         // For all concrete non-private members (but: see below) that have a (Scala) repeated
         //   parameter: compute the corresponding method type `jtpe` with a Java repeated parameter
         //   if a method with type `jtpe` exists and that method is not a varargs bridge
@@ -287,8 +338,24 @@ abstract class RefChecks extends Transform {
               // if we find a bridge everything is OK. If we find another member,
               // we need to create a bridge
               val inherited1 = inherited filter (sym => !(sym hasFlag VBRIDGE) && (self memberType sym matches jtpe))
-              if (inherited1.exists)
-                bridges += varargBridge(member, jtpe)
+              if (inherited1.exists) {
+                // The JVM signature to override is the erasure of the Java method's own type, which differs from
+                // the erasure of `jtpe` if a parameter or the result has a type parameter of the Java class as
+                // its type (`g(T... xs)` erases to `g(Object[])`, not `g(String[])` in `C extends JV[String]`).
+                lazy val bridgeErased = uncurryAndErase(member, jtpe)
+                val javaErased =
+                  if (currentRun.erasurePhase == NoPhase) None
+                  else inherited1.alternatives.iterator.collect {
+                    case sym if sym.isJavaDefined => uncurryAndErase(sym, sym.info)
+                  }.find(tp => !exitingErasure(tp =:= bridgeErased))
+                javaErased match {
+                  case Some(tp) =>
+                    // An erased bridge inherited from a superclass calls `member` virtually.
+                    if (!inherited.alternatives.exists(isErasedVarargBridge(_, tp)))
+                      bridges += erasedVarargBridge(member, tp)
+                  case _ => bridges += varargBridge(member, jtpe)
+                }
+              }
             }
           }
         }
@@ -696,7 +763,7 @@ abstract class RefChecks extends Transform {
             // the test requires exitingErasure so shouldn't be
             // done if the compiler has no erasure phase available
                member.isJavaDefined
-            && (currentRun.erasurePhase == NoPhase || javaErasedOverridingSym(member) != NoSymbol)
+            && (currentRun.erasurePhase == NoPhase || javaErasedOverridingSym(member) != NoSymbol || hasErasedVarargBridge(clazz, member))
           )
 
         // 2. Check that only abstract classes have deferred members
