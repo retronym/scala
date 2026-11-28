@@ -258,7 +258,7 @@ abstract class CleanUp extends Statics with Transform with ast.TreeDSL {
               def cache       = REF(reflectiveMethodCache(ad.symbol.name.toString, paramTypes))     // cache Symbol
               def lookup      = Apply(cache, List(qual1().GETCLASS()))                                // get Method object from cache
               def invokeArgs  = ArrayValue(TypeTree(ObjectTpe), params)                       // args for invocation
-              def invocation  = (lookup DOT invokeName)(qual1(), invokeArgs)                        // .invoke(qual1, ...)
+              def invocation(method: Tree) = (method DOT invokeName)(qual1(), invokeArgs)           // .invoke(qual1, ...)
 
               // exception catching machinery
               val invokeExc   = currentOwner.newValue(mkTerm(""), ad.pos) setInfo InvocationTargetExceptionClass.tpe
@@ -266,7 +266,21 @@ abstract class CleanUp extends Statics with Transform with ast.TreeDSL {
               def catchBody   = Throw(Apply(Select(Ident(invokeExc), nme.getCause), Nil))
 
               // try { method.invoke } catch { case e: InvocationTargetExceptionClass => throw e.getCause() }
-              fixResult(TRY (invocation) CATCH { CASE (catchVar) ==> catchBody } FINALLY END)
+              def invocationWithCatch(method: Tree) = TRY (invocation(method)) CATCH { CASE (catchVar) ==> catchBody } FINALLY END
+
+              // `invoke` returns null for a void method, which a refinement member whose result type
+              // is not a subtype of AnyRef (`Any`, a type parameter) can select. Only the selected method can tell.
+              if (resultSym == ObjectClass && !enteringErasure(ad.symbol.info.finalResultType <:< AnyRefTpe)) {
+                val method = currentOwner.newValue(mkTerm("method"), ad.pos) setInfo MethodClass.tpe
+                val result = currentOwner.newValue(mkTerm("result"), ad.pos) setInfo ObjectTpe
+                def isVoid = (REF(method) DOT (MethodClass.tpe member TermName("getReturnType")))() OBJ_EQ REF(BoxedUnit_TYPE)
+                BLOCK(
+                  ValDef(method, lookup),
+                  ValDef(result, invocationWithCatch(REF(method))),
+                  IF ((REF(result) OBJ_EQ NULL) AND isVoid) THEN REF(BoxedUnit_UNIT) ELSE REF(result)
+                )
+              }
+              else fixResult(invocationWithCatch(lookup))
             }
 
             /* A possible primitive method call, represented by methods in BoxesRunTime. */
