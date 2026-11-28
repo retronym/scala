@@ -576,6 +576,7 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
             locals.store(earlyReturnVar)
           }
           bc goTo nextCleanup
+          returnsToCleanup ::= mnode.instructions.getLast.asInstanceOf[asm.tree.JumpInsnNode]
           shouldEmitCleanup = true
       }
 

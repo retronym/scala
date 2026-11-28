@@ -306,6 +306,8 @@ abstract class BCodeSkelBuilder extends BCodeHelpers {
     // used by genLoadTry() and genSynchronized()
     var earlyReturnVar: Symbol     = null
     var shouldEmitCleanup          = false
+    // jumps emitted by genReturn to a cleanup, see dropStackAtReturnsToCleanup
+    var returnsToCleanup: List[asm.tree.JumpInsnNode] = Nil
     // line numbers
     var lastEmittedLineNr          = -1
 
@@ -524,6 +526,7 @@ abstract class BCodeSkelBuilder extends BCodeHelpers {
       isModuleInitialized = false
       earlyReturnVar      = null
       shouldEmitCleanup   = false
+      returnsToCleanup    = Nil
 
       lastEmittedLineNr = -1
     }
@@ -695,6 +698,7 @@ abstract class BCodeSkelBuilder extends BCodeHelpers {
 
         lineNumber(rhs)
         emitNormalMethodBody()
+        if (returnsToCleanup.nonEmpty) dropStackAtReturnsToCleanup()
 
         // Note we don't invoke visitMax, thus there are no FrameNode among mnode.instructions.
         // The only non-instruction nodes to be found are LabelNode and LineNumberNode.
@@ -705,6 +709,52 @@ abstract class BCodeSkelBuilder extends BCodeHelpers {
 
       mnode = null
     } // end of method genDefDef()
+
+    /* A `return` under a finalizer or `synchronized` jumps to a cleanup (see `genReturn`), and the JVM
+     * requires the same stack at every jump to it. The `return` may be evaluated while operands of the
+     * enclosing expression are on the stack, as in `f(a, if (c) return b else d)`: pop them before the
+     * jump (scala/bug#10183).
+     *
+     * The stack is found by an analysis in which each such jump is preceded by a `throw`, so that the
+     * cleanups are not reached while their incoming stacks are still inconsistent. A `return` inside a
+     * cleanup is reached only once the jumps to that cleanup are fixed, hence the loop.
+     */
+    private def dropStackAtReturnsToCleanup(): Unit = {
+      import asm.Opcodes._
+      import asm.tree.{InsnNode, JumpInsnNode}
+      val insns = mnode.instructions
+      val (maxLocals, maxStack, access) = (mnode.maxLocals, mnode.maxStack, mnode.access)
+      var pending = returnsToCleanup
+      var progress = true
+      while (pending.nonEmpty && progress) {
+        val stops = pending.map { jump =>
+          val stop = new InsnNode(ACONST_NULL)
+          insns.insertBefore(jump, stop)
+          insns.insertBefore(jump, new InsnNode(ATHROW))
+          (jump, stop)
+        }
+        val frames =
+          try {
+            val analyzer = new scala.tools.nsc.backend.jvm.analysis.BasicAnalyzer(mnode, cnode.name)
+            stops.map { case (_, stop) => analyzer.frameAt(stop) }
+          } catch {
+            case _: asm.tree.analysis.AnalyzerException => Nil
+          }
+        for ((_, stop) <- stops) { insns.remove(stop.getNext); insns.remove(stop) }
+        // the analysis computes and records maxs, which must not be kept for the changed method
+        mnode.maxLocals = maxLocals
+        mnode.maxStack = maxStack
+        mnode.access = access
+        var unresolved: List[JumpInsnNode] = Nil
+        for (((jump, _), frame) <- stops.lazyZip(frames)) {
+          if (frame == null) unresolved ::= jump
+          else for (i <- frame.getStackSize - 1 to 0 by -1)
+            insns.insertBefore(jump, new InsnNode(if (frame.getStack(i).getSize == 2) POP2 else POP))
+        }
+        progress = frames.nonEmpty && unresolved.lengthCompare(pending.length) < 0
+        pending = unresolved
+      }
+    }
 
     /*
      *  must-single-thread
