@@ -125,9 +125,20 @@ abstract class Duplicators extends AbstractAnalyzer {
       }
     }
 
+    /** The singleton type of a local lazy val, inferred while it was a value, outlives the fields phase, which turns
+     *  the lazy val into a method. Retyping a call to that method gives the underlying type, which does not conform
+     *  to the singleton type, so widen it.
+     */
+    private object WidenLocalLazySingletons extends TypeMap {
+      def apply(tpe: Type): Type = tpe match {
+        case SingleType(_, sym) if sym.isLazy && sym.isMethod && sym.isLocalToBlock => apply(tpe.underlying)
+        case _                                                                      => mapOver(tpe)
+      }
+    }
+
     /** Fix the given type by replacing invalid symbols with the new ones. */
     def fixType(tpe: Type): Type = {
-      val tpe1 = envSubstitution(tpe)
+      val tpe1 = envSubstitution(WidenLocalLazySingletons(tpe))
       val tpe2: Type = (new FixInvalidSyms)(tpe1)
       val tpe3 = if (newClassOwner ne null) {
         tpe2.asSeenFrom(newClassOwner.thisType, oldClassOwner)
