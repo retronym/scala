@@ -1350,6 +1350,10 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
     private[this] var symbolDepth: Int         = _ // the depth of the directly found symbol
     private[this] var foundInPrefix: Boolean   = _ // the symbol was found in pre
     private[this] var foundInSuper: Boolean    = _ // the symbol was found super of context class (inherited)
+    // fields, not locals of `apply`: its local methods assign them, which would box them in an ObjectRef per lookup
+    private[this] var impSel: ImportSelector   = _ // the selector of the import that binds the name
+    private[this] var impSym: Symbol           = _ // the imported symbol
+    private[this] val importCursor             = new ImportCursor
 
     def ambiguousImports(imp1: ImportInfo, imp2: ImportInfo) =
       LookupAmbiguous(s"it is imported twice in the same scope by\n$imp1\nand $imp2")
@@ -1387,6 +1391,8 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
       symbolDepth  = -1
       foundInPrefix = false
       foundInSuper = false
+      impSel = null
+      impSym = NoSymbol
 
       def finish(qual: Tree, sym: Symbol): NameLookup = (
         if (lookupError ne null) lookupError
@@ -1421,7 +1427,8 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
       def searchPrefix = {
         cx = cx.enclClass
         val found0 = lookupInPrefix(name)
-        val found1 = found0.filter(accessibleInPrefix)
+        // most lookups in the prefix of an enclosing class find nothing: don't allocate the closure for those
+        val found1 = if (found0 eq NoSymbol) NoSymbol else found0.filter(accessibleInPrefix)
         if (found0.exists && !found1.exists && inaccessible == null)
           inaccessible = LookupInaccessible(found0, analyzer.lastAccessCheckDetails)
 
@@ -1492,9 +1499,8 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
       if (symbolDepth < 0)
         symbolDepth = cx.depth
 
-      var impSel: ImportSelector = null
-      var impSym: Symbol = NoSymbol
-      val importCursor = new ImportCursor(thisContext, name)
+      val importCursor = this.importCursor
+      importCursor.init(thisContext, name)
       import importCursor.{imp1, imp2}
 
       // The symbol resolved by the given import for `name`, paired with the selector that was used.
@@ -1937,7 +1943,9 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
       //      check inside the above loop, as I believe that
       //      this always represents a mistake on the part of
       //      the caller.
-      result.filter(sym =>
+      // most imports do not bind the name: don't allocate the closure for those
+      if (result eq NoSymbol) TupleOfNullAndNoSymbol
+      else result.filter(sym =>
         if (isRootImport) !definitions.isUnimportableUnlessRenamed(sym)
         else definitions.isImportable(sym)
       ) match {
@@ -1992,9 +2000,17 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
   val ImportType = global.ImportType
 
   /** Walks a pair of references (`imp1` and `imp2`) up the context chain to ImportContexts */
-  private final class ImportCursor(var ctx: Context, name: Name) {
-    private var imp1Ctx = ctx.enclosingImport
-    private var imp2Ctx = imp1Ctx.outer.enclosingImport
+  private final class ImportCursor {
+    private[this] var name: Name = _
+    private[this] var imp1Ctx: Context = _
+    private[this] var imp2Ctx: Context = _
+
+    /** Starts the walk at `ctx`. One cursor serves every lookup of a `SymbolLookup`. */
+    def init(ctx: Context, name: Name): Unit = {
+      this.name = name
+      imp1Ctx = ctx.enclosingImport
+      imp2Ctx = imp1Ctx.outer.enclosingImport
+    }
 
     def advanceImp1Imp2(): Unit = {
       imp1Ctx = imp2Ctx; imp2Ctx = imp1Ctx.outer.enclosingImport
