@@ -133,6 +133,30 @@ class NumericRangeTest {
   }
 
   @Test
+  def bigDecimalCountFromFractionalStartAcrossZero(): Unit = {
+    def bd(s: String) = BigDecimal(s)
+    def model(start: BigDecimal, end: BigDecimal, step: BigDecimal, inclusive: Boolean): Int = {
+      val q = (end - start) / step
+      val n = q.setScale(0, BigDecimal.RoundingMode.FLOOR)
+      (if (!inclusive && n == q) n else n + 1).toInt
+    }
+    for {
+      (start, end, step) <- List(("0.34", "-0.12", "-0.01"), ("-0.34", "0.12", "0.01"), ("0.5", "-3", "-0.3"), ("-0.5", "3", "0.3"), ("0.05", "-1.05", "-0.1"), ("0.34", "-21474835.00", "-0.01"))
+      inclusive <- List(true, false)
+    } {
+      val r = if (inclusive) Range.BigDecimal.inclusive(bd(start), bd(end), bd(step)) else Range.BigDecimal(bd(start), bd(end), bd(step))
+      assertEquals(s"$r", model(bd(start), bd(end), bd(step), inclusive), r.length)
+    }
+    assertEquals(2147483646, Range.BigDecimal.inclusive(bd("0.34"), bd("-21474836.11"), bd("-0.01")).length)
+    assertEquals(2147483647, Range.BigDecimal.inclusive(bd("0.34"), bd("-21474836.12"), bd("-0.01")).length)
+    assertEquals(2147483646, Range.BigDecimal.inclusive(bd("-0.34"), bd("21474836.11"), bd("0.01")).length)
+    assertThrows[IllegalArgumentException](Range.BigDecimal.inclusive(bd("0.34"), bd("-21474836.13"), bd("-0.01")).length)
+    val d = Range.BigDecimal.inclusive(bd("0.34"), bd("-245480424064.33"), bd("-0.01")).take(Int.MaxValue)
+    assertEquals(Int.MaxValue, d.length)
+    assertEquals(bd("-21474836.12"), d.last)
+  }
+
+  @Test
   def numericRangeContains() = {
     def check(r: Range): List[Int] = {
       r.filterNot(r.contains).toList
