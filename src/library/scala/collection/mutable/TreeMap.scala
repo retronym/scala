@@ -248,7 +248,13 @@ sealed class TreeMap[K, V] private (tree: RB.Tree[K, V])(implicit val ordering: 
 object TreeMap extends SortedMapFactory[TreeMap] {
 
   def from[K : Ordering, V](it: IterableOnce[(K, V)]): TreeMap[K, V] =
-    Growable.from(empty[K, V], it)
+    it match {
+      // the entries of a sorted map with the same ordering are in order: build the tree without comparisons
+      case sm: scala.collection.SortedMap[K, V] if implicitly[Ordering[K]] == sm.ordering =>
+        new TreeMap[K, V](RB.fromOrderedEntries(sm.iterator, sm.size))
+      case _ =>
+        Growable.from(empty[K, V], it)
+    }
 
   def empty[K : Ordering, V]: TreeMap[K, V] = new TreeMap[K, V]()
 
