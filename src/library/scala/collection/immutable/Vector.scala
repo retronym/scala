@@ -292,7 +292,7 @@ sealed abstract class Vector[+A] private[immutable] (private[immutable] final va
   override final def last: A = {
     if(this.isInstanceOf[BigVector[_]]) {
       val suffix = this.asInstanceOf[BigVector[_]].suffix1
-      if(suffix.length == 0) throw new NoSuchElementException("empty.tail")
+      if(suffix.length == 0) throw new NoSuchElementException("empty.last")
       else suffix(suffix.length-1)
     } else prefix1(prefix1.length-1)
   }.asInstanceOf[A]
@@ -1058,7 +1058,11 @@ private final class Vector6[+A](_prefix1: Arr1, private[immutable] val len1: Int
     } else throw ioob(index)
   }
 
+  private[this] def checkCapacity(n: Int): Unit =
+    if(n > Int.MaxValue - length0) throw new IllegalArgumentException("Vector cannot have more than Int.MaxValue elements")
+
   override def appended[B >: A](elem: B): Vector[B] = {
+    checkCapacity(1)
     if     (suffix1.length < WIDTH      ) copy(suffix1 = copyAppend1(suffix1, elem), length0 = length0+1)
     else if(suffix2.length < WIDTH-1    ) copy(suffix2 = copyAppend(suffix2, suffix1), suffix1 = wrap1(elem), length0 = length0+1)
     else if(suffix3.length < WIDTH-1    ) copy(suffix3 = copyAppend(suffix3, copyAppend(suffix2, suffix1)), suffix2 = empty2, suffix1 = wrap1(elem), length0 = length0+1)
@@ -1069,6 +1073,7 @@ private final class Vector6[+A](_prefix1: Arr1, private[immutable] val len1: Int
   }
 
   override def prepended[B >: A](elem: B): Vector[B] = {
+    checkCapacity(1)
     if     (len1         < WIDTH      ) copy(copyPrepend1(elem, prefix1), len1+1, len12 = len12+1, len123 = len123+1, len1234 = len1234+1, len12345 = len12345+1, length0 = length0+1)
     else if(len12        < WIDTH2     ) copy(wrap1(elem), 1, copyPrepend(prefix1, prefix2), len12+1, len123 = len123+1, len1234 = len1234+1, len12345 = len12345+1, length0 = length0+1)
     else if(len123       < WIDTH3     ) copy(wrap1(elem), 1, empty2, 1, copyPrepend(copyPrepend(prefix1, prefix2), prefix3), len123+1, len1234 = len1234+1, len12345 = len12345+1, length0 = length0+1)
@@ -1135,7 +1140,8 @@ private final class Vector6[+A](_prefix1: Arr1, private[immutable] val len1: Int
     case 10 => length0
   }
 
-  override protected[this] def prependedAll0[B >: A](prefix: collection.IterableOnce[B], k: Int): Vector[B] =
+  override protected[this] def prependedAll0[B >: A](prefix: collection.IterableOnce[B], k: Int): Vector[B] = {
+    checkCapacity(k)
     prepend1IfSpace(prefix1, prefix) match {
       case null => super.prependedAll0(prefix, k)
       case prefix1b =>
@@ -1149,8 +1155,10 @@ private final class Vector6[+A](_prefix1: Arr1, private[immutable] val len1: Int
           length0  = length0 + diff,
         )
     }
+  }
 
   override protected[this] def appendedAll0[B >: A](suffix: collection.IterableOnce[B], k: Int): Vector[B] = {
+    checkCapacity(k)
     val suffix1b = append1IfSpace(suffix1, suffix)
     if(suffix1b ne null) copy(suffix1 = suffix1b, length0 = length0-suffix1.length+suffix1b.length)
     else super.appendedAll0(suffix, k)
@@ -1573,7 +1581,7 @@ final class VectorBuilder[A] extends ReusableBuilder[A, Vector[A]] {
   //TODO Make public; this method is only private for binary compatibility
   private[collection] def alignTo(before: Int, bigVector: Vector[A]): this.type = {
     if (len1 != 0 || lenRest != 0)
-      throw new UnsupportedOperationException("A non-empty VectorBuilder cannot be aligned retrospectively. Please call .reset() or use a new VectorBuilder.")
+      throw new UnsupportedOperationException("A non-empty VectorBuilder cannot be aligned retrospectively. Please call .clear() or use a new VectorBuilder.")
     val (prefixLength, maxPrefixLength) = bigVector match {
       case Vector0 => (0, 1)
       case v1: Vector1[_] => (0, 1)
@@ -2356,7 +2364,7 @@ private final class NewVectorIterator[A](v: Vector[A], private[this] var totalLe
   override def drop(n: Int): Iterator[A] = {
     if(n > 0) {
       val oldpos = i1-len1+totalLength
-      val newpos = mmin(oldpos + n, totalLength)
+      val newpos = if(n >= totalLength - oldpos) totalLength else oldpos + n
       if(newpos == totalLength) {
         i1 = 0
         len1 = 0
