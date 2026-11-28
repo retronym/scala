@@ -28,6 +28,33 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
     clearCount
   }
 
+  /** Counters that let a failed member lookup be remembered; see `ImportInfo` in the compiler.
+   *
+   *  A lookup such as `Type.nonLocalMember` reads only the member scopes of the base classes of the
+   *  type, after forcing their infos. The members of a class that is not a package can only grow
+   *  after its info is complete: a symbol owned by a class with a complete info is entered (a default
+   *  getter, a synthetic method, a package object member), or the info of a class is replaced. Both
+   *  increment `classMembersEpoch`. Symbols entered while their owner is being completed are not
+   *  counted, since no lookup has seen that class yet, nor symbols collected by `findMembers`.
+   *
+   *  A package scope only grows by entering a symbol at the front of `elems`, so a package lookup can
+   *  instead be keyed on the package's last entry. `scopeRewritesEpoch` counts the changes that bypass
+   *  that: renaming a member, and `enterBefore`.
+   */
+  private[this] var _classMembersEpoch: Int = 0
+  private[this] var _scopeRewritesEpoch: Int = 0
+  final def classMembersEpoch: Int = _classMembersEpoch
+  final def scopeRewritesEpoch: Int = _scopeRewritesEpoch
+  private[scala] final def classInfoReplaced(): Unit = _classMembersEpoch += 1
+  private[scala] final def scopeRewritten(): Unit = {
+    _scopeRewritesEpoch += 1
+    _classMembersEpoch += 1
+  }
+  private def symbolEntered(sym: Symbol): Unit = {
+    val owner = sym.owner
+    if (owner.isClass && !owner.hasPackageFlag && owner.hasCompletedInfo) _classMembersEpoch += 1
+  }
+
   /** An ADT to represent the results of symbol name lookups.
    */
   sealed trait NameLookup { def symbol: Symbol ; def isSuccess = false }
@@ -46,7 +73,7 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
     var next: ScopeEntry = null
 
     def depth = owner.nestingLevel
-    override def hashCode(): Int = sym.name.start
+    override def hashCode(): Int = sym.name.id
     override def toString() = s"$sym (depth=$depth)"
     // OPT: compare raw names when pre-flatten, saving needsFlatClasses within the loop
     final def name(flat: Boolean): Name = if (flat) sym.name else sym.rawname
@@ -135,9 +162,13 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
       s
     }
 
+    /** Does this scope collect the result of `findMembers`, rather than declare anything? */
+    protected def isFindMemberScope: Boolean = false
+
     /** enter a scope entry
      */
     protected def enterEntry(e: ScopeEntry): Unit = {
+      if (!isFindMemberScope) symbolEntered(e.sym)
       flushElemsCache()
       if (hashtable ne null)
         enterInHash(e)
@@ -146,7 +177,7 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
     }
 
     private def enterInHash(e: ScopeEntry): Unit = {
-      val i = e.sym.name.start & HASHMASK
+      val i = e.sym.name.id & HASHMASK
       e.tail = hashtable(i)
       hashtable(i) = e
     }
@@ -171,6 +202,7 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
       next.sym = sym
       next.next = newNext
       if (hasHashTable) next.tail = newNext
+      scopeRewritten()
       flushElemsCache()
       sym
     }
@@ -212,7 +244,7 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
 
     def rehash(sym: Symbol, newname: Name): Unit = {
       if (hashtable ne null) {
-        val index = sym.name.start & HASHMASK
+        val index = sym.name.id & HASHMASK
         var e1 = hashtable(index)
         var e: ScopeEntry = null
         if (e1 != null) {
@@ -228,7 +260,7 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
           }
         }
         if (e != null) {
-          val newindex = newname.start & HASHMASK
+          val newindex = newname.id & HASHMASK
           e.tail = hashtable(newindex)
           hashtable(newindex) = e
         }
@@ -246,7 +278,7 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
         e1.next = e.next
       }
       if (hashtable ne null) {
-        val index = e.sym.name.start & HASHMASK
+        val index = e.sym.name.id & HASHMASK
         var e1 = hashtable(index)
         if (e1 == e) {
           hashtable(index) = e.tail
@@ -350,7 +382,7 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
       var e: ScopeEntry = null
       val flat = phase.flatClasses
       if (hashtable ne null) {
-        e = hashtable(name.start & HASHMASK)
+        e = hashtable(name.id & HASHMASK)
         while ((e ne null) && (e.name(flat) ne name)) {
           e = e.tail
         }
@@ -454,6 +486,32 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
 
     override def foreach[U](p: Symbol => U): Unit = toList foreach p
 
+    // `exists`, `forall` and `count` don't depend on order, so walk the entries rather than
+    // `iterator`, which builds (and caches) `toList`. The runtime universe keeps the inherited
+    // versions, which go through the synchronized `toList`.
+    override def exists(p: Symbol => Boolean): Boolean =
+      if (!isCompilerUniverse) super.exists(p)
+      else {
+        var e = elems
+        while ((e ne null) && e.owner == this) {
+          if (p(e.sym)) return true
+          e = e.next
+        }
+        false
+      }
+    override def forall(p: Symbol => Boolean): Boolean = !exists(sym => !p(sym))
+    override def count(p: Symbol => Boolean): Int =
+      if (!isCompilerUniverse) super.count(p)
+      else {
+        var n = 0
+        var e = elems
+        while ((e ne null) && e.owner == this) {
+          if (p(e.sym)) n += 1
+          e = e.next
+        }
+        n
+      }
+
     override def filterNot(p: Symbol => Boolean): Scope = {
       val result = toList
       val filtered = result.filterNot(p)
@@ -505,6 +563,7 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
    *  Therefore we introduce a special flavor of scopes to accommodate this quirk of `findMembers`
    */
   private[scala] def newFindMemberScope: Scope = new Scope() {
+    override protected def isFindMemberScope = true
     override def sorted = {
       val members = toList
       val owners = members.map(_.owner).distinct

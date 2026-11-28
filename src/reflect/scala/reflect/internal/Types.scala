@@ -584,14 +584,29 @@ trait Types
      *  might lurk in the upper bounds of an abstract type. See scala/bug#7051.
      */
     @tailrec
-    final def dealiasWiden: Type = {
-      val widened = widen
-      if (this ne widened) widened.dealiasWiden
+    final def dealiasWiden: Type =
+      if (!mayDealiasOrWiden) this
       else {
-        val dealiased = dealias
-        if (this ne dealiased) dealiased.dealiasWiden
-        else this
+        val widened = widen
+        if (this ne widened) widened.dealiasWiden
+        else {
+          val dealiased = dealias
+          if (this ne dealiased) dealiased.dealiasWiden
+          else this
+        }
       }
+
+    /** False if `widen` and `dealias` are certainly the identity on this type.
+     *
+     *  OPT: answers without the megamorphic virtual calls to `widen` and `dealias`.
+     *  Class type refs are by far the most common case and are recognized with an
+     *  exact-class test. The tests below must cover every class that overrides
+     *  `widen` or `dealias`.
+     */
+    private[internal] final def mayDealiasOrWiden: Boolean = this match {
+      case _: ClassTypeRef                        => false
+      case _: AliasTypeRef | _: SimpleTypeProxy   => true
+      case _                                      => false
     }
 
     /** All the types encountered in the course of dealiasing/widening,
@@ -1447,6 +1462,8 @@ trait Types
   /** A class for this-types of the form <sym>.this.type
    */
   abstract case class ThisType(sym: Symbol) extends SingletonType with ThisTypeApi {
+    //OPT specialize hashCode, as `findUniqueThisType` computes it from the components
+    override final def computeHashCode = thisTypeHashCode(sym)
     if (!sym.isClass && !sym.isFreeType) {
       // scala/bug#6640 allow StubSymbols to reveal what's missing from the classpath before we trip the assertion.
       sym.failIfStub()
@@ -1475,16 +1492,39 @@ trait Types
   final class UniqueThisType(sym: Symbol) extends ThisType(sym) { }
 
   object ThisType extends ThisTypeExtractor {
-    def apply(sym: Symbol): Type = (
-      if (!phase.erasedTypes) unique(new UniqueThisType(sym))
+    def apply(sym: Symbol): Type =
+      if (!phase.erasedTypes) {
+        val existing = findUniqueThisType(sym)
+        if (existing ne null) existing
+        else unique(new UniqueThisType(sym))
+      }
       else sym.tpe_*
-    )
+  }
+
+  /** The hash code of `ThisType(sym)`: the synthetic one of a case class, `MurmurHash3.caseClassHash`. */
+  private def thisTypeHashCode(sym: Symbol): Int = {
+    import scala.util.hashing.MurmurHash3._
+    var h = productSeed
+    h = mix(h, "ThisType".hashCode)
+    h = mix(h, sym.hashCode)
+    finalizeHash(h, 1)
+  }
+
+  /** Matches the unique types that a `ThisType(sym)` would be `equals` to. */
+  private final class ThisTypeProbe extends util.WeakHashSet.Probe[Type, Symbol, Null, Null] {
+    // As the synthetic `ThisType#equals`, with the ThisType(sym) as the receiver
+    def matches(elem: Type, sym: Symbol, unused1: Null, unused2: Null): Boolean = elem match {
+      case tt: ThisType => sym == tt.sym
+      case _ => false
+    }
   }
 
   /** A class for singleton types of the form `<prefix>.<sym.name>.type`.
    *  Cannot be created directly; one should always use `singleType` for creation.
    */
   abstract case class SingleType(pre: Type, sym: Symbol) extends SingletonType with SingleTypeApi {
+    //OPT specialize hashCode, as `findUniqueSingleType` computes it from the components
+    override final def computeHashCode = singleTypeHashCode(pre, sym)
     private[this] var trivial: ThreeValue = UNKNOWN
     override def isTrivial: Boolean = {
       if (trivial == UNKNOWN) trivial = fromBoolean(pre.isTrivial)
@@ -1547,7 +1587,28 @@ trait Types
 
   object SingleType extends SingleTypeExtractor {
     def apply(pre: Type, sym: Symbol): Type = {
-      unique(new UniqueSingleType(pre, sym))
+      val existing = findUniqueSingleType(pre, sym)
+      if (existing ne null) existing
+      else unique(new UniqueSingleType(pre, sym))
+    }
+  }
+
+  /** The hash code of `SingleType(pre, sym)`: the synthetic one of a case class, `MurmurHash3.caseClassHash`. */
+  private def singleTypeHashCode(pre: Type, sym: Symbol): Int = {
+    import scala.util.hashing.MurmurHash3._
+    var h = productSeed
+    h = mix(h, "SingleType".hashCode)
+    h = mix(h, pre.hashCode)
+    h = mix(h, sym.hashCode)
+    finalizeHash(h, 2)
+  }
+
+  /** Matches the unique types that a `SingleType(pre, sym)` would be `equals` to. */
+  private final class SingleTypeProbe extends util.WeakHashSet.Probe[Type, Type, Symbol, Null] {
+    // As the synthetic `SingleType#equals`, with the SingleType(pre, sym) as the receiver
+    def matches(elem: Type, pre: Type, sym: Symbol, unused: Null): Boolean = elem match {
+      case st: SingleType => pre == st.pre && sym == st.sym
+      case _ => false
     }
   }
 
@@ -1920,7 +1981,12 @@ trait Types
 
     override def kind = "RefinedType"
     override def mapOver(map: TypeMap): Type = {
-      val parents1 = parents mapConserve map
+      val parents0 = parents mapConserve map
+      // A map can replace a parent by an intersection, as ExistentialExtrapolation does with `_$1 with T` where
+      // `_$1 >: A with B`. Keep it flat, as `normalize` would: subtype checks and `isHigherKinded` walk the nesting.
+      val parents1 =
+        if ((parents0 eq parents) || !parents0.exists { case RefinedType(_, ds) => ds.isEmpty; case _ => false }) parents0
+        else parents0.flatMap { case RefinedType(ps, ds) if ds.isEmpty => ps; case p => p :: Nil }
       val decls1 = map.mapOver(decls)
       copyRefinedType(this, parents1, decls1)
     }
@@ -2163,20 +2229,7 @@ trait Types
     def apply(value: Constant) = unique(new UniqueLiteralType(value))
   }
 
-  class ArgsTypeRef(pre0: Type, sym0: Symbol, args0: List[Type]) extends TypeRef(pre0, sym0, args0) {
-    require(args0 ne Nil, this)
-
-    /** No unapplied type params size it has (should have) equally as many args. */
-    override def isHigherKinded = false
-    override def typeParams = Nil
-
-    // note: does not go through typeRef. There's no need to because
-    // neither `pre` nor `sym` changes.  And there's a performance
-    // advantage to call TypeRef directly.
-    override def typeConstructor = TypeRef(pre, sym, Nil)
-  }
-
-  class ModuleTypeRef(pre0: Type, sym0: Symbol) extends NoArgsTypeRef(pre0, sym0) {
+  class ModuleTypeRef(pre0: Type, sym0: Symbol) extends TypeRef(pre0, sym0, Nil) {
     require(sym.isModuleClass, sym)
     private[this] var narrowedCache: Type = _
     override def narrow = {
@@ -2205,7 +2258,7 @@ trait Types
     require(sym.isPackageClass, sym)
     override protected def finishPrefix(rest: String) = packagePrefix + rest
   }
-  class RefinementTypeRef(pre0: Type, sym0: Symbol) extends NoArgsTypeRef(pre0, sym0) {
+  class RefinementTypeRef(pre0: Type, sym0: Symbol) extends TypeRef(pre0, sym0, Nil) {
     require(sym.isRefinementClass, sym)
 
     // I think this is okay, but see #1241 (r12414), #2208, and typedTypeConstructor in Typers
@@ -2213,38 +2266,10 @@ trait Types
     override protected def finishPrefix(rest: String) = "" + sym.info
   }
 
-  class NoArgsTypeRef(pre0: Type, sym0: Symbol) extends TypeRef(pre0, sym0, Nil) {
-    // A reference (in a Scala program) to a type that has type parameters, but where the reference
-    // does not include type arguments. Note that it doesn't matter whether the symbol refers
-    // to a java or scala symbol, but it does matter whether it occurs in java or scala code.
-    // TypeRefs w/o type params that occur in java signatures/code are considered raw types, and are
-    // represented as existential types.
-    override def isHigherKinded = (typeParams ne Nil)
-    override def typeParams     = if (isDefinitionsInitialized) sym.typeParams else sym.unsafeTypeParams
-
-    override def instantiateTypeParams(formals: List[Symbol], actuals: List[Type]): Type =
-      if (isHigherKinded) {
-        if (typeParams.forall(formals.contains))
-          copyTypeRef(this, pre, sym, actuals)
-        // partial application (needed in infer when bunching type arguments from classes and methods together)
-        else
-          copyTypeRef(this, pre, sym, dummyArgs).instantiateTypeParams(formals, actuals)
-      }
-      else
-        super.instantiateTypeParams(formals, actuals)
-
-    override def narrow =
-      if (sym.isModuleClass) singleType(pre, sym.sourceModule)
-      else super.narrow
-
-    override def typeConstructor = this
-    // eta-expand, subtyping relies on eta-expansion of higher-kinded types
-
-    override protected def normalizeImpl: Type =
-      if (isHigherKinded) etaExpand else super.normalizeImpl
-  }
-
-  trait NonClassTypeRef extends TypeRef {
+  /** A reference to an alias or abstract type. The caches here are reached through
+   *  `getfield` on a class rather than interface accessors on a trait.
+   */
+  abstract class NonClassTypeRef(pre0: Type, sym0: Symbol, args0: List[Type]) extends TypeRef(pre0, sym0, args0) {
     require(sym.isNonClassType, sym)
 
     /** Syncnote: These are pure caches for performance; no problem to evaluate these
@@ -2286,7 +2311,7 @@ trait Types
   }
 
 
-  trait AliasTypeRef extends NonClassTypeRef {
+  final class AliasTypeRef(pre0: Type, sym0: Symbol, args0: List[Type]) extends NonClassTypeRef(pre0, sym0, args0) {
     require(sym.isAliasType, sym)
 
     override def dealias    = if (typeParamsMatchArgs) betaReduce.dealias else super.dealias
@@ -2392,7 +2417,7 @@ trait Types
     }
 
 
-  trait AbstractTypeRef extends NonClassTypeRef {
+  final class AbstractTypeRef(pre0: Type, sym0: Symbol, args0: List[Type]) extends NonClassTypeRef(pre0, sym0, args0) {
     require(sym.isAbstractType, sym)
 
     override def baseClasses = relativeInfo.baseClasses
@@ -2435,6 +2460,37 @@ trait Types
       folder(pre)
       args.foreach(folder)
     }
+
+    // A TypeRef with args has as many args as its symbol has type params, so it is not higher-kinded.
+    // One without args is higher-kinded if its symbol has type params.
+    // A reference (in a Scala program) to a type that has type parameters, but where the reference
+    // does not include type arguments. Note that it doesn't matter whether the symbol refers
+    // to a java or scala symbol, but it does matter whether it occurs in java or scala code.
+    // TypeRefs w/o type params that occur in java signatures/code are considered raw types, and are
+    // represented as existential types.
+    override def isHigherKinded = (args eq Nil) && (symTypeParams ne Nil)
+    override def typeParams     = if (args eq Nil) symTypeParams else Nil
+    private def symTypeParams   = if (isDefinitionsInitialized) sym.typeParams else sym.unsafeTypeParams
+
+    // note: does not go through typeRef. There's no need to because
+    // neither `pre` nor `sym` changes.  And there's a performance
+    // advantage to call TypeRef directly.
+    override def typeConstructor = if (args eq Nil) this else TypeRef(pre, sym, Nil)
+
+    override def instantiateTypeParams(formals: List[Symbol], actuals: List[Type]): Type =
+      if (isHigherKinded) {
+        if (typeParams.forall(formals.contains))
+          copyTypeRef(this, pre, sym, actuals)
+        // partial application (needed in infer when bunching type arguments from classes and methods together)
+        else
+          copyTypeRef(this, pre, sym, dummyArgs).instantiateTypeParams(formals, actuals)
+      }
+      else
+        super.instantiateTypeParams(formals, actuals)
+
+    override def narrow =
+      if ((args eq Nil) && sym.isModuleClass) singleType(pre, sym.sourceModule)
+      else super.narrow
     private[this] var trivial: ThreeValue = UNKNOWN
     override def isTrivial: Boolean = {
       if (trivial == UNKNOWN)
@@ -2464,20 +2520,7 @@ trait Types
     @volatile private[this] var normalized: Type       = _
 
     //OPT specialize hashCode
-    override final def computeHashCode = {
-      import scala.util.hashing.MurmurHash3._
-      var h = productSeed
-      h = mix(h, pre.hashCode)
-      h = mix(h, sym.hashCode)
-      var length = 2
-      var elems = args
-      while (elems ne Nil) {
-        h = mix(h, elems.head.hashCode())
-        elems = elems.tail
-        length += 1
-      }
-      finalizeHash(h, length)
-    }
+    override final def computeHashCode = typeRefHashCode(pre, sym, args)
     //OPT specialize equals
     override final def equals(other: Any): Boolean = {
       if (this eq other.asInstanceOf[AnyRef]) true
@@ -2784,13 +2827,10 @@ trait Types
   }
 
   // No longer defined as anonymous classes in `object TypeRef` to avoid an unnecessary outer pointer.
-  private final class AliasArgsTypeRef(pre: Type, sym: Symbol, args: List[Type]) extends ArgsTypeRef(pre, sym, args) with AliasTypeRef
-  private final class AbstractArgsTypeRef(pre: Type, sym: Symbol, args: List[Type]) extends ArgsTypeRef(pre, sym, args) with AbstractTypeRef
-  private final class ClassArgsTypeRef(pre: Type, sym: Symbol, args: List[Type]) extends ArgsTypeRef(pre, sym, args)
-  private final class AliasNoArgsTypeRef(pre: Type, sym: Symbol) extends NoArgsTypeRef(pre, sym) with AliasTypeRef
-  private final class AbstractNoArgsTypeRef(pre: Type, sym: Symbol) extends NoArgsTypeRef(pre, sym) with AbstractTypeRef
-  private final class ClassNoArgsTypeRef(pre: Type, sym: Symbol) extends NoArgsTypeRef(pre, sym) {
-    override def contains(sym0: Symbol): Boolean = (sym eq sym0) || pre.contains(sym0)
+  private final class ClassTypeRef(pre: Type, sym: Symbol, args: List[Type]) extends TypeRef(pre, sym, args) {
+    override def contains(sym0: Symbol): Boolean =
+      if (args eq Nil) (sym eq sym0) || pre.contains(sym0)
+      else super.contains(sym0)
   }
 
   /** Expose ObjectTpeJavaRef so we can create a non-uniqued ObjectTpeJava
@@ -2801,26 +2841,55 @@ trait Types
     *   - the created TypeRef is structurally equal to ObjectTpe, but with its own identity
     *   - we don't want the TypeRef we create here to be unique'd
     */
-  private[internal] final class ObjectTpeJavaRef extends NoArgsTypeRef(definitions.ObjectTpe.prefix, definitions.ObjectClass) {
+  private[internal] final class ObjectTpeJavaRef extends TypeRef(definitions.ObjectTpe.prefix, definitions.ObjectClass, Nil) {
     override def contains(sym0: Symbol): Boolean = (sym eq sym0) || pre.contains(sym0)
   }
 
   object TypeRef extends TypeRefExtractor {
-    def apply(pre: Type, sym: Symbol, args: List[Type]): Type = unique({
-      if (args ne Nil) {
-        if (sym.isAliasType)              new AliasArgsTypeRef(pre, sym, args)
-        else if (sym.isAbstractType)      new AbstractArgsTypeRef(pre, sym, args)
-        else                              new ClassArgsTypeRef(pre, sym, args)
-      }
-      else {
-        if (sym.isAliasType)              new AliasNoArgsTypeRef(pre, sym)
-        else if (sym.isAbstractType)      new AbstractNoArgsTypeRef(pre, sym)
-        else if (sym.isRefinementClass)   new RefinementTypeRef(pre, sym)
-        else if (sym.isPackageClass)      new PackageTypeRef(pre, sym)
-        else if (sym.isModuleClass)       new ModuleTypeRef(pre, sym)
-        else                              new ClassNoArgsTypeRef(pre, sym)
-      }
-    })
+    def apply(pre: Type, sym: Symbol, args: List[Type]): Type = {
+      // Most calls ask for a TypeRef that is already unique; find it without allocating one to compare with.
+      val existing = findUniqueTypeRef(pre, sym, args)
+      if (existing ne null) existing
+      else unique(newTypeRef(pre, sym, args))
+    }
+
+    private def newTypeRef(pre: Type, sym: Symbol, args: List[Type]): TypeRef =
+      if (sym.isAliasType)                         new AliasTypeRef(pre, sym, args)
+      else if (sym.isAbstractType)                 new AbstractTypeRef(pre, sym, args)
+      else if (args ne Nil)                        new ClassTypeRef(pre, sym, args)
+      else if (sym.isRefinementClass)              new RefinementTypeRef(pre, sym)
+      else if (sym.isPackageClass)                 new PackageTypeRef(pre, sym)
+      else if (sym.isModuleClass)                  new ModuleTypeRef(pre, sym)
+      else                                         new ClassTypeRef(pre, sym, Nil)
+  }
+
+  /** The hash code of `TypeRef(pre, sym, args)`. */
+  private def typeRefHashCode(pre: Type, sym: Symbol, args: List[Type]): Int = {
+    import scala.util.hashing.MurmurHash3._
+    var h = productSeed
+    h = mix(h, pre.hashCode)
+    h = mix(h, sym.hashCode)
+    var length = 2
+    var elems = args
+    while (elems ne Nil) {
+      h = mix(h, elems.head.hashCode())
+      elems = elems.tail
+      length += 1
+    }
+    finalizeHash(h, length)
+  }
+
+  /** Matches the unique types that a `TypeRef(pre, sym, args)` would be `equals` to. */
+  private final class TypeRefProbe extends util.WeakHashSet.Probe[Type, Type, Symbol, List[Type]] {
+    // As `TypeRef#equals`, with the TypeRef(pre, sym, args) as the receiver
+    def matches(elem: Type, pre: Type, sym: Symbol, args: List[Type]): Boolean = elem match {
+      case tr: TypeRef =>
+        Objects.equals(pre, tr.pre) &&
+          sym.eq(tr.sym) &&
+          sameElementsEquals(args, tr.args) &&
+          !tr.isInstanceOf[ObjectTpeJavaRef]
+      case _ => false
+    }
   }
 
   protected def defineNormalized(tr: TypeRef): Unit = {
@@ -4397,21 +4466,74 @@ trait Types
 
   private[this] val initialUniquesCapacity = 4096
   private[this] var uniques: util.WeakHashSet[Type] = _
+  /** Used in place of `uniques` when the layout is "chunked" or "chunked-weak"; exactly one of the two is set during a run. */
+  private[this] var chunkedUniques: util.ChunkedInterner[Type] = _
   private[this] var uniqueRunId = NoRunId
 
-  final def howManyUniqueTypes: Int = if (uniques == null) 0 else uniques.size
+  final def howManyUniqueTypes: Int =
+    if (uniques != null) uniques.size
+    else if (chunkedUniques != null) chunkedUniques.size
+    else 0
+
+  /** Called by `perRunCaches.clearAll()` at the end of a run. Drops the table rather than
+   *  `clear()`ing it, which would allocate a new bucket array of the same size;
+   *  `unique` makes a new table on its next call.
+   */
+  private[internal] def dropUniques(): Unit = {
+    uniques = null
+    chunkedUniques = null
+    uniqueRunId = NoRunId
+  }
+
+  /** The unique type with hash code `hash` that `probe` matches with components `c1`, `c2` and `c3`, or null if
+   *  there is none yet. Lets the creators of unique types find an existing one without allocating another.
+   */
+  protected def findUnique[C1, C2, C3](hash: Int, c1: C1, c2: C2, c3: C3, probe: util.WeakHashSet.Probe[Type, C1, C2, C3]): Type =
+    if (uniqueRunId != currentRunId) null
+    else {
+      val chunked = chunkedUniques
+      if (chunked != null) chunked.find(hash, c1, c2, c3, probe)
+      else if (uniques != null) uniques.findEntry(hash, c1, c2, c3, probe)
+      else null
+    }
+
+  private def findUniqueTypeRef(pre: Type, sym: Symbol, args: List[Type]): Type =
+    findUnique(typeRefHashCode(pre, sym, args), pre, sym, args, typeRefProbe)
+  private def findUniqueSingleType(pre: Type, sym: Symbol): Type =
+    findUnique(singleTypeHashCode(pre, sym), pre, sym, null, singleTypeProbe)
+  private def findUniqueThisType(sym: Symbol): Type =
+    findUnique(thisTypeHashCode(sym), sym, null, null, thisTypeProbe)
+
+  // Stateless, so they need no synchronization. They are created with the first uniques table, before `findUnique`
+  // can search one. Not `object`s, whose accessors read a volatile field.
+  private[this] var typeRefProbe: TypeRefProbe = _
+  private[this] var singleTypeProbe: SingleTypeProbe = _
+  private[this] var thisTypeProbe: ThisTypeProbe = _
 
   protected def unique[T <: Type](tp: T): T =  {
     if (uniqueRunId != currentRunId) {
-      uniques = util.WeakHashSet[Type](initialUniquesCapacity)
-      // JZ: We used to register this as a perRunCache so it would be cleared eagerly at
-      // the end of the compilation run. But, that facility didn't actually clear this map (scala/bug#8129)!
-      // When i fixed that bug, run/tpeCache-tyconCache.scala started failing. Why was that?
-      // I've removed the registration for now. I don't think it's particularly harmful anymore
-      // as a) this is now a weak set, and b) it is discarded completely before the next run.
+      if (typeRefProbe eq null) {
+        typeRefProbe = new TypeRefProbe
+        singleTypeProbe = new SingleTypeProbe
+        thisTypeProbe = new ThisTypeProbe
+      }
+      val layout = uniquesLayout match {
+        case "default" => System.getProperty("scala.uniques.layout", "weak")
+        case l         => l
+      }
+      layout match {
+        case "chunked" | "chunked-weak" =>
+          uniques = null
+          chunkedUniques = new util.ChunkedInterner[Type](initialUniquesCapacity, weak = layout == "chunked-weak")
+        case _ =>
+          uniques = util.WeakHashSet[Type](initialUniquesCapacity)
+          chunkedUniques = null
+      }
       uniqueRunId = currentRunId
     }
-    (uniques findEntryOrUpdate tp).asInstanceOf[T]
+    val chunked = chunkedUniques
+    if (chunked != null) chunked.findOrAdd(tp)
+    else (uniques findEntryOrUpdate tp).asInstanceOf[T]
   }
 
 // Helper Classes ---------------------------------------------------------
@@ -5136,14 +5258,23 @@ trait Types
    *  Return `x` if the computation succeeds with result `x`.
    *  Return `NoType` if the computation fails.
    */
-  def mergePrefixAndArgs(tps0: List[Type], variance: Variance, depth: Depth): Type = {
+  def mergePrefixAndArgs(tps0: List[Type], variance: Variance, depth0: => Depth): Type = {
+    // The depth is needed only to merge prefixes or arguments that differ; computing it can build the base type
+    // sequences of `tps0` (see `lubDepth`), so it is computed only then, once.
+    var depthComputed = false
+    var depth1: Depth = Depth.Zero
+    def depth: Depth = { if (!depthComputed) { depth1 = depth0; depthComputed = true }; depth1 }
+    // lub and glb of equal prefixes are that prefix, whatever the depth
+    def mergePrefixes(pres: List[Type]): Type =
+      if (pres.forall(_ eq pres.head)) pres.head
+      else if (variance.isPositive) lub(pres, depth) else glb(pres, depth)
     val (tps, tparams) = stripExistentialsAndTypeVars(tps0, expandLazyBaseType = true)
 
     val merged = tps match {
       case tp :: Nil => tp
       case TypeRef(_, sym, _) :: rest =>
         val pres = tps map (_.prefix) // prefix normalizes automatically
-        val pre = if (variance.isPositive) lub(pres, depth) else glb(pres, depth)
+        val pre = mergePrefixes(pres)
         val argss = tps map (_.normalize.typeArgs) // symbol equality (of the tp in tps) was checked using typeSymbol, which normalizes, so should normalize before retrieving arguments
         val capturedParams = new ListBuffer[Symbol]
         try {
@@ -5218,7 +5349,7 @@ trait Types
         }
       case SingleType(_, sym) :: rest =>
         val pres = tps map (_.prefix)
-        val pre = if (variance.isPositive) lub(pres, depth) else glb(pres, depth)
+        val pre = mergePrefixes(pres)
         try singleType(pre, sym)
         catch { case ex: MalformedType => NoType }
       case _ =>

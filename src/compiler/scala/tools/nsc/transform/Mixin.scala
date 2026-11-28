@@ -21,7 +21,7 @@ import scala.reflect.NameTransformer
 import scala.reflect.internal.util.ListOfNil
 
 
-abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis {
+abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis with TypingTransformers {
   import global._
   import definitions._
   import CODE._
@@ -178,21 +178,23 @@ abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis {
       // info) as they are seen from the class.  We can't use the member that we get from the
       // implementation class, as it's a clone that was made after erasure, and thus it does not
       // know its info at the beginning of erasure anymore.
-      val sym = mixinMember cloneSymbol clazz
-
-      val erasureMap = erasure.erasure(mixinMember)
-      val erasedInterfaceInfo: Type = erasureMap(mixinMember.info)
-      val specificForwardInfo       = (clazz.thisType baseType mixinClass) memberInfo mixinMember
-      val forwarderInfo =
-        if (erasureMap(specificForwardInfo) =:= erasedInterfaceInfo)
-          specificForwardInfo
-        else {
-          erasedInterfaceInfo
-        }
       // Optimize: no need if mixinClass has no typeparams.
       // !!! JZ Really? What about the effect of abstract types, prefix?
-      if (mixinClass.typeParams.isEmpty) sym
+      if (mixinClass.typeParams.isEmpty) mixinMember cloneSymbol clazz
       else {
+        val erasureMap = erasure.erasure(mixinMember)
+        val erasedInterfaceInfo: Type = erasureMap(mixinMember.info)
+        val specificForwardInfo       = (clazz.thisType baseType mixinClass) memberInfo mixinMember
+        val forwarderInfo =
+          if (erasureMap(specificForwardInfo) =:= erasedInterfaceInfo)
+            specificForwardInfo
+          else {
+            erasedInterfaceInfo
+          }
+        // As `cloneSymbol`, but without cloning `mixinMember.info`: the forwarder's info replaces it.
+        val sym = mixinMember.cloneSymbolImpl(clazz, mixinMember.rawflags)
+        sym setPrivateWithin mixinMember.privateWithin setAnnotations mixinMember.annotations
+        sym.setAttachments(mixinMember.attachments.cloneAttachments)
         // `forwarderInfo` was obtained by `memberInfo`, which may share the type parameter symbols of
         // `mixinMember`. Clone them so that renaming them below doesn't mutate the original method.
         // It is an existential if the method's type refers to `this.type`, e.g. `Iterable.lazyZip`.
@@ -200,7 +202,7 @@ abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis {
           case ExistentialType(quantified, underlying) => newExistentialType(quantified, cloneTypeParams(underlying))
           case _                                       => tp.cloneInfo(sym)
         }
-        sym modifyInfo (_ => cloneTypeParams(forwarderInfo))
+        sym setInfo cloneTypeParams(forwarderInfo)
         avoidTypeParamShadowing(sym)
         sym
       }
@@ -420,14 +422,16 @@ abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis {
   protected def newTransformer(unit: CompilationUnit): AstTransformer =
     new MixinTransformer(unit)
 
-  class MixinTransformer(unit : CompilationUnit) extends AstTransformer with AccessorTreeSynthesis {
-    /** The typer */
-    private var localTyper: erasure.erasureAnalyzer.Typer = _
-    protected def typedPos(pos: Position)(tree: Tree): Tree = localTyper.typedPos(pos)(tree)
-
+  class MixinTransformer(unit : CompilationUnit) extends TypeAssigner with AccessorTreeSynthesis {
     /** The rootContext used for typing */
     private val rootContext =
       erasure.erasureAnalyzer.NoContext.make(EmptyTree, rootMirror.RootClass, newScope)
+
+    // A typer for the template being transformed, made when `localTyper` is next read.
+    private val typers = new erasure.erasureAnalyzer.TyperStack(erasure.erasureAnalyzer.newTyper(rootContext))
+    private def localTyper: erasure.erasureAnalyzer.Typer = typers.typer
+    override protected def fallbackTyper(why: String): analyzer.Typer = localTyper.asInstanceOf[analyzer.Typer]
+    protected def typedPos(pos: Position)(tree: Tree): Tree = typed(atPos(pos)(tree), WildcardType)
 
     private val nullables = mutable.HashMap[Symbol, Map[Symbol, List[Symbol]]]()
 
@@ -441,7 +445,7 @@ abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis {
       val sym = tree.symbol
       tree match {
         case Template(parents, self, body) =>
-          localTyper = erasure.erasureAnalyzer.newTyper(rootContext.make(tree, currentOwner))
+          typers.enterFromRoot(tree, currentOwner)
           exitingMixin(currentOwner.owner.info)//todo: needed?
 
           if (!currentOwner.isTrait && !isPrimitiveValueClass(currentOwner))
@@ -657,12 +661,12 @@ abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis {
      *  when coming back, it performs a postTransform at phase after.
      */
     override def transform(tree: Tree): Tree = {
-      val saved = localTyper
-      val tree1 = preTransform(tree).transform(this)
+      val saved = typers.depth
+      val tree1 = super.transform(preTransform(tree))
       // localTyper needed when not flattening inner classes. parts after an
       // inner class will otherwise be typechecked with a wrong scope
       try exitingMixin(postTransform(tree1))
-      finally localTyper = saved
+      finally typers.depth = saved
     }
   }
 

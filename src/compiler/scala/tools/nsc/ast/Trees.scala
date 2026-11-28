@@ -68,7 +68,7 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
   }
 
   /** emitted by typer, eliminated by refchecks */
-  case class TypeTreeWithDeferredRefCheck(precheck: TypeTree)(val check: () => TypeTree) extends TypTree {
+  case class TypeTreeWithDeferredRefCheck(precheck: TypeTree)(val check: () => TypeTree) extends AbstractTypTree {
     override def transform(transformer: ApiTransformer): Tree =
       transformer.treeCopy.TypeTreeWithDeferredRefCheck(this)
     override def traverse(traverser: Traverser): Unit = {

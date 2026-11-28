@@ -1285,6 +1285,27 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
     || tp.typeSymbol.isPackageClass
   )
 
+  /** Classes that have a specialized type parameter or declare a method with one. */
+  private val declaresSpecialized = perRunCaches.newAnyRefMap[Symbol, Boolean]()
+
+  /** Can `specializeClass` or `specialOverrides` find anything in `clazz`? Only if `clazz` is
+   *  nested in a specialized class, or if it or one of its base classes has a specialized type
+   *  parameter or declares a method with one. Most classes have neither, and for them the
+   *  per-member work of both would come up empty.
+   *
+   *  Java and Scala 3 classes are never specialized, so their members are not inspected.
+   *  Besides saving the work, this avoids completing the signatures of TASTy members that
+   *  nothing else uses: the TASTy unpickler reports unsupported Scala 3 types only when such
+   *  a signature is completed.
+   */
+  private def mayNeedSpecialization(clazz: Symbol): Boolean =
+    typeEnv(clazz).nonEmpty || clazz.info.baseClasses.exists { bc =>
+      declaresSpecialized.getOrElseUpdate(bc,
+        !(bc.isJavaDefined || bc.isScala3Defined) && (
+          bc.typeParams.exists(_.isSpecialized) ||
+            bc.info.decls.exists(m => m.isMethod && enteringTyper(m.typeParams.exists(_.isSpecialized)))))
+    }
+
   /** Type transformation. It is applied to all symbols, compiled or loaded.
    *  If it is a 'no-specialization' run, it is applied only to loaded symbols.
    */
@@ -1314,7 +1335,11 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
               if (tparams.nonEmpty) "(poly) " else "", clazz, parents1)
             )
           }
-          val newScope = newScopeWith(specializeClass(clazz, typeEnv(clazz)) ++ specialOverrides(clazz): _*)
+          val newScope =
+            if (mayNeedSpecialization(clazz))
+              newScopeWith(specializeClass(clazz, typeEnv(clazz)) ++ specialOverrides(clazz): _*)
+            else
+              decls.cloneScope
           // If tparams.isEmpty, this is just the ClassInfoType.
           GenPolyType(tparams, ClassInfoType(parents1, newScope, clazz))
         }
@@ -1617,7 +1642,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
         val qual1                     = transform(qual)
         def copySelect                = treeCopy.Select(tree, qual1, name)
         def newSelect(member: Symbol) = atPos(tree.pos)(Select(qual1, member))
-        def typedOp(member: Symbol)   = localTyper typedOperator newSelect(member)
+        def typedOp(member: Symbol)   = typedFun(newSelect(member)) // as `localTyper.typedOperator`
         def typedTree(member: Symbol) = localTyper typed newSelect(member)
 
         val ignoreEnv = specializedTypeVars(symbol.info).isEmpty || name == nme.CONSTRUCTOR
@@ -1730,13 +1755,13 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
         case PackageDef(pid, stats) =>
           tree.symbol.info // make sure specializations have been performed
           atOwner(tree, symbol) {
-            val specMembers = implSpecClasses(stats) map localTyper.typed
+            val specMembers = implSpecClasses(stats).map(localTyper.typed(_))
             treeCopy.PackageDef(tree, pid, transformStats(stats ::: specMembers, symbol.moduleClass))
           }
 
         case Template(parents, self, body) =>
           def transformTemplate = {
-            val specMembers = makeSpecializedMembers(tree.symbol.enclClass) ::: implSpecClasses(body).map(localTyper.typed)
+            val specMembers = makeSpecializedMembers(tree.symbol.enclClass) ::: implSpecClasses(body).map(localTyper.typed(_))
             if (!symbol.isPackageClass)
               new CollectMethodBodies()(tree)
             // currentOwner.info.parents.map(tpe => TypeTree(tpe) setPos parents.head.pos)

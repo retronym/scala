@@ -895,6 +895,14 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
       c
     }
 
+    /** The alternatives of `sym` that are accessible as members of `pre`, as `sym.filter(isAccessible(_, pre, superAccess))`.
+     *  Calls `isAccessible` directly when `sym` is not overloaded, the usual case, rather than allocating a closure.
+     */
+    def filterAccessible(sym: Symbol, pre: Type, superAccess: Boolean): Symbol =
+      if (sym.isOverloaded) sym.filter(isAccessible(_, pre, superAccess))
+      else if ((sym eq NoSymbol) || isAccessible(sym, pre, superAccess)) sym
+      else NoSymbol
+
     /** Is `sym` accessible as a member of `pre` in current context? */
     def isAccessible(sym: Symbol, pre: Type, superAccess: Boolean = false): Boolean = {
       lastAccessCheckDetails = ""
@@ -1178,8 +1186,8 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
       val imp1Explicit = imp1 isExplicitImport name
       val imp2Explicit = imp2 isExplicitImport name
       val ambiguous    = if (imp1.depth == imp2.depth) imp1Explicit == imp2Explicit else !imp1Explicit && imp2Explicit
-      val imp1Symbol   = imp1.importedSymbol(name).initialize.filter(isAccessible(_, imp1.qual.tpe, superAccess = false))
-      val imp2Symbol   = imp2.importedSymbol(name).initialize.filter(isAccessible(_, imp2.qual.tpe, superAccess = false))
+      val imp1Symbol   = filterAccessible(imp1.importedSymbol(name).initialize, imp1.qual.tpe, superAccess = false)
+      val imp2Symbol   = filterAccessible(imp2.importedSymbol(name).initialize, imp2.qual.tpe, superAccess = false)
 
       // The types of the qualifiers from which the ambiguous imports come.
       // If the ambiguous name is a value, these must be the same.
@@ -1230,7 +1238,18 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
      */
     private[Contexts] def importedAccessibleSymbol(imp: ImportInfo, sym: => Symbol): Symbol =
       if (isExcludedRootImport(imp)) NoSymbol
-      else sym.filter(s => s.exists && isAccessible(s, imp.qual.tpe, superAccess = false))
+      else accessibleImported(imp, sym)
+
+    /** `importedAccessibleSymbol` of a symbol already looked up, without a closure for it. */
+    private[Contexts] def importedAccessibleSymbolOf(imp: ImportInfo, sym: Symbol): Symbol =
+      if (isExcludedRootImport(imp)) NoSymbol
+      else accessibleImported(imp, sym)
+
+    // `sym.filter(isAccessible ...)`, with a closure only for an overloaded symbol.
+    private def accessibleImported(imp: ImportInfo, sym: Symbol): Symbol =
+      if (sym.isOverloaded) sym.filter(s => s.exists && isAccessible(s, imp.qual.tpe, superAccess = false))
+      else if (sym.exists && isAccessible(sym, imp.qual.tpe, superAccess = false)) sym
+      else NoSymbol
 
     private def isExcludedRootImport(imp: ImportInfo): Boolean =
       imp.isRootImport && isMaskedRootImport(unit, imp.qual.symbol)
@@ -1253,7 +1272,10 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
     def isNameInScope(name: Name) = lookupSymbol(name, _ => true).isSuccess
 
     def lookupSymbol(name: Name, qualifies: Symbol => Boolean): NameLookup =
-      symbolLookupCache.using(_(this, name)(qualifies))
+      symbolLookupCache.using { lookup =>
+        try lookup(this, name)(qualifies)
+        finally lookup.clear()
+      }
 
     final def lookupCompanionInIncompleteOwner(original: Symbol): Symbol = {
       // Must have both a class and module symbol, so that `{ class C; def C }` or `{ type T; object T }` are not companions.
@@ -1350,6 +1372,23 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
     private[this] var symbolDepth: Int         = _ // the depth of the directly found symbol
     private[this] var foundInPrefix: Boolean   = _ // the symbol was found in pre
     private[this] var foundInSuper: Boolean    = _ // the symbol was found super of context class (inherited)
+    // fields, not locals of `apply`: its local methods assign them, which would box them in an ObjectRef per lookup
+    private[this] var impSel: ImportSelector   = _ // the selector of the import that binds the name
+    private[this] var impSym: Symbol           = _ // the imported symbol
+    private[this] val importCursor             = new ImportCursor
+
+    /** Drop references held from the last lookup, so that the pooled instance doesn't retain its
+     *  context chain (and the trees of the enclosing definitions) after the lookup is done. */
+    def clear(): Unit = {
+      lookupError  = null
+      inaccessible = null
+      defSym       = null
+      pre          = null
+      cx           = null
+      impSel       = null
+      impSym       = null
+      importCursor.clear()
+    }
 
     def ambiguousImports(imp1: ImportInfo, imp2: ImportInfo) =
       LookupAmbiguous(s"it is imported twice in the same scope by\n$imp1\nand $imp2")
@@ -1387,6 +1426,8 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
       symbolDepth  = -1
       foundInPrefix = false
       foundInSuper = false
+      impSel = null
+      impSym = NoSymbol
 
       def finish(qual: Tree, sym: Symbol): NameLookup = (
         if (lookupError ne null) lookupError
@@ -1421,7 +1462,8 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
       def searchPrefix = {
         cx = cx.enclClass
         val found0 = lookupInPrefix(name)
-        val found1 = found0.filter(accessibleInPrefix)
+        // most lookups in the prefix of an enclosing class find nothing: don't allocate the closure for those
+        val found1 = if (found0 eq NoSymbol) NoSymbol else found0.filter(accessibleInPrefix)
         if (found0.exists && !found1.exists && inaccessible == null)
           inaccessible = LookupInaccessible(found0, analyzer.lastAccessCheckDetails)
 
@@ -1492,9 +1534,8 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
       if (symbolDepth < 0)
         symbolDepth = cx.depth
 
-      var impSel: ImportSelector = null
-      var impSym: Symbol = NoSymbol
-      val importCursor = new ImportCursor(thisContext, name)
+      val importCursor = this.importCursor
+      importCursor.init(thisContext, name)
       import importCursor.{imp1, imp2}
 
       // The symbol resolved by the given import for `name`, paired with the selector that was used.
@@ -1504,7 +1545,7 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
         val pair @ (sel, sym) = imp.importedSelectedSymbol(name, requireExplicit)
         if (sym == NoSymbol) pair
         else {
-          val sym1 = thisContext.importedAccessibleSymbol(imp, sym).filter(qualifies)
+          val sym1 = thisContext.importedAccessibleSymbolOf(imp, sym).filter(qualifies)
           if (sym1 eq sym) pair
           else (sel, sym1)
         }
@@ -1598,15 +1639,16 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
         val cx0     = cx
         val depth0  = symbolDepth
         val wasFoundInSuper = foundInSuper
-        val foundCompetingSymbol: () => Boolean =
-          if (foreignDefined)
+        val defSym0IsLevel4 = foreignDefined
+        def foundCompetingSymbol(): Boolean =
+          if (defSym0IsLevel4)
             // if the first found symbol (defSym0) is level 4 (foreignDefined), a lower level (1 or 1b) defSym is competing
-            () => defSym.exists && !foreignDefined
+            defSym.exists && !foreignDefined
           else {
             // if defSym0 is level 1 or 1b, another defSym is competing if defined in an outer scope in the same file
-            () => defSym.exists && !(pre.typeSymbol.isPackageClass && !defSym.owner.isPackageClass) && !foundInSuper && !foreignDefined
-            //                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-            //                       defined in package object (or inherited into package object)
+            defSym.exists && !(pre.typeSymbol.isPackageClass && !defSym.owner.isPackageClass) && !foundInSuper && !foreignDefined
+            //               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+            //               defined in package object (or inherited into package object)
           }
         while ((cx ne NoContext) && cx.depth >= symbolDepth) cx = cx.outer
         if (wasFoundInSuper)
@@ -1887,11 +1929,55 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
       case bad              => throw new FatalError(s"symbol ${tree.symbol} has bad type: ${bad}")
     }
 
+    // Names that `qual.tpe` was found not to have as members. Every unqualified reference that is not
+    // bound more locally probes the enclosing wildcard imports in turn, so the same misses recur many
+    // times per unit (`Int` or `List` through `import global._`, say). The misses hold in the same run
+    // and phase while `qual.tpe` still denotes the same class, until a member may have been added: for
+    // a package, until its scope gains an entry; otherwise, until any class gains a member (see
+    // `classMembersEpoch`). A qualifier whose type is not a class (say, an abstract type, whose bounds
+    // could be reassigned) is not memoized.
+    private[this] var missNames: java.util.HashSet[Name] = null
+    private[this] var missPeriod: Period = NoPeriod
+    private[this] var missClass: Symbol = NoSymbol
+    private[this] var missEpoch: Int = 0
+    private[this] var missElems: ScopeEntry = null
+
+    private def missesHold(cls: Symbol): Boolean =
+      (cls eq missClass) && missPeriod == currentPeriod && (
+        if (cls.hasPackageFlag) missEpoch == scopeRewritesEpoch && (missElems eq cls.info.decls.elems)
+        else missEpoch == classMembersEpoch)
+
+    private def isKnownMiss(tp: Type, name: Name): Boolean =
+      (missNames ne null) && missNames.contains(name) && missesHold(tp.typeSymbol)
+
+    private def recordMiss(tp: Type, name: Name): Unit = {
+      val cls = tp.typeSymbol
+      if (cls.isClass) {
+        if ((missNames eq null) || !missesHold(cls)) {
+          if (missNames eq null) missNames = new java.util.HashSet[Name]() else missNames.clear()
+          missPeriod = currentPeriod
+          missClass = cls
+          if (cls.hasPackageFlag) {
+            missEpoch = scopeRewritesEpoch
+            missElems = cls.info.decls.elems
+          } else {
+            missEpoch = classMembersEpoch
+            missElems = null
+          }
+        }
+        missNames.add(name)
+      }
+    }
+
     /** Is name imported explicitly, not via wildcard? */
     def isExplicitImport(name: Name): Boolean = tree.selectors.exists(_.introduces(name))
 
     /** The symbol with name `name` imported from import clause `tree`. */
     def importedSymbol(name: Name): Symbol = importedSelectedSymbol(name, requireExplicit = false)._2
+
+    private def isImportable(sym: Symbol): Boolean =
+      if (isRootImport) !definitions.isUnimportableUnlessRenamed(sym)
+      else definitions.isImportable(sym)
 
     /** If requireExplicit is true, wildcard imports are not considered. */
     def importedSelectedSymbol(name: Name, requireExplicit: Boolean): (ImportSelector, Symbol) = {
@@ -1913,7 +1999,12 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
             if (sym.hasPackageFlag && analyzer.packageObjects.deferredOpen.remove(sym))
               openPackageModule(sym)
           }
-          tp.nonLocalMember(nom)
+          if (isKnownMiss(tp, nom)) NoSymbol
+          else {
+            val sym = tp.nonLocalMember(nom)
+            if (sym eq NoSymbol) recordMiss(tp, nom)
+            sym
+          }
         }
       while ((selectors ne Nil) && result == NoSymbol) {
         if (current.introduces(name))
@@ -1937,10 +2028,11 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
       //      check inside the above loop, as I believe that
       //      this always represents a mistake on the part of
       //      the caller.
-      result.filter(sym =>
-        if (isRootImport) !definitions.isUnimportableUnlessRenamed(sym)
-        else definitions.isImportable(sym)
-      ) match {
+      val importable =
+        if (result.isOverloaded) result.filter(isImportable)
+        else if ((result ne NoSymbol) && isImportable(result)) result
+        else NoSymbol
+      importable match {
         case _: NoSymbol => TupleOfNullAndNoSymbol
         case _           => (current, result)
       }
@@ -1992,9 +2084,22 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
   val ImportType = global.ImportType
 
   /** Walks a pair of references (`imp1` and `imp2`) up the context chain to ImportContexts */
-  private final class ImportCursor(var ctx: Context, name: Name) {
-    private var imp1Ctx = ctx.enclosingImport
-    private var imp2Ctx = imp1Ctx.outer.enclosingImport
+  private final class ImportCursor {
+    private[this] var name: Name = _
+    private[this] var imp1Ctx: Context = _
+    private[this] var imp2Ctx: Context = _
+
+    /** Starts the walk at `ctx`. One cursor serves every lookup of a `SymbolLookup`. */
+    def clear(): Unit = {
+      name = null
+      imp1Ctx = null
+      imp2Ctx = null
+    }
+    def init(ctx: Context, name: Name): Unit = {
+      this.name = name
+      imp1Ctx = ctx.enclosingImport
+      imp2Ctx = imp1Ctx.outer.enclosingImport
+    }
 
     def advanceImp1Imp2(): Unit = {
       imp1Ctx = imp2Ctx; imp2Ctx = imp1Ctx.outer.enclosingImport

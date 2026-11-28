@@ -15,6 +15,7 @@ package typechecker
 
 import scala.annotation._
 import scala.collection.mutable
+import scala.reflect.ClassTag
 import symtab.Flags._
 import scala.reflect.internal.util.ListOfNil
 import scala.tools.nsc.Reporting.WarningCategory
@@ -29,6 +30,24 @@ trait Namers extends MethodSynthesis {
 
   import global._
   import definitions._
+
+  // Companion symbols carrying a ClassForCaseCompanionAttachment or ConstructorDefaultsAttachment.
+  // Those hold the parser's ClassDef and a Namer (with its context chain), and are only needed
+  // until the companion is completed, so they are dropped at the end of typer.
+  private[this] val symbolsWithNamerAttachments = perRunCaches.newSet[Symbol]()
+
+  private[typechecker] def addNamerAttachment[T: ClassTag](sym: Symbol, attachment: T): Unit = {
+    sym.updateAttachment(attachment)
+    symbolsWithNamerAttachments += sym
+  }
+
+  def clearNamerAttachments(): Unit = {
+    symbolsWithNamerAttachments.foreach { sym =>
+      sym.removeAttachment[ClassForCaseCompanionAttachment]
+      sym.removeAttachment[ConstructorDefaultsAttachment]
+    }
+    symbolsWithNamerAttachments.clear()
+  }
 
   /** Replaces any Idents for which cond is true with fresh TypeTrees().
    *  Does the same for any trees containing EmptyTrees.
@@ -87,7 +106,18 @@ trait Namers extends MethodSynthesis {
         case _ =>
           context
       }
-      newNamer(ownerCtx.makeNewScope(tree, sym))
+      // Only the signatures of polymorphic or parameterized members, classes and modules
+      // enter symbols (type and value params, the self symbol) into the context's scope.
+      // Every other member shares its owner's scope rather than paying for a nested
+      // scope (and the copy of the owner scope's hash table) that would stay empty.
+      // Lookups through the shared scope compute the same symbol depth.
+      val entersSymbols = tree match {
+        case _: ValDef   => false
+        case dd: DefDef  => dd.tparams.nonEmpty || dd.vparamss.exists(_.nonEmpty)
+        case td: TypeDef => td.tparams.nonEmpty
+        case _           => true
+      }
+      newNamer(if (entersSymbols) ownerCtx.makeNewScope(tree, sym) else ownerCtx.make(tree, sym))
     }
     def createInnerNamer() = {
       newNamer(context.make(context.tree, owner, newScope))
@@ -798,12 +828,12 @@ trait Namers extends MethodSynthesis {
 
       if (mods.isCase) {
         val m = ensureCompanionObject(tree, caseModuleDef)
-        m.moduleClass.updateAttachment(new ClassForCaseCompanionAttachment(tree))
+        addNamerAttachment(m.moduleClass, new ClassForCaseCompanionAttachment(tree))
       }
       val hasDefault = impl.body exists treeInfo.isConstructorWithDefault
       if (hasDefault) {
         val m = ensureCompanionObject(tree)
-        m.updateAttachment(new ConstructorDefaultsAttachment(tree, null))
+        addNamerAttachment(m, new ConstructorDefaultsAttachment(tree, null))
       }
       val owner = tree.symbol.owner
       if (settings.warnPackageObjectClasses && owner.isPackageObjectClass && !mods.isImplicit) {
