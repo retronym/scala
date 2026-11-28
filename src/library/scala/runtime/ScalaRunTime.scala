@@ -170,6 +170,7 @@ object ScalaRunTime {
       private[this] val cmax = x.productArity
       def hasNext = c < cmax
       def next() = {
+        if (c >= cmax) Iterator.empty.next()
         val result = x.productElement(c)
         c += 1
         result.asInstanceOf[T]

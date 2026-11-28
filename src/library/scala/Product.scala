@@ -12,6 +12,8 @@
 
 package scala
 
+import scala.collection.{AbstractIterator, Iterator}
+
 /** Base trait for all products, which in the standard library include at
  *  least [[scala.Product1]] through [[scala.Product22]] and therefore also
  *  their subclasses [[scala.Tuple1]] through [[scala.Tuple22]].  In addition,
@@ -35,11 +37,14 @@ trait Product extends Any with Equals {
   /** An iterator over all the elements of this product.
    *  @return     in the default implementation, an `Iterator[Any]`
    */
-  def productIterator: Iterator[Any] = new scala.collection.AbstractIterator[Any] {
+  def productIterator: Iterator[Any] = new AbstractIterator[Any] {
     private[this] var c: Int = 0
     private[this] val cmax = productArity
     def hasNext: Boolean = c < cmax
-    def next(): Any = { val result = productElement(c); c += 1; result }
+    def next(): Any = {
+      if (c >= cmax) Iterator.empty.next()
+      val result = productElement(c); c += 1; result
+    }
   }
 
   /** A string used in the `toString` methods of derived classes.
