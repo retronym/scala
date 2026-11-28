@@ -1,0 +1,29 @@
+Test.scala:8: error: annotation argument needs to be a constant; found: {
+  scala.Predef.println("side effect");
+  false
+}
+@Ann(z = { println("side effect"); false }) class Block1
+         ^
+Test.scala:9: error: annotation argument needs to be a constant; found: {
+  private[this] val u: Int = 1./(0);
+  <stable> <accessor> def u: Int = <empty>.this.u;
+  3
+}
+@Ann(i = { val u = 1 / 0; 3 }) class Block2
+         ^
+Test.scala:10: error: annotation argument needs to be a constant; found: K.three()
+@Ann(i = K.three()) class Call1
+                ^
+Test.scala:11: error: annotation argument needs to be a constant; found: K.id[5](5)
+@Ann(i = K.id(5)) class Call2
+             ^
+Test.scala:12: error: annotation argument needs to be a constant; found: K.three().+(1)
+@Ann(i = K.three() + 1) class Call3
+                   ^
+Test.scala:15: error: annotation argument needs to be a constant; found: {
+  scala.Predef.println("side effect");
+  3
+}
+@C({ println("side effect"); 3 }) class Block3
+   ^
+6 errors
