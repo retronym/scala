@@ -419,4 +419,13 @@ class HashMapTest extends AllocationTest{
     assertEquals(expected, big.merged(HashMap(42 -> "x")) { case (_, (_, r)) => 1000 -> r })
     assertEquals(expected, HashMap(42 -> "x").merged(big) { case ((_, l), _) => 1000 -> l })
   }
+
+  // The fields of a CHAMP node. cachedJavaKeySetHashCode (read only by node equals) makes the node
+  // 40 bytes instead of 32 under compressed oops; this test fails until it is removed.
+  @Test
+  def nodeFields(): Unit = {
+    def fields(c: Class[_]) = c.getDeclaredFields.toList.filterNot(f => java.lang.reflect.Modifier.isStatic(f.getModifiers)).map(f => s"${f.getName}: ${f.getType.getSimpleName}").sorted
+    assertEquals(List("content: Object[]", "dataMap: int", "nodeMap: int", "originalHashes: int[]", "size: int"), fields(classOf[BitmapIndexedMapNode[_, _]]))
+    assertEquals(List("content: Object[]", "dataMap: int", "nodeMap: int", "originalHashes: int[]", "size: int"), fields(classOf[BitmapIndexedSetNode[_]]))
+  }
 }
