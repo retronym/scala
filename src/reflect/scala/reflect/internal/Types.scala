@@ -1861,6 +1861,24 @@ trait Types
    */
   case class RefinedType(override val parents: List[Type],
                          override val decls: Scope) extends CompoundType with RefinedTypeApi {
+    override def baseTypeSeq: BaseTypeSeq =
+      if (narrowedTypeBounds > 0) {
+        val cache = baseTypeSeqCache
+        val period = baseTypeSeqPeriod
+        if (cache ne undetBaseTypeSeq) baseTypeSeqPeriod = NoPeriod // unless in progress, i.e. a cycle
+        try super.baseTypeSeq finally { baseTypeSeqCache = cache; baseTypeSeqPeriod = period }
+      }
+      else super.baseTypeSeq
+
+    override def baseClasses: List[Symbol] =
+      if (narrowedTypeBounds > 0) {
+        val cache = baseClassesCache
+        val period = baseClassesPeriod
+        if (cache ne null) baseClassesPeriod = NoPeriod // unless in progress, i.e. a cycle
+        try super.baseClasses finally { baseClassesCache = cache; baseClassesPeriod = period }
+      }
+      else super.baseClasses
+
     override def isHigherKinded = (
       !parents.isEmpty &&
       (parents.forall(_.isHigherKinded)) &&
@@ -2246,6 +2264,19 @@ trait Types
 
   trait NonClassTypeRef extends TypeRef {
     require(sym.isNonClassType, sym)
+
+    override def parents: List[Type] =
+      if (narrowedTypeBounds > 0) parentsImpl
+      else super.parents
+
+    override def baseTypeSeq: BaseTypeSeq =
+      if (narrowedTypeBounds > 0) {
+        val cache = baseTypeSeqCache
+        val period = baseTypeSeqPeriod
+        if (cache ne undetBaseTypeSeq) baseTypeSeqPeriod = NoPeriod // unless in progress, i.e. a cycle
+        try super.baseTypeSeq finally { baseTypeSeqCache = cache; baseTypeSeqPeriod = period }
+      }
+      else super.baseTypeSeq
 
     /** Syncnote: These are pure caches for performance; no problem to evaluate these
       * several times. Hence, no need to protected with synchronized in a multi-threaded
@@ -5338,6 +5369,20 @@ trait Types
   /** Members which can be imported into other scopes.
    */
   def importableMembers(pre: Type): Scope = pre.members filter isImportable
+
+  /** The number of type parameters whose bounds are narrowed for the case being typed. Meanwhile, abstract
+   *  types, aliases and refinements bypass their base type caches, as their base types may depend on bounds
+   *  that hold in that case only. Class types can't, so they keep their caches.
+   */
+  private[this] var narrowedTypeBounds = 0
+  perRunCaches.recordCache(new mutable.Clearable { def clear(): Unit = narrowedTypeBounds = 0 })
+
+  /** Called by `Infer#instantiateTypeVar` after it narrows the bounds of `tparam`. */
+  def typeBoundsNarrowed(tparam: Symbol): Unit = narrowedTypeBounds += 1
+
+  /** Called by `Context#restoreTypeBounds` after it restores the bounds of `tparams`. */
+  def typeBoundsRestored(tparams: List[Symbol]): Unit =
+    narrowedTypeBounds = math.max(0, narrowedTypeBounds - tparams.length)
 
   def invalidateTreeTpeCaches(tree: Tree, updatedSyms: collection.Set[Symbol]) = if (!updatedSyms.isEmpty) {
     val invldtr = new InvalidateTypeCaches(updatedSyms)
