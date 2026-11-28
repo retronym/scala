@@ -685,10 +685,13 @@ trait Implicits extends splain.SplainData {
         if(ref != EmptyTree)
           new SearchResult(ref, EmptyTreeTypeSubstituter, Nil, inPackagePrefix = info.inPackagePrefix)
         else {
+          // `isByName` is true if there is a by-name argument between `ois.head` and the top of the stack.
+          // Whether `ois.head` is itself the argument of a by-name parameter does not count: that parameter
+          // lies below it, and a reference to it from here would be evaluated while it is being constructed.
           @tailrec
           def loop(ois: List[OpenImplicit], isByName: Boolean): Option[OpenImplicit] =
             ois match {
-              case hd :: _ if (isByName || hd.isByName) && hd.pt <:< pt => Some(hd)
+              case hd :: _ if isByName && hd.pt <:< pt => Some(hd)
               case hd :: tl => loop(tl, isByName || hd.isByName)
               case _ => None
             }
