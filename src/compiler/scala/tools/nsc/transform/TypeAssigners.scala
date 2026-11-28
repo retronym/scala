@@ -179,6 +179,9 @@ trait TypeAssigners { self: TypingTransformers =>
         val pre = if (sym.isTopLevel) sym.owner.thisType else NoPrefix
         stabilize(tree setType pre.memberType(sym), pre, mode, pt)
 
+      case sel @ Select(qual, name) if isRootPackageRef(qual) =>
+        typedCore(rootSelection(sel), mode, pt)
+
       case sel @ Select(qual, _) =>
         typedSelect(sel, typedQualifier(qual), mode, pt)
 
@@ -308,16 +311,16 @@ trait TypeAssigners { self: TypingTransformers =>
       case templ @ Template(parents, _, body) =>
         val clazz = currentOwner
         val body1 = atOwner(templ, clazz) {
-          body mapConserve { stat =>
+          dropEmpty(body mapConserve { stat =>
             if (stat.isDef) typed(stat)
             else atOwner(stat, templ.symbol)(typed(stat))
-          }
+          })
         }
         treeCopy.Template(templ, parents, noSelfType, body1) setType clazz.tpe_*
 
       case pdef @ PackageDef(pid, stats) =>
         val pid1 = typedQualifier(pid).asInstanceOf[RefTree]
-        val stats1 = atOwner(pdef, pdef.symbol)(stats mapConserve (stat => typed(stat)))
+        val stats1 = atOwner(pdef, pdef.symbol)(typedStats(stats))
         treeCopy.PackageDef(pdef, pid1, stats1) setType NoType
 
       case fun @ Function(vparams, body) if !phase.erasedTypes =>
@@ -337,6 +340,14 @@ trait TypeAssigners { self: TypingTransformers =>
       case _ =>
         fallback(tree, pt, "core-" + tree.getClass.getSimpleName)
     }
+
+    /** Whether `qual`, the qualifier of a selection, is `_root_`. */
+    protected final def isRootPackageRef(qual: Tree): Boolean =
+      qual.isInstanceOf[Ident] && (qual.symbol ne null) && qual.symbol.isRootPackage
+
+    /** `_root_.x` as `x`, as `Typer.typedSelect` retypes it: `_root_` has a nullary method type, which
+     *  erasure would turn into an application. */
+    protected final def rootSelection(sel: Select): Ident = treeCopy.Ident(sel, sel.name).clearType()
 
     /** `sel` on its typed qualifier `qual1`: `Typer.typedSelect`. */
     protected final def typedSelect(sel: Select, qual1: Tree, mode: Mode, pt: Type): Tree = {
@@ -450,7 +461,12 @@ trait TypeAssigners { self: TypingTransformers =>
     }
 
     private def typedStats(stats: List[Tree]): List[Tree] =
-      stats mapConserve (stat => typed(stat))
+      dropEmpty(stats mapConserve (stat => typed(stat)))
+
+    /** Without the statements that typing left empty, as `Transformer.transformStats` drops them: erasure
+     *  pre-erases a statement, a type definition say, to `EmptyTree` when it enters it. */
+    private def dropEmpty(stats: List[Tree]): List[Tree] =
+      if (stats.exists(_ eq EmptyTree)) stats.filterNot(_ eq EmptyTree) else stats
 
     private def typedCases(cases: List[CaseDef], pattpe: Type, pt: Type): List[CaseDef] =
       cases mapConserve { cdef =>

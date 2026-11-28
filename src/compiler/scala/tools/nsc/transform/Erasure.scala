@@ -1572,6 +1572,9 @@ abstract class Erasure extends InfoTransform
 
       /** The tree shapes erasure types differently from `TypeAssigner`. */
       override protected def typedCore(tree: Tree, mode: Mode, pt: Type): Tree = tree match {
+        case sel @ Select(qual, _) if isRootPackageRef(qual) =>
+          super.typedCore(rootSelection(sel), mode, pt)
+
         case sel @ Select(qual, name) =>
           if (sel.symbol == NoSymbol) typedSelect(sel, typedQualifier(qual), mode, pt)
           else if (name == nme.CONSTRUCTOR) {

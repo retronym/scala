@@ -66,7 +66,10 @@ trait TypeAdaptingTransformer { self: TreeDSL =>
         })
       case _ =>
         val tree1 = tree.tpe match {
-          case ErasedValueType(clazz, _) => New(clazz, cast(tree, underlyingOfValueClass(clazz)))
+          case ErasedValueType(clazz, _) =>
+            // The constructor of a value class over `Unit` takes it boxed.
+            val arg = cast(tree, underlyingOfValueClass(clazz))
+            New(clazz, if (arg.tpe.typeSymbol == UnitClass) box(arg) else arg)
           case _ => tree.tpe.typeSymbol match {
             case UnitClass =>
               preservingSideEffects(tree, REF(BoxedUnit_UNIT))
@@ -166,9 +169,15 @@ trait TypeAdaptingTransformer { self: TreeDSL =>
      *  @param pt   the expected type
      *  @return     the adapted tree
      */
+    /** Erased value types of one class, whose underlying types are the same type written differently. */
+    private def isSameErasedValueType(tp: Type, pt: Type): Boolean = (tp, pt) match {
+      case (ErasedValueType(c1, u1), ErasedValueType(c2, u2)) => (c1 eq c2) && u1 =:= u2
+      case _ => false
+    }
+
     @tailrec final def adaptToType(tree: Tree, pt: Type): Tree = {
       val tpe = tree.tpe
-      if ((tpe eq pt) || tpe <:< pt) tree
+      if ((tpe eq pt) || tpe <:< pt || isSameErasedValueType(tpe, pt)) tree
       else if (tpe.isInstanceOf[ErasedValueType]) adaptToType(box(tree), pt) // what if pt is an erased value type?
       else if (pt.isInstanceOf[ErasedValueType])  adaptToType(unbox(tree, pt), pt)
       // See corresponding case in `Eraser`'s `adaptMember`
