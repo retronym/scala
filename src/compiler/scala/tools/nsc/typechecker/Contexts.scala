@@ -1085,7 +1085,9 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
           for (sym <- qual.tpe.implicitMembers.toList if isQualifyingImplicit(sym.name, sym, pre, imported = true))
           yield new ImplicitInfo(sym.name, pre, sym, importInfo = imp, importSelector = sel)
         case (sel @ ImportSelector(from, _, to, _)) :: sels1 =>
-          var impls = collect(sels1).filter(_.name != from)
+          // `from` is renamed or masked here, so a later selector (in practice the wildcard) does not import it
+          // under its own name. An implicit that a later selector renames to `from` stays: `{y => z, x => y}`.
+          var impls = collect(sels1).filter(info => info.name != from || info.importSelector.isRename)
           if (!sel.isMask)
             withQualifyingImplicitAlternatives(imp, to, pre) { sym =>
               impls = new ImplicitInfo(to, pre, sym, importInfo = imp, importSelector = sel) :: impls
