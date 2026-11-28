@@ -365,10 +365,12 @@ private[collection] object JavaCollectionWrappers extends Serializable {
         None
     }
 
+    // Not `underlying.computeIfAbsent(key, _ => op)`: the function given to it must not modify the map, but `op`
+    // may, as for any other mutable map, for instance in a memoised recursive function.
     override def getOrElseUpdate(key: K, op: => V): V =
-      underlying.computeIfAbsent(key, _ => op) match {
-        case null => update(key, null.asInstanceOf[V]); null.asInstanceOf[V]
-        case v    => v
+      get(key) match {
+        case Some(v) => v
+        case None    => val v = op; update(key, v); v
       }
 
     def addOne(kv: (K, V)): this.type = { underlying.put(kv._1, kv._2); this }
