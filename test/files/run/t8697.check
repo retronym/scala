@@ -1,0 +1,5 @@
+no other reference: member
+unrelated reference before the search: member
+unrelated reference after the search: member
+parent trait later in the same file: member
+parent trait in another file: member
