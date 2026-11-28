@@ -7,9 +7,10 @@ import scala.annotation.nowarn
 import scala.collection.SeqFactory
 import scala.collection.immutable.List
 import scala.tools.nsc.`strip margin`
+import scala.tools.testkit.AllocationTest
 import scala.tools.testkit.AssertUtil.assertThrows
 
-class ArrayDequeTest {
+class ArrayDequeTest extends AllocationTest {
 
   @Test
   def apply: Unit = {
@@ -132,6 +133,58 @@ class ArrayDequeTest {
     assertEquals(2, it.next().size)
     sut.clear()
     assertThrows[java.util.ConcurrentModificationException](it.hasNext)
+  }
+
+  // scala/bug#12121: a source read lazily from the deque gives what the same source of an equal deque gives
+  @nowarn("cat=deprecation") // Stream
+  @Test def `bulk operations with a source that reads the deque`: Unit = {
+    val sources: List[(String, ArrayDeque[Int] => IterableOnce[Int])] = List(
+      "self"          -> (d => d),
+      "view"          -> (d => d.view),
+      "view.reverse"  -> (d => d.view.reverse),
+      "view.map"      -> (d => d.view.map(_ + 1)),
+      "view.filter"   -> (d => d.view.filter(_ > 0)),
+      "view.slice"    -> (d => d.view.slice(1, 4)),
+      "iterator"      -> (d => d.iterator),
+      "iterator.map"  -> (d => d.iterator.map(_ * 10)),
+      "LazyList"      -> (d => LazyList.from(d.view.reverse)),
+      "Stream"        -> (d => d.view.reverse.to(Stream)),
+      "concat"        -> (d => Iterator(5, 6) ++ d.view.reverse.take(10)),
+    )
+    // with and without spare capacity, so that both the in-place and the reallocating paths are taken
+    for (init <- List(Vector(6, -2, 3, 9, 4), Vector.empty[Int]); capacity <- List(init.length, 64); (name, source) <- sources) {
+      def sut() = new ArrayDeque[Int](capacity) ++= init
+      def check(op: String)(f: (ArrayDeque[Int], IterableOnce[Int]) => Unit): Unit = {
+        val expected = sut()
+        f(expected, source(sut()).iterator.toVector)
+        val d = sut()
+        f(d, source(d))
+        assertEquals(s"$op($name) of $init with capacity $capacity", expected, d)
+      }
+      check("addAll")(_ addAll _)
+      check("prependAll")(_ prependAll _)
+      check("subtractAll")(_ subtractAll _)
+      for (from <- 0 to init.length; replaced <- 0 to 2)
+        check(s"patchInPlace($from, _, $replaced)")(_.patchInPlace(from, _, replaced))
+    }
+    val q = Queue(1, 2, 3)
+    q.patchInPlace(1, q.view.map(_ * 10), 1)
+    assertEquals(Queue(1, 10, 20, 30, 3), q)
+  }
+
+  // scala/bug#12121: a source that cannot read the receiver is not copied; each bound is what the call allocated before the copy existed
+  @Test def `bulk operations with a strict source allocate no copy`: Unit = {
+    val d = new ArrayDeque[Int](64)
+    val other = ArrayBuffer(1, 2, 3)
+    val list = List(1, 2, 3)
+    val some: Option[Int] = Some(1)
+    def append(source: IterableOnce[Int]): Int = { d += 0; d ++= source; val n = d.length; d.clear(); n }
+    onlyAllocates(sizeFor(40, 32), "deque ++= Some")(append(some))
+    onlyAllocates(sizeFor(32, 32), "deque ++= List")(append(list))
+    onlyAllocates(sizeFor(88, 80), "deque ++= ArrayBuffer")(append(other))
+    val b = new ArrayBuffer[Int](64)
+    val set = Set(1, 2, 3)
+    onlyAllocates(sizeFor(296, 264), "buffer --= immutable.Set")({ b ++= other; b --= set; b.length })
   }
 
   @Test def `sliding throws on grow`: Unit = {

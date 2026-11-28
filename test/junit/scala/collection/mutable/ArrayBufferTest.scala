@@ -513,6 +513,22 @@ class ArrayBufferTest {
     check(_.insertAll(1, 1 to 100))
   }
 
+  // scala/bug#12121
+  @Test
+  def bulkOperations_viewOfSelf(): Unit = {
+    def check(expected: List[Int])(op: ArrayBuffer[Int] => Unit): Unit = {
+      val buf = ArrayBuffer(1, 2, 3)
+      op(buf)
+      assertSameElements(expected, buf)
+    }
+    check(List(1, 1, 2, 3, 3))(b => b.patchInPlace(1, b, 1))
+    check(List(1, 2, 3, 4, 3))(b => b.patchInPlace(1, b.view.map(_ + 1), 1))
+    check(List(1, 3, 2, 1))(b => b.patchInPlace(1, b.view.reverse, 2))
+    check(List(1, 7, 8, 3))(b => b.patchInPlace(1, Array(7, 8), 1))
+    check(List(2))(b => b.subtractAll(b.view.filter(_ != 2)))
+    check(Nil)(b => b.subtractAll(b.iterator))
+  }
+
   @Test def `drop right when empty is empty`: Unit = {
     assertTrue(ArrayBuffer().dropRight(1).isEmpty)
   }

@@ -23,6 +23,17 @@ class UnrolledBufferTestTest {
     assert(b sameElements((1 to 40) ++ Seq(-1) ++ (41 to 100)))
   }
 
+  // scala/bug#12121
+  @Test
+  def subtractAllViewOfSelf(): Unit = {
+    val b = UnrolledBuffer(1, 4)
+    b.subtractAll(b.view.slice(0, 2))
+    assert(b.isEmpty, b)
+    val c = UnrolledBuffer(1, 2, 3)
+    c --= c.iterator.filter(_ != 2)
+    assert(c == List(2), c)
+  }
+
   @Test
   def test_removal(): Unit = {
     val b = UnrolledBuffer(1, 2, 3)

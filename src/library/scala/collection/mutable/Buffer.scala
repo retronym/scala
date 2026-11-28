@@ -297,7 +297,17 @@ trait IndexedBuffer[A] extends IndexedSeq[A]
     val replaced0 = math.min(math.max(replaced, 0), length)
     val i = math.min(math.max(from, 0), length)
     var j = 0
-    val iter = patch.iterator
+    // This buffer is updated while `patch` is read, so a source that may read this buffer is read in full first.
+    @nowarn("cat=deprecation") // Stream
+    val mayReadThis = patch match {
+      case _: Option[_] => false
+      case _: immutable.LazyList[_] | _: immutable.Stream[_] => true
+      case _: immutable.Iterable[_] | _: ArraySeq[_] => false
+      case _: ArrayBuffer[_] | _: ArrayDeque[_] | _: ListBuffer[_] | _: UnrolledBuffer[_] | _: HashSet[_] | _: LinkedHashSet[_] =>
+        patch.asInstanceOf[AnyRef] eq this
+      case _ => true
+    }
+    val iter = (if (mayReadThis) ArrayBuffer.from(patch) else patch).iterator
     while (iter.hasNext && j < replaced0 && i + j < length) {
       update(i + j, iter.next())
       j += 1
