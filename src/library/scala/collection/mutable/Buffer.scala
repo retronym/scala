@@ -266,7 +266,21 @@ trait IndexedBuffer[A] extends IndexedSeq[A]
     var i = 0
     val s = size
     val newElems = new Array[IterableOnce[A]](s)
-    while (i < s) { newElems(i) = f(this(i)); i += 1 }
+    while (i < s) {
+      // The results are read after this buffer is cleared, so a result that may read this buffer is read now.
+      val r = f(this(i))
+      @nowarn("cat=deprecation") // Stream
+      val mayReadThis = r match {
+        case _: Option[_] => false
+        case _: immutable.LazyList[_] | _: immutable.Stream[_] => true
+        case _: immutable.Iterable[_] | _: ArraySeq[_] => false
+        case _: ArrayBuffer[_] | _: ArrayDeque[_] | _: ListBuffer[_] | _: UnrolledBuffer[_] | _: HashSet[_] | _: LinkedHashSet[_] =>
+          r.asInstanceOf[AnyRef] eq this
+        case _ => true
+      }
+      newElems(i) = if (mayReadThis) ArrayBuffer.from(r) else r
+      i += 1
+    }
     clear()
     i = 0
     while (i < s) { ++=(newElems(i)); i += 1 }
