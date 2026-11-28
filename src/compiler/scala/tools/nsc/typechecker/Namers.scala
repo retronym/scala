@@ -87,7 +87,18 @@ trait Namers extends MethodSynthesis {
         case _ =>
           context
       }
-      newNamer(ownerCtx.makeNewScope(tree, sym))
+      // Only the signatures of polymorphic or parameterized members, classes and modules
+      // enter symbols (type and value params, the self symbol) into the context's scope.
+      // Every other member shares its owner's scope rather than paying for a nested
+      // scope (and the copy of the owner scope's hash table) that would stay empty.
+      // Lookups through the shared scope compute the same symbol depth.
+      val entersSymbols = tree match {
+        case _: ValDef   => false
+        case dd: DefDef  => dd.tparams.nonEmpty || dd.vparamss.exists(_.nonEmpty)
+        case td: TypeDef => td.tparams.nonEmpty
+        case _           => true
+      }
+      newNamer(if (entersSymbols) ownerCtx.makeNewScope(tree, sym) else ownerCtx.make(tree, sym))
     }
     def createInnerNamer() = {
       newNamer(context.make(context.tree, owner, newScope))
