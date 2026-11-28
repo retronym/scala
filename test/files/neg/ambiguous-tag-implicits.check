@@ -1,0 +1,49 @@
+ambiguous-tag-implicits.scala:8: error: ambiguous implicit values:
+ both value b in object Control of type Ordering[Foo]
+ and value a in object Control of type Ordering[Foo]
+ match expected type Ordering[Foo]
+  def noExpectedType                = implicitly[Ordering[Foo]]
+                                                ^
+ambiguous-tag-implicits.scala:9: error: ambiguous implicit values:
+ both value a in object Control of type Ordering[Foo]
+ and value b in object Control of type Ordering[Foo]
+ match expected type Ordering[Foo]
+  def expectedType: Ordering[Foo]   = implicitly[Ordering[Foo]]
+                                                ^
+ambiguous-tag-implicits.scala:16: error: ambiguous implicit values:
+ both value b in object Manifests of type Manifest[Foo]
+ and value a in object Manifests of type Manifest[Foo]
+ match expected type Manifest[Foo]
+  def noExpectedType                = implicitly[Manifest[Foo]]
+                                                ^
+ambiguous-tag-implicits.scala:17: error: ambiguous implicit values:
+ both value a in object Manifests of type Manifest[Foo]
+ and value b in object Manifests of type Manifest[Foo]
+ match expected type Manifest[Foo]
+  def expectedType: Manifest[Foo]   = implicitly[Manifest[Foo]]
+                                                ^
+ambiguous-tag-implicits.scala:23: error: ambiguous implicit values:
+ both value b in object ClassTags of type scala.reflect.ClassTag[Foo]
+ and value a in object ClassTags of type scala.reflect.ClassTag[Foo]
+ match expected type scala.reflect.ClassTag[Foo]
+  def noExpectedType                = implicitly[ClassTag[Foo]]
+                                                ^
+ambiguous-tag-implicits.scala:24: error: ambiguous implicit values:
+ both value a in object ClassTags of type scala.reflect.ClassTag[Foo]
+ and value b in object ClassTags of type scala.reflect.ClassTag[Foo]
+ match expected type scala.reflect.ClassTag[Foo]
+  def expectedType: ClassTag[Foo]   = implicitly[ClassTag[Foo]]
+                                                ^
+ambiguous-tag-implicits.scala:30: error: ambiguous implicit values:
+ both value b in object ValueOfs of type ValueOf[1]
+ and value a in object ValueOfs of type ValueOf[1]
+ match expected type ValueOf[1]
+  def noExpectedType                = implicitly[ValueOf[1]]
+                                                ^
+ambiguous-tag-implicits.scala:31: error: ambiguous implicit values:
+ both value a in object ValueOfs of type ValueOf[1]
+ and value b in object ValueOfs of type ValueOf[1]
+ match expected type ValueOf[1]
+  def expectedType: ValueOf[1]      = implicitly[ValueOf[1]]
+                                                ^
+8 errors
