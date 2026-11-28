@@ -75,10 +75,29 @@ object LongMap {
       else LongMap.Tip(key, s)
   }
 
-  private[immutable] case class Bin[+T](prefix: Long, mask: Long, left: LongMap[T], right: LongMap[T]) extends LongMap[T] {
+  /** A branch of the Patricia trie. `prefix` has the branching bit `mask` and all bits below it clear, so both
+   *  are kept in one word, `prefixMask = prefix | mask`, which saves a field per branch.
+   */
+  private[immutable] final class Bin[+T](prefixMask: Long, val left: LongMap[T], val right: LongMap[T]) extends LongMap[T] {
+    def prefix: Long = prefixMask & (prefixMask - 1)
+    def mask: Long = prefixMask & -prefixMask
     def bin[S](left: LongMap[S], right: LongMap[S]): LongMap[S] = {
       if ((this.left eq left) && (this.right eq right)) this.asInstanceOf[LongMap.Bin[S]]
       else LongMap.Bin[S](prefix, mask, left, right)
+    }
+  }
+
+  private[immutable] object Bin {
+    def apply[T](prefix: Long, mask: Long, left: LongMap[T], right: LongMap[T]): Bin[T] = new Bin(prefix | mask, left, right)
+    // An allocation-free, irrefutable extractor, so that `Bin(prefix, mask, left, right)` patterns read as before
+    def unapply[T](bin: Bin[T]): Extractor[T] = new Extractor(bin)
+    final class Extractor[+T](private val bin: Bin[T]) extends AnyVal {
+      def isEmpty: false = false
+      def get: Extractor[T] = this
+      def _1: Long = bin.prefix
+      def _2: Long = bin.mask
+      def _3: LongMap[T] = bin.left
+      def _4: LongMap[T] = bin.right
     }
   }
 
@@ -285,7 +304,7 @@ sealed abstract class LongMap[+T] extends AbstractMap[Long, T]
 
   @tailrec
   final def get(key: Long): Option[T] = this match {
-    case LongMap.Bin(prefix, mask, left, right) => if (zero(key, mask)) left.get(key) else right.get(key)
+    case b: LongMap.Bin[T] => if (zero(key, b.mask)) b.left.get(key) else b.right.get(key)
     case LongMap.Tip(key2, value) => if (key == key2) Some(value) else None
     case LongMap.Nil => None
   }
@@ -294,13 +313,13 @@ sealed abstract class LongMap[+T] extends AbstractMap[Long, T]
   final override def getOrElse[S >: T](key: Long, default: => S): S = this match {
     case LongMap.Nil => default
     case LongMap.Tip(key2, value) => if (key == key2) value else default
-    case LongMap.Bin(prefix, mask, left, right) =>
-      if (zero(key, mask)) left.getOrElse(key, default) else right.getOrElse(key, default)
+    case b: LongMap.Bin[T] =>
+      if (zero(key, b.mask)) b.left.getOrElse(key, default) else b.right.getOrElse(key, default)
   }
 
   @tailrec
   final override def apply(key: Long): T = this match {
-    case LongMap.Bin(prefix, mask, left, right) => if (zero(key, mask)) left(key) else right(key)
+    case b: LongMap.Bin[T] => if (zero(key, b.mask)) b.left(key) else b.right(key)
     case LongMap.Tip(key2, value) => if (key == key2) value else throw new IllegalArgumentException("Key not found")
     case LongMap.Nil => throw new IllegalArgumentException("key not found")
   }
@@ -392,7 +411,7 @@ sealed abstract class LongMap[+T] extends AbstractMap[Long, T]
     * @return        Union of `this` and `that`, with identical key conflicts resolved using the function `f`.
     */
   def unionWith[S >: T](that: LongMap[S], f: (Long, S, S) => S): LongMap[S] = (this, that) match{
-    case (LongMap.Bin(p1, m1, l1, r1), that@(LongMap.Bin(p2, m2, l2, r2))) =>
+    case (LongMap.Bin(p1, m1, l1, r1), LongMap.Bin(p2, m2, l2, r2)) =>
       if (shorter(m1, m2)) {
         if (!hasMatch(p2, p1, m1)) join(p1, this, p2, that)
         else if (zero(p2, m1)) LongMap.Bin(p1, m1, l1.unionWith(that, f), r1)
@@ -424,7 +443,7 @@ sealed abstract class LongMap[+T] extends AbstractMap[Long, T]
     * @return        Intersection of `this` and `that`, with values for identical keys produced by function `f`.
     */
   def intersectionWith[S, R](that: LongMap[S], f: (Long, T, S) => R): LongMap[R] = (this, that) match {
-    case (LongMap.Bin(p1, m1, l1, r1), that@LongMap.Bin(p2, m2, l2, r2)) =>
+    case (LongMap.Bin(p1, m1, l1, r1), LongMap.Bin(p2, m2, l2, r2)) =>
       if (shorter(m1, m2)) {
         if (!hasMatch(p2, p1, m1)) LongMap.Nil
         else if (zero(p2, m1)) l1.intersectionWith(that, f)
@@ -462,14 +481,14 @@ sealed abstract class LongMap[+T] extends AbstractMap[Long, T]
 
   @tailrec
   final def firstKey: Long = this match {
-    case LongMap.Bin(_, _, l, r) => l.firstKey
+    case b: LongMap.Bin[T] => b.left.firstKey
     case LongMap.Tip(k, v) => k
     case LongMap.Nil => throw new IllegalStateException("Empty set")
   }
 
   @tailrec
   final def lastKey: Long = this match {
-    case LongMap.Bin(_, _, l, r) => r.lastKey
+    case b: LongMap.Bin[T] => b.right.lastKey
     case LongMap.Tip(k , v) => k
     case LongMap.Nil => throw new IllegalStateException("Empty set")
   }
