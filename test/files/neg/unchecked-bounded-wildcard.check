@@ -1,0 +1,15 @@
+unchecked-bounded-wildcard.scala:11: warning: non-variable type argument _ <: String in type Option[_ <: String] is unchecked since it is eliminated by erasure
+    println(o.isInstanceOf[Option[_ <: String]])                               // warn
+                          ^
+unchecked-bounded-wildcard.scala:12: warning: non-variable type argument _ <: String in type pattern Test.OS (the underlying of Test.OS) is unchecked since it is eliminated by erasure
+    println(o match { case x: OS => x.get.length; case _ => -1 })              // warn
+                              ^
+unchecked-bounded-wildcard.scala:13: warning: non-variable type argument T in type pattern List[T] is unchecked since it is eliminated by erasure
+    println(l match { case Strs(n) => n; case _ => -1 })                       // warn
+                               ^
+unchecked-bounded-wildcard.scala:14: warning: non-variable type argument String in type pattern Option[String] is unchecked since it is eliminated by erasure
+    println(o match { case x: Option[String] => x.get.length; case _ => -1 })  // warns today
+                              ^
+error: No warnings can be incurred under -Werror.
+4 warnings
+1 error
