@@ -1,9 +1,9 @@
 package scala.reflect.internal
 
 import org.junit.Test
-import org.junit.Assert.assertFalse
+import org.junit.Assert.{assertFalse, assertTrue}
 
-import scala.reflect.internal.util.{NoSourceFile, Position}
+import scala.reflect.internal.util.{BatchSourceFile, NoSourceFile, Position}
 import scala.tools.nsc.reporters.StoreReporter
 import scala.tools.nsc.symtab.SymbolTableForUnitTesting
 import scala.tools.testkit.AssertUtil.assertThrows
@@ -70,5 +70,14 @@ class PositionsTest {
 
   @Test def `focused position is synthetic`: Unit = checkValid(rangePos(27, 42)) {
     x.setPos(offsetPos(3))
+  }
+
+  @Test def `position errors number the trees they mention`: Unit = {
+    val source = new BatchSourceFile("test.scala", "xxxxxxxxxx")
+    def rangePos(start: Int, end: Int) = Position.range(source, start, start, end)
+    val top = Block(Nil, x.setPos(rangePos(0, 3))).setPos(rangePos(0, 2))
+    reporter.reset()
+    assertThrows[ValidateException](validatePositions(top), _ == "Enclosing tree [1] does not include tree [2]")
+    assertTrue(reporter.infos.toString, reporter.infos.exists(_.msg == "\nWhile validating #1"))
   }
 }
