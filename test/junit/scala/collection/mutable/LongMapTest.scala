@@ -50,4 +50,13 @@ class LongMapTest {
 
     assertEquals(None, m.put(999L, 1))
   }
+
+  // Keys built as (i << 32) | j must not all land on the few slots that i ^ j selects.
+  @Test def packedKeysSpread(): Unit = {
+    val m = LongMap.empty[Unit]
+    for (i <- 1 to 317; j <- 1 to 317) m.update((i.toLong << 32) | j, ())
+    val toIndex = getMethodAccessible[LongMap[_]]("toIndex")
+    val indices = m.keys.map(k => toIndex.invoke(m, k: java.lang.Long)).toSet
+    assertTrue(s"${indices.size} distinct indices for ${m.size} keys", indices.size > m.size / 2)
+  }
 }
