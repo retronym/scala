@@ -25,9 +25,12 @@ import scala.util.hashing.MurmurHash3
   * traversal methods visit key-value pairs in the order they were first inserted.
   *
   * Entries are stored internally in reversed insertion order, which means the newest key is at the
-  * head of the list. As such, methods such as `head` and `tail` are O(n), while `last` and `init`
-  * are O(1). Other operations, such as inserting or removing entries, are also O(n), which makes
-  * this collection suitable only for a small number of elements.
+  * head of the list. As such, `head` is O(n), while `last` and `init` are O(1). Other operations,
+  * such as inserting or removing entries, are also O(n), and so is `size`. `tail` and bulk operations
+  * such as `filter`, `map` and `++` build a new map that checks every key for duplicates, which is
+  * O(n^2^). This makes the collection suitable only for a small number of elements; for more than a
+  * few hundred entries, prefer [[VectorMap]] or [[TreeSeqMap]] to preserve insertion order, or
+  * [[HashMap]] otherwise.
   *
   * Instances of `ListMap` represent empty maps; they can be either created by calling the
   * constructor directly, or by applying the function `ListMap.empty`.

@@ -97,6 +97,9 @@ object Vector extends StrictOptimizedSeqFactory[Vector] {
   * Because vectors strike a good balance between fast random selections and fast random functional updates,
   * they are currently the default implementation of immutable indexed sequences.
   *
+  * Concatenating two vectors of sizes n and m takes O(min(n, m)/32) array copies when their internal
+  * structures can be aligned, and is linear otherwise. `patch` is O(n), whereas `updated` is O(log n).
+  *
   * Vectors are implemented by radix-balanced finger trees of width 32. There is a separate subclass
   * for each level (0 to 6, with 0 being the empty vector and 6 a tree with a maximum width of 64 at the
   * top level).
@@ -1393,7 +1396,15 @@ private final class VectorSliceBuilder(lo: Int, hi: Int) {
   private[immutable] def getSlices: Array[Array[AnyRef]] = slices
 }
 
-
+/** A builder for [[Vector]]s. It is a [[scala.collection.mutable.ReusableBuilder]]. In addition to
+  * `clear()`, it supports adding more elements after `result()` without calling `clear()` first, in order
+  * to build multiple related results; vectors returned earlier are not affected.
+  *
+  * Adding a `Vector` with `addAll` to an empty builder shares the structure of that vector rather than
+  * copying its elements. `knownSize` is always the exact number of elements added so far.
+  *
+  * @tparam A the type of the elements
+  */
 final class VectorBuilder[A] extends ReusableBuilder[A, Vector[A]] {
 
   private[this] var a6: Arr6 = _
