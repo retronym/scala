@@ -319,4 +319,17 @@ class BigDecimalTest {
     val bdValue: BigDecimal = (BD.ONE: java.math.BigDecimal): BigDecimal
     assertEquals(BD.ONE, bdValue.bigDecimal)
   }
+
+  // == implies ## for BigDecimal(d) and a whole Double d in [1e17, 2^63), where the shortest decimal
+  // string of d (which BigDecimal(d) and BigDecimal == Double use) has fewer digits than d's exact value.
+  @Test def `hashCode agrees with an equal whole Double below 2^63`: Unit = {
+    val ds = List(math.pow(2, 57), 1e17 + 16, 1.2345678901234568e18, -9.2e18, math.pow(2, 62) + 1024)
+    for (d <- ds) {
+      val bd = BigDecimal(d)
+      if (bd == d || d == bd) {
+        assertEquals(s"$bd.## == $d.##", d.##, bd.##)
+        assertTrue(s"HashSet($d).contains($bd)", collection.mutable.HashSet[Any](d).contains(bd))
+      }
+    }
+  }
 }
