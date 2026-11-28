@@ -1,0 +1,16 @@
+type argument: 2
+inferred type argument: 2
+specialized type parameter, Int: 2
+specialized type parameter, String: 2
+fold: 2
+class parent: 2
+overloads by arity, trait parent, from another method: 12
+overloads by arity, trait parent, overridden: 11 12
+overloads by type and arity, trait parent, from another method: 123
+overloads by type and arity, trait parent, overridden: 11 12
+overloads by arity, class parent, from another method: 12
+overloads by arity, class parent, overridden: 11 12
+overloads by type and arity, class parent, from another method: 123
+overloads by type and arity, class parent, overridden: 11 12
+super call from another method: 1
+overloads by type, not a super call: 12
