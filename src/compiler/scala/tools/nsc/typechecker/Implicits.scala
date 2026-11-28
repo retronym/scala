@@ -652,38 +652,66 @@ trait Implicits extends splain.SplainData {
       // otherwise, the macro writer could check `c.openMacros` and `c.openImplicits` and do `c.abort` when expansions are deemed to be divergent
       // upon receiving `c.abort` the typechecker will decide that the corresponding implicit search has failed
       // which will fail the entire stack of implicit searches, producing a nice error message provided by the programmer
-      val existsDominatedImplicit: Boolean =
-        if (tree == EmptyTree) false
-        else {
-          lazy val ptStripped = stripped(core(pt))
-          lazy val ptStrippedSyms = AllSymbols.collect(ptStripped)
-
-          // Are all the symbols of the stripped core of dominating pt contained in the stripped core of tp?
-          def coversDominatingPt(tp: Type): Boolean = {
-            val tpStripped = stripped(core(tp))
-            dominates(ptStripped, tpStripped) && ptStrippedSyms == AllSymbols.collect(tpStripped)
-          }
-
-          @tailrec
-          def loop(ois: List[OpenImplicit], belowByName: Boolean): Boolean = ois match {
-            case Nil => false
-            case (hd @ OpenImplicit(info1, tp, tree1)) :: tl =>
-              val possiblyDominated = !info1.sym.isMacro && tree1.symbol == tree.symbol
-              if (possiblyDominated && belowByName && tp =:= pt) false
-              else if (possiblyDominated && coversDominatingPt(tp)) true
-              else loop(tl, hd.isByName || belowByName)
-          }
-
-          loop(context.openImplicits, this.isByNamePt)
-        }
-
-      if(existsDominatedImplicit) {
+      if (existsDominatedImplicit) {
         //println("Pending implicit "+pending+" dominates "+pt+"/"+undetParams) //@MDEBUG
         DivergentSearchFailure
       } else {
+        try {
+          context.openImplicits = OpenImplicit(info, pt, tree, isView, isByNamePt) :: context.openImplicits
+          //println("  "*context.openImplicits.length+"typed implicit "+info+" for "+pt) //@MDEBUG
+          val result = typedImplicit0(info, ptChecked, isLocalToCallsite)
+          if (result.isDivergent) {
+            //println("DivergentImplicit for pt:"+ pt +", open implicits:"+context.openImplicits) //@MDEBUG
+            if (context.openImplicits.tail.isEmpty && !pt.isErroneous)
+              DivergingImplicitExpansionError(tree, pt, info.sym)(context)
+          }
+          result
+        } finally {
+          context.openImplicits = context.openImplicits.tail
+        }
+      }
+    }
+
+    /** Does the expected type dominate the type of an open implicit search for the same tree,
+     *  so that expanding any candidate for it would diverge?
+     */
+    private def existsDominatedImplicit: Boolean =
+      if (tree == EmptyTree) false
+      else {
+        lazy val ptStripped = stripped(core(pt))
+        lazy val ptStrippedSyms = AllSymbols.collect(ptStripped)
+
+        // Are all the symbols of the stripped core of dominating pt contained in the stripped core of tp?
+        def coversDominatingPt(tp: Type): Boolean = {
+          val tpStripped = stripped(core(tp))
+          dominates(ptStripped, tpStripped) && ptStrippedSyms == AllSymbols.collect(tpStripped)
+        }
+
+        @tailrec
+        def loop(ois: List[OpenImplicit], belowByName: Boolean): Boolean = ois match {
+          case Nil => false
+          case (hd @ OpenImplicit(info1, tp, tree1)) :: tl =>
+            val possiblyDominated = !info1.sym.isMacro && tree1.symbol == tree.symbol
+            if (possiblyDominated && belowByName && tp =:= pt) false
+            else if (possiblyDominated && coversDominatingPt(tp)) true
+            else loop(tl, hd.isByName || belowByName)
+        }
+
+        loop(context.openImplicits, this.isByNamePt)
+      }
+
+    /** The by-name rule of SLS 7.2, which applies to the search for `pt` as a whole, before any
+     *  candidate is considered: an argument for a type that already has a defined entry in the
+     *  dictionary of by-name implicits is a reference to that entry, and one for a type whose
+     *  search is open with a by-name argument in between is a recursive reference to the result
+     *  of that search, which becomes a dictionary entry. `SearchFailure` if neither applies.
+     */
+    private def byNameImplicitReference: SearchResult =
+      if (existsDominatedImplicit) SearchFailure
+      else {
         val ref = context.refByNameImplicit(pt)
-        if(ref != EmptyTree)
-          new SearchResult(ref, EmptyTreeTypeSubstituter, Nil, inPackagePrefix = info.inPackagePrefix)
+        if (ref != EmptyTree)
+          new SearchResult(ref, EmptyTreeTypeSubstituter, Nil)
         else {
           @tailrec
           def loop(ois: List[OpenImplicit], isByName: Boolean): Option[OpenImplicit] =
@@ -693,30 +721,15 @@ trait Implicits extends splain.SplainData {
               case _ => None
             }
 
-          val recursiveImplicit: Option[OpenImplicit] = loop(context.openImplicits, isByNamePt)
-
-          recursiveImplicit match {
+          loop(context.openImplicits, isByNamePt) match {
             case Some(rec) =>
               val ref = atPos(pos.focus)(context.linkByNameImplicit(rec.pt))
-              new SearchResult(ref, EmptyTreeTypeSubstituter, Nil, inPackagePrefix = info.inPackagePrefix)
+              new SearchResult(ref, EmptyTreeTypeSubstituter, Nil)
             case None =>
-              try {
-                context.openImplicits = OpenImplicit(info, pt, tree, isView, isByNamePt) :: context.openImplicits
-                //println("  "*context.openImplicits.length+"typed implicit "+info+" for "+pt) //@MDEBUG
-                val result = typedImplicit0(info, ptChecked, isLocalToCallsite)
-                if (result.isDivergent) {
-                  //println("DivergentImplicit for pt:"+ pt +", open implicits:"+context.openImplicits) //@MDEBUG
-                  if (context.openImplicits.tail.isEmpty && !pt.isErroneous)
-                    DivergingImplicitExpansionError(tree, pt, info.sym)(context)
-                  result
-                } else context.defineByNameImplicit(pt, result)
-              } finally {
-                context.openImplicits = context.openImplicits.tail
-              }
+              SearchFailure
           }
         }
       }
-    }
 
     /** Does type `tp` match expected type `pt`
      *  This is the case if either `pt` is a unary function type with a
@@ -1778,6 +1791,17 @@ trait Implicits extends splain.SplainData {
      *  If all fails return SearchFailure
      */
     def bestImplicit: SearchResult = {
+      val byNameRef = byNameImplicitReference
+      if (byNameRef.isSuccess) byNameRef
+      else {
+        // The winner of this search defines the dictionary entry that recursive references to it,
+        // made while its candidates were typed, are linked to.
+        val result = bestImplicit0
+        if (result.isSuccess) context.defineByNameImplicit(pt, result) else result
+      }
+    }
+
+    private def bestImplicit0: SearchResult = {
       val stats = settings.areStatisticsEnabled
       val failstart = if (stats) statistics.startTimer(inscopeFailNanos) else null
       val succstart = if (stats) statistics.startTimer(inscopeSucceedNanos) else null
