@@ -217,7 +217,7 @@ abstract class TreeCheckers extends AbstractAnalyzer {
     val checker = new TreeChecker(context)
     runWithUnit(unit) {
       checker.precheck.traverse(unit.body)
-      checker.typed(unit.body)
+      checker.typed(duplicateAndKeepPositions(unit.body))
       checker.postcheck.traverse(unit.body)
     }
   }
@@ -265,17 +265,23 @@ abstract class TreeCheckers extends AbstractAnalyzer {
         checkedTyped(tree, mode, pt)
     )
     private def checkedTyped(tree: Tree, mode: Mode, pt: Type): Tree = {
+      val tpe0 = tree.tpe
       val typed = wrap(tree)(super.typed(tree.clearType(), mode, pt))
 
       // Vlad: super.typed returns null for package defs, why is that?
+      // (`wrap` also returns null if re-typing threw, which has already been reported.)
       if (typed eq null)
-        return tree
+        return tree.setType(tpe0)
 
       if (typed.tpe ne null)
         assert(!typed.tpe.isErroneous, "Tree has erroneous type: " + typed)
 
-      if (tree ne typed)
+      // Carry on with `tree`, so that the difference is reported once rather than at every enclosing tree,
+      // but restore its type, so that the enclosing tree is not re-typed with an untyped child.
+      if (tree ne typed) {
         treesDiffer(tree, typed)
+        tree.setType(tpe0)
+      }
       tree
     }
 
@@ -367,7 +373,10 @@ abstract class TreeCheckers extends AbstractAnalyzer {
         def symbolOf(t: Tree): Symbol  = if (t.symbol eq null) NoSymbol else t.symbol
         def typeOf(t: Tree): Type      = if (t.tpe eq null) NoType else t.tpe
         def infoOf(t: Tree): Type      = symbolOf(t).info
-        def referencesInType(tp: Type) = tp collect { case TypeRef(_, sym, _) => sym }
+        def referencesInType(tp: Type) = {
+          val bound = tp.collect { case ExistentialType(quantified, _) => quantified }.flatten
+          tp collect { case TypeRef(_, sym, _) if !bound.contains(sym) => sym }
+        }
         // Accessors are known to steal the type of the underlying field without cloning existential symbols at the new owner.
         // This happens in Namer#accessorTypeCompleter. We just look the other way here.
         if (symbolOf(tree).isAccessor)
@@ -377,7 +386,7 @@ abstract class TreeCheckers extends AbstractAnalyzer {
         val treeInfo = infoOf(tree)
         val treeTpe  = typeOf(tree)
 
-        def isOk(sym: Symbol) = treeSym hasTransOwner sym.enclosingSuchThat(x => !x.isTypeParameterOrSkolem) // account for higher order type params
+        def isOk(sym: Symbol) = treeSym hasTransOwner sym.safeOwner.enclosingSuchThat(x => !x.isTypeParameterOrSkolem) // account for higher order type params
         def isEligible(sym: Symbol) = (sym ne NoSymbol) && (
              sym.isTypeParameter
           || sym.isLocalToBlock
