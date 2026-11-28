@@ -1032,8 +1032,16 @@ final class TrieMap[K, V] private (r: AnyRef, rtupd: AtomicReferenceFieldUpdater
   override def knownSize: Int =
     if (nonReadOnly) -1
     else RDCSS_READ_ROOT().knownSize(this)
+  // Answered from one read of the root, without a snapshot: a snapshot starts a new generation, after which the next
+  // operation on each path, lookups included, has to copy that path. The map is empty exactly when the root C-node
+  // is, since no other node is ever empty: a C-node below the root that is left with a single entry is contracted
+  // into a tomb, and an L-node that is left with one becomes a tomb as well.
   override def isEmpty: Boolean =
-    (if (nonReadOnly) readOnlySnapshot() else this).sizeIs == 0 // sizeIs checks knownSize
+    if (nonReadOnly) RDCSS_READ_ROOT().gcasRead(this) match {
+      case cn: CNode[_, _] => cn.array.length == 0
+      case _               => false
+    }
+    else this.sizeIs == 0 // sizeIs checks knownSize
   override protected[this] def className = "TrieMap"
 
   override def lastOption: Option[(K, V)] = if (isEmpty) None else Try(last).toOption
