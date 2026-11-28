@@ -1902,6 +1902,8 @@ abstract class RefChecks extends Transform {
       tree
     }
 
+    private def keepType(tree: Tree, tpe: Type): Tree = atPos(tree.pos)(Typed(tree, TypeTree(tpe))).setType(tpe)
+
     private def transformIf(tree: If): Tree = {
       val If(cond, thenpart, elsepart) = tree
       def unitIfEmpty(t: Tree): Tree =
@@ -1909,8 +1911,15 @@ abstract class RefChecks extends Transform {
 
       cond.tpe match {
         case FoldableConstantType(value) =>
-          val res = if (value.booleanValue) thenpart else elsepart
-          unitIfEmpty(res)
+          val res = unitIfEmpty(if (value.booleanValue) thenpart else elsepart)
+          // The back end cannot select on or unbox an operand of type `Nothing`, nor apply an array operation to one
+          // of type `Null`. A narrower match selector is handled in `Match`.
+          val keep = res.tpe.typeSymbol match {
+            case NothingClass => tree.tpe.typeSymbol != NothingClass
+            case NullClass    => tree.tpe.typeSymbol == ArrayClass
+            case _            => false
+          }
+          if (keep) keepType(res, tree.tpe) else res
         case _ => tree
       }
     }
@@ -2108,7 +2117,9 @@ abstract class RefChecks extends Transform {
             res.transform(this)
 
           case x @ If(_, _, _)  =>
-            transformIf(x).transform(this)
+            val res = transformIf(x)
+            // the surviving branch of a constant `if` gets the checks of its own node
+            if (res eq x) res.transform(this) else transform(res)
 
           case New(tpt) =>
             enterReference(tree.pos, tpt.tpe.typeSymbol)
@@ -2257,7 +2268,14 @@ abstract class RefChecks extends Transform {
             }
             // check the patterns for unfriendly shadowing, patvars bearing PatShadowAttachment
             if (settings.warnPatternShadow) for (cdef <- cases) checkPattern(cdef.pat)
-            tree.transform(this)
+            // The pattern matcher takes the scrutinee type from the selector, which must stay the type the cases were
+            // typed against: reducing a constant `if` can narrow it to a branch's type.
+            val selectorTpe = selector.tpe
+            val selector1 = transform(selector) match {
+              case sel1 if sel1.tpe.widen =:= selectorTpe.widen => sel1
+              case sel1 => keepType(sel1, selectorTpe)
+            }
+            treeCopy.Match(tree, selector1, transformCaseDefs(cases))
 
           // skip refchecks in patterns....
           case CaseDef(pat, guard, body) =>

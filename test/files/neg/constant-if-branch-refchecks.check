@@ -1,0 +1,15 @@
+constant-if-branch-refchecks.scala:11: warning: method old in class Test is deprecated (since 1.0): use y
+  def a = if (C.T) old else 0
+                   ^
+constant-if-branch-refchecks.scala:12: warning: method old in class Test is deprecated (since 1.0): use y
+  def b = if (C.F) 0 else old
+                          ^
+constant-if-branch-refchecks.scala:13: warning: method old in class Test is deprecated (since 1.0): use y
+  def c = if (C.T) (if (C.F) 0 else old) else 1
+                                    ^
+constant-if-branch-refchecks.scala:14: warning: method old in class Test is deprecated (since 1.0): use y
+  def d(s: String) = if (C.T) (if (C.F) s else null) match { case null => old; case _ => 0 } else 1
+                                                                          ^
+error: No warnings can be incurred under -Werror.
+4 warnings
+1 error
