@@ -357,7 +357,38 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
             else prune(in.map(_._2) ++ trees, out, in ++ acc)
         }
 
-        val pruned = prune(List(result.tree), implicitDictionary.map(_._2), Nil)
+        // The entries become the vals of a class, initialized in the order they are declared in. An entry that
+        // refers to another one outside of a by-name argument reads it while it is itself being initialized,
+        // so declare that other entry first. A cycle of such references has no valid order and is left as is.
+        def initializationOrder(entries: List[(Symbol, Tree)]): List[(Symbol, Tree)] = {
+          val syms = entries.map(_._1)
+          def strictRefs(rhs: Tree): List[Symbol] = {
+            val refs = mutable.LinkedHashSet.empty[Symbol]
+            new Traverser {
+              override def traverse(tree: Tree): Unit = tree match {
+                case Apply(fun, args) if fun.tpe != null =>
+                  traverse(fun)
+                  foreach2(args, fun.tpe.params)((arg, param) => if (!param.isByNameParam) traverse(arg))
+                  if (args.lengthCompare(fun.tpe.params.length) > 0) traverseTrees(args.drop(fun.tpe.params.length))
+                case _ =>
+                  if (tree.hasExistingSymbol && syms.contains(tree.symbol)) refs += tree.symbol
+                  super.traverse(tree)
+              }
+            }.traverse(rhs)
+            refs.toList
+          }
+          val ordered = mutable.LinkedHashSet.empty[Symbol]
+          val visiting = mutable.HashSet.empty[Symbol]
+          def visit(entry: (Symbol, Tree)): Unit =
+            if (!ordered(entry._1) && visiting.add(entry._1)) {
+              strictRefs(entry._2).foreach(ref => entries.find(_._1 == ref).foreach(visit))
+              ordered += entry._1
+            }
+          entries.foreach(visit)
+          ordered.toList.map(sym => entries.find(_._1 == sym).get)
+        }
+
+        val pruned = initializationOrder(prune(List(result.tree), implicitDictionary.map(_._2), Nil))
         if (pruned.isEmpty) result
         else if (pruned.exists(_._2 == EmptyTree)) SearchFailure
         else {
