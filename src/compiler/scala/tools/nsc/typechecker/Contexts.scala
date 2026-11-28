@@ -895,6 +895,14 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
       c
     }
 
+    /** The alternatives of `sym` that are accessible as members of `pre`, as `sym.filter(isAccessible(_, pre, superAccess))`.
+     *  Calls `isAccessible` directly when `sym` is not overloaded, the usual case, rather than allocating a closure.
+     */
+    def filterAccessible(sym: Symbol, pre: Type, superAccess: Boolean): Symbol =
+      if (sym.isOverloaded) sym.filter(isAccessible(_, pre, superAccess))
+      else if ((sym eq NoSymbol) || isAccessible(sym, pre, superAccess)) sym
+      else NoSymbol
+
     /** Is `sym` accessible as a member of `pre` in current context? */
     def isAccessible(sym: Symbol, pre: Type, superAccess: Boolean = false): Boolean = {
       lastAccessCheckDetails = ""
@@ -1178,8 +1186,8 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
       val imp1Explicit = imp1 isExplicitImport name
       val imp2Explicit = imp2 isExplicitImport name
       val ambiguous    = if (imp1.depth == imp2.depth) imp1Explicit == imp2Explicit else !imp1Explicit && imp2Explicit
-      val imp1Symbol   = imp1.importedSymbol(name).initialize.filter(isAccessible(_, imp1.qual.tpe, superAccess = false))
-      val imp2Symbol   = imp2.importedSymbol(name).initialize.filter(isAccessible(_, imp2.qual.tpe, superAccess = false))
+      val imp1Symbol   = filterAccessible(imp1.importedSymbol(name).initialize, imp1.qual.tpe, superAccess = false)
+      val imp2Symbol   = filterAccessible(imp2.importedSymbol(name).initialize, imp2.qual.tpe, superAccess = false)
 
       // The types of the qualifiers from which the ambiguous imports come.
       // If the ambiguous name is a value, these must be the same.
@@ -1230,7 +1238,7 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
      */
     private[Contexts] def importedAccessibleSymbol(imp: ImportInfo, sym: => Symbol): Symbol =
       if (isExcludedRootImport(imp)) NoSymbol
-      else sym.filter(s => s.exists && isAccessible(s, imp.qual.tpe, superAccess = false))
+      else filterAccessible(sym.filter(_.exists), imp.qual.tpe, superAccess = false)
 
     private def isExcludedRootImport(imp: ImportInfo): Boolean =
       imp.isRootImport && isMaskedRootImport(unit, imp.qual.symbol)
