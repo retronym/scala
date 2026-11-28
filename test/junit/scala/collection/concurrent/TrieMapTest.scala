@@ -705,4 +705,53 @@ class TrieMapTest {
     assert(!TrieMap.from((1 to 10).map(x => x -> x)).isEmpty)
     assert(!TrieMap.from((1 to 100).map(x => x -> x)).isEmpty)
   }
+
+  // One thread clears the map in a loop while three threads each overwrite their own key. A put returns None only
+  // if a clear emptied the map since the same thread's previous put, so two puts of one thread returning None need
+  // two emptyings. If at most one clear() call overlaps the time from the put before the first None to the second
+  // None, that call emptied the map twice and discarded the entry written in between.
+  @Test
+  def clearEmptiesTheMapOnce(): Unit = {
+    import java.util.concurrent.atomic.{AtomicLong, AtomicReference}
+    val map = new TrieMap[Integer, Integer]
+    val started, finished = new AtomicLong
+    val failure = new AtomicReference[String]
+    @volatile var stop = false
+    def done = stop || failure.get != null
+    val writers = (1 to 3).map { t =>
+      new Thread(() => {
+        val key = Integer.valueOf(t)
+        var finishedBeforePrev = finished.get   // clear() calls finished before the previous put was invoked
+        map.put(key, 0)
+        var finishedBeforeLastNonePrev = -1L    // the same, for the put that preceded the last None
+        var i = 1
+        while (!done) {
+          val finishedBefore = finished.get
+          val r = map.put(key, i)
+          val startedAfter = started.get
+          if (r.isEmpty) {
+            if (finishedBeforeLastNonePrev >= 0 && startedAfter - finishedBeforeLastNonePrev <= 1)
+              failure.compareAndSet(null, s"two puts of key $t returned None while only clear() call number $startedAfter was running")
+            finishedBeforeLastNonePrev = finishedBeforePrev
+          }
+          finishedBeforePrev = finishedBefore
+          i += 1
+        }
+      })
+    }
+    val clearer = new Thread(() => {
+      while (!done) {
+        started.incrementAndGet(); map.clear(); finished.incrementAndGet()
+        var spin = 0
+        while (spin < 2000 && !done) spin += 1
+      }
+    })
+    val threads = clearer +: writers
+    threads.foreach { t => t.setDaemon(true); t.start() }
+    val deadline = System.nanoTime + 3000L * 1000 * 1000
+    while (failure.get == null && System.nanoTime < deadline) Thread.sleep(10)
+    stop = true
+    threads.foreach(_.join(10000))
+    assertEquals(null, failure.get)
+  }
 }
