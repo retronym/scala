@@ -274,4 +274,37 @@ class HashMapTest {
     for ((k, v) <- m) m.addOne(k -> (v + 1))
     assertEquals(List.fill(11)(4), m.values.toList)
   }
+
+  @Test
+  def updateWithModifyingTheMap(): Unit = HashMapTest.checkUpdateWithModifyingTheMap(HashMap.from(_))
+}
+
+object HashMapTest {
+  // A remapping function that modifies the map must either be rejected or have the
+  // effect the generic `Map.updateWith` gives it.
+  def checkUpdateWithModifyingTheMap(mk: Seq[(Int, Int)] => Map[Int, Int]): Unit = {
+    type F = Map[Int, Int] => Option[Int] => Option[Int]
+    val cases = List[(String, Seq[(Int, Int)], Int, F)](
+      ("remove the key, Some", Seq(1 -> 1), 1, m => _ => { m.remove(1); Some(7) }),
+      ("clear, Some", Seq(1 -> 1, 2 -> 2), 1, m => _ => { m.clear(); Some(7) }),
+      ("remove the key, None", Seq(1 -> 1), 1, m => _ => { m.remove(1); None }),
+      ("remove the key from a bucket chain, None", Seq(1 -> 1, 17 -> 17), 1, m => _ => { m.remove(1); None }),
+      ("add the key, Some", Seq(2 -> 2), 1, m => _ => { m.put(1, 5); Some(7) }),
+      ("grow the table, absent key, Some", Seq(2 -> 2), 17, m => _ => { for (i <- 100 to 140) m.put(i, i); Some(7) }),
+    )
+    for ((name, init, key, f) <- cases) {
+      val ref = TreeMap.from(init)
+      val refResult = ref.updateWith(key)(f(ref))
+      val m = mk(init)
+      val result =
+        try Some(m.updateWith(key)(f(m)))
+        catch { case _: java.util.ConcurrentModificationException => None }
+      result.foreach { r =>
+        assertEquals(name, refResult, r)
+        assertEquals(name, ref.toList, m.toList.sorted)
+        assertEquals(name, ref.size, m.size)
+        for (k <- List(1, 2, 17)) assertEquals(s"$name: get($k)", ref.get(k), m.get(k))
+      }
+    }
+  }
 }
