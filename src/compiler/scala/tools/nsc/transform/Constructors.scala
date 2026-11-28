@@ -376,7 +376,8 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
         // statements coming from the original class need retyping in the current context
         debuglog("retyping " + rewritten)
         val duplicator = new specializeTypes.Duplicator(Map.empty)
-        val context = localTyper.context1.asInstanceOf[duplicator.Context]
+        // The statements end up in the constructor: their locals must be locals of the constructor, not members
+        val context = localTyper.context1.make(rewritten, clazz.primaryConstructor, newScope).asInstanceOf[duplicator.Context]
         duplicator.retyped(context, rewritten, genericClazz, clazz, Map.empty)
       }
 
