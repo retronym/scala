@@ -821,7 +821,9 @@ abstract class Erasure extends InfoTransform
                 log(s"transforming inject $arg -> $tref/$argPt")
                 val result = typed(arg, mode, argPt)
                 log(s"transformed inject $arg -> $tref/$argPt = $result:${result.tpe}")
-                return result setType ErasedValueType(tref.sym, result.tpe)
+                // Posterasure replaces `new C(e).x` by `e`, which must not have type Nothing if a member is selected from it.
+                val underlying = if (result.tpe.typeSymbol == NothingClass) argPt else result.tpe
+                return result setType ErasedValueType(tref.sym, underlying)
 
             }
           case tree @ Block(_, _: LabelDef) =>
