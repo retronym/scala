@@ -143,7 +143,15 @@ abstract class ExtensionMethods extends Transform with TypingTransformers {
               .substituteSymbols(origParams, extensionParams)
               .substituteThis(origThis, extensionThis)
               .changeOwner(origMeth, extensionMeth)
-            new SubstututeRecursion(origMeth, extensionMeth, unit).transform(tree)
+            val tree1 = new SubstututeRecursion(origMeth, extensionMeth, unit).transform(tree)
+            // Substituting the type parameters clones the refinement classes in types; select the clones' members.
+            tree1.foreach {
+              case sel @ Select(qual, name) if sel.symbol.exists && sel.symbol.owner.isRefinementClass && qual.tpe != null =>
+                val sym1 = qual.tpe.member(name).suchThat(sym => qual.tpe.memberType(sym) matches sel.tpe)
+                if (sym1.exists && !sym1.isOverloaded && sym1.owner.isRefinementClass) sel.setSymbol(sym1)
+              case _ =>
+            }
+            tree1
           }
 
           val resultType = extensionMono.finalResultType
