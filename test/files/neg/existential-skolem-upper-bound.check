@@ -1,0 +1,31 @@
+existential-skolem-upper-bound.scala:11: error: type mismatch;
+ found   : List[Ref[_]]
+ required: List[Ref[T]] forSome { type T }
+
+    val t1: List[Ref[T]] forSome { type T } = loose               // error
+                                              ^
+existential-skolem-upper-bound.scala:12: error: type mismatch;
+ found   : (Ref[_], Ref[_])
+ required: (Ref[T], Ref[T]) forSome { type T }
+
+    val t2: (Ref[T], Ref[T]) forSome { type T } = pair            // error
+                                                  ^
+existential-skolem-upper-bound.scala:13: error: type mismatch;
+ found   : (Ref[_], Any)
+ required: (Ref[T], T) forSome { type T }
+
+    val t3: (Ref[T], T) forSome { type T } = one                  // error
+                                             ^
+existential-skolem-upper-bound.scala:14: error: type mismatch;
+ found   : Map[Class[_],Ref[_]]
+ required: Map[Class[T],Ref[T]] forSome { type T }
+
+    val t4: Map[Class[T], Ref[T]] forSome { type T } = reg        // error
+                                                       ^
+existential-skolem-upper-bound.scala:15: error: type mismatch;
+ found   : Inv[Inv[_]]
+ required: Inv[Inv[T]] forSome { type T }
+
+    val t5: Inv[Inv[T]] forSome { type T } = inv                  // error
+                                             ^
+5 errors

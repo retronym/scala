@@ -853,7 +853,16 @@ trait Infer extends Checkable {
         val aligned =
           if (isRepeatedParamType(paramTypes.last) && isVarArgsList(ftpe2.params)) paramTypes.init :+ repeatedToSingle(paramTypes.last)
           else paramTypes
-        isApplicable(Nil, ftpe2, aligned, WildcardType)
+        // An argument of an existential type is opened before a method is applied to it (see `adapt`), which lets
+        // a type parameter of `ftpe2` be instantiated to the skolem. Do the same for the parameter types standing in
+        // for arguments here, else the skolems only come into being inside the subtype check, out of reach of the type variables.
+        val opened = aligned.mapConserve { tp =>
+          tp.dealias match {
+            case et: ExistentialType => et.skolemizeExistential
+            case _                   => tp
+          }
+        }
+        isApplicable(Nil, ftpe2, opened, WildcardType)
       }
 
       val res =
