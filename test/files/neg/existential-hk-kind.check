@@ -1,0 +1,14 @@
+existential-hk-kind.scala:12: error: type mismatch;
+ found   : (Ref[String], Ref[Any] => Unit)
+ required: (F[Any], F[Any] => Unit) forSome { type F[+X] }
+
+    val e: (F[Any], F[Any] => Unit) forSome { type F[+X] } = p    // error
+                                                             ^
+existential-hk-kind.scala:17: error: type mismatch;
+ found   : K[Ref]
+ required: K[_[+X]]
+Note: Ref <: [+X]Any, but trait K is invariant in type F.
+You may wish to define F as +F instead. (SLS 4.5)
+    val e: K[F] forSome { type F[+X] } = k                        // error
+                                         ^
+2 errors

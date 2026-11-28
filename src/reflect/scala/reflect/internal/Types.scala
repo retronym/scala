@@ -3271,8 +3271,13 @@ trait Types
       val tvars = quantifiedFresh map (tparam => TypeVar(tparam))
       val underlying1 = underlying.instantiateTypeParams(quantified, tvars) // fuse subst quantified -> quantifiedFresh -> tvars
       op(underlying1) && {
-        solve(tvars, quantifiedFresh, (_ => Invariant), upper = false, depth) &&
-        isWithinBounds(NoPrefix, NoSymbol, quantifiedFresh, tvars map (_.inst))
+        solve(tvars, quantifiedFresh, (_ => Invariant), upper = false, depth) && {
+          val insts = tvars map (_.inst)
+          // unification of a higher-kinded type variable leaves the variances and bounds of the instance's
+          // type parameters unchecked, as `inferMethodInstance` does before it checks the kinds
+          isWithinBounds(NoPrefix, NoSymbol, quantifiedFresh, insts) &&
+            (!quantifiedFresh.exists(_.typeParams.nonEmpty) || kinds.kindsConform(quantifiedFresh, insts, NoPrefix, NoSymbol))
+        }
       }
     }
     override def mapOver(map: TypeMap): Type = {
