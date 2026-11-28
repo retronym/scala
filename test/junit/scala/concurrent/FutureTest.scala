@@ -4,6 +4,7 @@ package scala.concurrent
 import org.junit.Assert.{assertEquals, assertTrue}
 import org.junit.Test
 
+import scala.tools.testkit.AllocationTest
 import scala.tools.testkit.AssertUtil._
 import scala.util.{Success, Try}
 import duration.Duration.{Inf, Undefined}
@@ -12,7 +13,7 @@ import scala.collection.mutable.ListBuffer
 import scala.concurrent.impl.Promise.DefaultPromise
 import scala.util.chaining._
 
-class FutureTest {
+class FutureTest extends AllocationTest {
   @Test
   def testZipWithFailFastBothWays(): Unit = {
     import ExecutionContext.Implicits.global
@@ -303,5 +304,26 @@ class FutureTest {
   @Test def completedWaitUndefined(): Unit = {
     assertThrows[IllegalArgumentException](Await.result(Future.successful(1), Undefined))
     assertThrows[IllegalArgumentException](Await.ready(Future.successful(1), Undefined))
+  }
+
+  // Requests are raced against one long-lived future; the oldest request completes and a new one arrives.
+  // Each completion unregisters its handler from the long-lived future, at a cost that should not depend on the
+  // number of requests in flight.
+  @Test def unregisterCostDoesNotGrowWithCallbacks(): Unit = {
+    implicit val ec: ExecutionContext = ExecutionContext.parasitic
+    val longLived = Promise[Int]()
+    val inFlight = new java.util.ArrayDeque[Promise[Int]]()
+    def arrive(): Unit = {
+      val request = Promise[Int]()
+      Future.firstCompletedOf(List(longLived.future, request.future))
+      inFlight.add(request)
+    }
+    for (_ <- 1 to 4096) arrive()
+    val bytes = allocationInfo {
+      inFlight.poll().success(1)
+      arrive()
+    }.min
+    assertEquals(4096, numTransforms(longLived))
+    assertTrue(s"allocated $bytes bytes per completion", bytes < 4096)
   }
 }
