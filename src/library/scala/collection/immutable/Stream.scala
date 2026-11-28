@@ -74,6 +74,19 @@ sealed abstract class Stream[+A] extends AbstractSeq[A]
     else tail.find(p)
   }
 
+  // Overridden, as in 2.12, so that no frame keeps the head of the stream reachable while the rest is evaluated:
+  // the inherited `LinearSeqOps.length` keeps the receiver in the trait method's and the mixin forwarder's frames.
+  // This loops in its own frame, whose receiver is dead once the loop has been compiled.
+  override def length: Int = {
+    var these = this
+    var len = 0
+    while (!these.isEmpty) {
+      len += 1
+      these = these.tail
+    }
+    len
+  }
+
   override def take(n: Int): Stream[A] = {
     if (n <= 0 || isEmpty) Stream.empty
     else if (n == 1) new Stream.Cons(head, Stream.empty)
