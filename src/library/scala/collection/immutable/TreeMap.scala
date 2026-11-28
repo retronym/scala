@@ -316,6 +316,24 @@ object TreeMap extends SortedMapFactory[TreeMap] {
         new TreeMap[K, V](RB.fromOrderedEntries(sm.iterator, sm.size))
       case _ if it.knownSize == 0 =>
         new TreeMap[K, V]
+      case s: scala.collection.Seq[(K, V)] if s.isInstanceOf[scala.collection.IndexedSeq[_]] || s.isInstanceOf[List[_]] =>
+        // A strict sequence whose keys are already strictly ascending is built in linear time with no further
+        // comparisons. The order is checked in a first pass, which is safe as reading the sequence again evaluates nothing.
+        val i = s.iterator
+        var n = 0
+        var ascending = true
+        if (i.hasNext) {
+          var prev = i.next()._1
+          n = 1
+          while (ascending && i.hasNext) {
+            val k = i.next()._1
+            ascending = ordering.compare(prev, k) < 0
+            prev = k
+            n += 1
+          }
+        }
+        if (ascending) new TreeMap[K, V](RB.fromOrderedEntries(s.iterator, n))
+        else (newBuilder[K, V] ++= s).result()
       case _ =>
         (newBuilder[K, V] ++= it).result()
     }

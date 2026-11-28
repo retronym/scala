@@ -13,6 +13,22 @@ import scala.tools.testkit.AllocationTest
 @annotation.nowarn("msg=Boolean literals should be passed using named argument syntax for parameter selfEqual")
 class TreeMapTest extends AllocationTest {
 
+  @Test def `from of a sorted strict Seq builds the tree without inserting`(): Unit = {
+    var compares = 0
+    val ord: Ordering[String] = (x, y) => { compares += 1; x.compareToIgnoreCase(y) }
+    val n = 1000
+    val sorted = List.tabulate(n)(i => f"$i%05d" -> i)
+    for (s <- List[collection.Seq[(String, Int)]](sorted, sorted.toVector)) {
+      compares = 0
+      val tm = TreeMap.from(s)(ord)
+      assertEquals(n - 1, compares)
+      assertEquals(sorted, tm.toList)
+    }
+    // a duplicate key under the ordering: insert one by one, as before
+    val dup = List("a" -> 1, "b" -> 2, "B" -> 3, "c" -> 4)
+    assertEquals(dup.foldLeft(TreeMap.empty[String, Int](ord))(_ + _).toList, TreeMap.from(dup)(ord).toList)
+  }
+
   @Test
   def hasCorrectDropAndTakeMethods(): Unit = {
     val tree = TreeMap(1 -> "a", 2 -> "b", 3 -> "c")
