@@ -17,7 +17,7 @@ object VectorMapProperties extends Properties("immutable.VectorMap") {
     !m.isEmpty ==> {
       val vm = VectorMap.from(m)
       val last = vm.keys.last
-      vm.fields(vm.underlying(last)._1) == last
+      vm.fields(vm.underlying(last).ordinal) == last
     }
   }
 
@@ -34,10 +34,10 @@ object VectorMapProperties extends Properties("immutable.VectorMap") {
       val vm      = VectorMap.from(v)
       val removed = vm - random._1
       ("all map keys are located at the specified indices in the vector" |:
-        removed.underlying.forall { case (k, (s, v)) => removed.fields(s) == k }) &&
+        removed.underlying.forall { case (k, e) => removed.fields(e.ordinal) == k }) &&
         ("all elements in the vector are in the map with the correct associated indices" |:
           removed.fields.zipWithIndex.forall {
-            case (k: K, s) => removed.underlying(k)._1 == s
+            case (k: K, s) => removed.underlying(k).ordinal == s
             case _         => true
           })
     }

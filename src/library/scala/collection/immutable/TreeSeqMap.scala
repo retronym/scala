@@ -83,24 +83,25 @@ final class TreeSeqMap[K, +V] private (
       case e if ordinal == -1 && (orderedBy == OrderBy.Modification || e.isEmpty) =>
         // Reinsert into fresh instance to restart ordinal counting, expensive but only done after 2^32 updates.
         TreeSeqMap.empty[K, V1](orderedBy) ++ this + (key -> value)
-      case Some((o, _)) if orderedBy == OrderBy.Insertion =>
+      case Some(e) if orderedBy == OrderBy.Insertion =>
+        val o = e.ordinal
         new TreeSeqMap(
           ordering.include(o, key),
-          mapping.updated[(Int, V1)](key, (o, value)),
+          mapping.updated[SeqMapEntry[V1]](key, new SeqMapEntry(o, value)),
           ordinal, // Do not increment the ordinal since the key is already present, i.e. o <= ordinal.
           orderedBy)
-      case Some((o, _)) =>
+      case Some(e) =>
         val o1 = increment(ordinal)
         new TreeSeqMap(
-          ordering.exclude(o).append(o1, key),
-          mapping.updated[(Int, V1)](key, (o1, value)),
+          ordering.exclude(e.ordinal).append(o1, key),
+          mapping.updated[SeqMapEntry[V1]](key, new SeqMapEntry(o1, value)),
           o1,
           orderedBy)
       case None =>
         val o1 = increment(ordinal)
         new TreeSeqMap(
           ordering.append(o1, key),
-          mapping.updated[(Int, V1)](key, (o1, value)),
+          mapping.updated[SeqMapEntry[V1]](key, new SeqMapEntry(o1, value)),
           o1,
           orderedBy)
     }
@@ -108,9 +109,9 @@ final class TreeSeqMap[K, +V] private (
 
   def removed(key: K): TreeSeqMap[K, V] = {
     mapping.get(key) match {
-      case Some((o, _)) =>
+      case Some(e) =>
         new TreeSeqMap(
-          ordering.exclude(o),
+          ordering.exclude(e.ordinal),
           mapping.removed(key),
           ordinal,
           orderedBy)
@@ -121,10 +122,10 @@ final class TreeSeqMap[K, +V] private (
 
   def refresh(key: K): TreeSeqMap[K, V] = {
     mapping.get(key) match {
-      case Some((o, _)) =>
+      case Some(e) =>
         val o1 = increment(ordinal)
         new TreeSeqMap(
-          ordering.exclude(o).append(o1, key),
+          ordering.exclude(e.ordinal).append(o1, key),
           mapping,
           o1,
           orderedBy)
@@ -133,7 +134,10 @@ final class TreeSeqMap[K, +V] private (
     }
   }
 
-  def get(key: K): Option[V] = mapping.get(key).map(value)
+  def get(key: K): Option[V] = mapping.get(key) match {
+    case Some(e) => Some(e.value)
+    case None    => None
+  }
 
   def iterator: Iterator[(K, V)] = new AbstractIterator[(K, V)] {
     private[this] val iter = ordering.iterator
@@ -156,7 +160,7 @@ final class TreeSeqMap[K, +V] private (
 
     override def hasNext: Boolean = iter.hasNext
 
-    override def next(): V = value(binding(iter.next()))
+    override def next(): V = mapping(iter.next()).value
   }
 
   override def contains(key: K): Boolean = mapping.contains(key)
@@ -213,7 +217,7 @@ final class TreeSeqMap[K, +V] private (
         }
         while (i < u) {
           val k = iter.next()
-          bdr.addOne((k, mapping(k)._2))
+          bdr.addOne((k, mapping(k).value))
           i += 1
         }
         bdr.result()
@@ -226,7 +230,7 @@ final class TreeSeqMap[K, +V] private (
     val iter = ordering.iterator
     while (iter.hasNext) {
       val k = iter.next()
-      val (_, v) = mapping(k)
+      val v = mapping(k).value
       val (k2, v2) = f((k, v))
       bdr.addOne((k2, v2))
     }
@@ -238,7 +242,7 @@ final class TreeSeqMap[K, +V] private (
     val iter = ordering.iterator
     while (iter.hasNext) {
       val k = iter.next()
-      val (_, v) = mapping(k)
+      val v = mapping(k).value
       val jter = f((k, v)).iterator
       while (jter.hasNext) {
         val (k2, v2) = jter.next()
@@ -253,7 +257,7 @@ final class TreeSeqMap[K, +V] private (
     val iter = ordering.iterator
     while (iter.hasNext) {
       val k = iter.next()
-      val (_, v) = mapping(k)
+      val v = mapping(k).value
       pf.runWith({ case (k2, v2) => bdr.addOne((k2, v2)) })((k, v))
     }
     bdr.result()
@@ -267,15 +271,15 @@ final class TreeSeqMap[K, +V] private (
     while (iter.hasNext) {
       val (k, v2) = iter.next()
       mng.get(k) match {
-        case Some((o, v)) =>
-          if (orderedBy == OrderBy.Insertion && v != v2) mng = mng.updated(k, (o, v2))
+        case Some(e) =>
+          if (orderedBy == OrderBy.Insertion && e.value != v2) mng = mng.updated(k, new SeqMapEntry(e.ordinal, v2))
           else if (orderedBy == OrderBy.Modification) {
-            mng = mng.updated(k, (ord, v2))
-            ong = ong.exclude(o).append(ord, k)
+            mng = mng.updated(k, new SeqMapEntry(ord, v2))
+            ong = ong.exclude(e.ordinal).append(ord, k)
             ord = increment(ord)
           }
         case None =>
-          mng = mng.updated(k, (ord, v2))
+          mng = mng.updated(k, new SeqMapEntry(ord, v2))
           ong = ong.append(ord, k)
           ord = increment(ord)
       }
@@ -283,8 +287,7 @@ final class TreeSeqMap[K, +V] private (
     new TreeSeqMap[K, V2](ong, mng, ord, orderedBy)
   }
 
-  @`inline` private[this] def value(p: (_, V)) = p._2
-  @`inline` private[this] def binding(k: K) = mapping(k).copy(_1 = k)
+  @`inline` private[this] def binding(k: K): (K, V) = (k, mapping(k).value)
 }
 object TreeSeqMap extends MapFactory[TreeSeqMap] {
   sealed trait OrderBy
@@ -314,7 +317,7 @@ object TreeSeqMap extends MapFactory[TreeSeqMap] {
   def newBuilder[K, V](orderedBy: OrderBy): mutable.Builder[(K, V), TreeSeqMap[K, V]] = new Builder[K, V](orderedBy)
 
   final class Builder[K, V](orderedBy: OrderBy) extends mutable.Builder[(K, V), TreeSeqMap[K, V]] {
-    private[this] val bdr = new MapBuilderImpl[K, (Int, V)]
+    private[this] val bdr = new MapBuilderImpl[K, SeqMapEntry[V]]
     private[this] var ong = Ordering.empty[K]
     private[this] var ord = 0
     private[this] var aliased: TreeSeqMap[K, V] = _
@@ -325,17 +328,17 @@ object TreeSeqMap extends MapFactory[TreeSeqMap] {
         aliased = aliased.updated(key, value)
       } else {
         bdr.getOrElse(key, null) match {
-          case (o, v) =>
-            if (orderedBy == OrderBy.Insertion && v != value) bdr.addOne(key, (o, value))
-            else if (orderedBy == OrderBy.Modification) {
-              bdr.addOne(key, (ord, value))
-              ong = ong.exclude(o).appendInPlace(ord, key)
-              ord = increment(ord)
-            }
           case null =>
-            bdr.addOne(key, (ord, value))
+            bdr.addOne(key, new SeqMapEntry(ord, value))
             ong = ong.appendInPlace(ord, key)
             ord = increment(ord)
+          case e =>
+            if (orderedBy == OrderBy.Insertion && e.value != value) bdr.addOne(key, new SeqMapEntry(e.ordinal, value))
+            else if (orderedBy == OrderBy.Modification) {
+              bdr.addOne(key, new SeqMapEntry(ord, value))
+              ong = ong.exclude(e.ordinal).appendInPlace(ord, key)
+              ord = increment(ord)
+            }
         }
       }
       this
@@ -356,7 +359,7 @@ object TreeSeqMap extends MapFactory[TreeSeqMap] {
     }
   }
 
-  private type Mapping[K, +V] = Map[K, (Int, V)]
+  private type Mapping[K, +V] = Map[K, SeqMapEntry[V]]
   @annotation.unused
   private val Mapping = Map
 

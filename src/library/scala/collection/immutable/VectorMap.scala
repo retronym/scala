@@ -30,7 +30,7 @@ import scala.collection.generic.DefaultSerializable
   */
 final class VectorMap[K, +V] private (
     private[immutable] val fields: Vector[Any], // K | Tombstone | Null
-    private[immutable] val underlying: Map[K, (Int, V)],
+    private[immutable] val underlying: Map[K, SeqMapEntry[V]],
     dropped: Int)
   extends AbstractMap[K, V]
     with SeqMap[K, V]
@@ -42,7 +42,7 @@ final class VectorMap[K, +V] private (
 
   override protected[this] def className: String = "VectorMap"
 
-  private[immutable] def this(fields: Vector[K], underlying: Map[K, (Int, V)]) = this(fields, underlying, 0)
+  private[immutable] def this(fields: Vector[K], underlying: Map[K, SeqMapEntry[V]]) = this(fields, underlying, 0)
 
   override val size = underlying.size
 
@@ -52,10 +52,10 @@ final class VectorMap[K, +V] private (
 
   def updated[V1 >: V](key: K, value: V1): VectorMap[K, V1] = {
     underlying.get(key) match {
-      case Some((slot, _)) =>
-        new VectorMap(fields, underlying.updated[(Int, V1)](key, (slot, value)), dropped)
+      case Some(e) =>
+        new VectorMap(fields, underlying.updated[SeqMapEntry[V1]](key, new SeqMapEntry(e.ordinal, value)), dropped)
       case None =>
-        new VectorMap(fields :+ key, underlying.updated[(Int, V1)](key, (fields.length + dropped, value)), dropped)
+        new VectorMap(fields :+ key, underlying.updated[SeqMapEntry[V1]](key, new SeqMapEntry(fields.length + dropped, value)), dropped)
     }
   }
 
@@ -66,7 +66,7 @@ final class VectorMap[K, +V] private (
     new Map.WithDefault[K, V1](this, _ => d)
 
   def get(key: K): Option[V] = underlying.get(key) match {
-    case Some(v) => Some(v._2)
+    case Some(e) => Some(e.value)
     case None    => None
   }
 
@@ -108,7 +108,7 @@ final class VectorMap[K, +V] private (
     override def next(): (K, V) =
       if (!hasNext) Iterator.empty.next()
       else {
-        val result = (key, underlying(key)._2)
+        val result = (key, underlying(key).value)
         advance()
         result
       }
@@ -131,8 +131,8 @@ final class VectorMap[K, +V] private (
       val sz = fs.size
       underlying.get(key) match {
         case Some(_) if size == 1 => empty
-        case Some((slot, _)) =>
-          val s = slot - dropped
+        case Some(e) =>
+          val s = e.ordinal - dropped
 
           // Calculate next of kin
           val next =
@@ -182,7 +182,7 @@ final class VectorMap[K, +V] private (
       case Tombstone(d) => throw new IllegalStateException("tombstone indicate wrong position: " + d)
       case k => k.asInstanceOf[K]
     }
-    (last, underlying(last)._2)
+    (last, underlying(last).value)
   }
 
   override def lastOption: Option[(K, V)] = {
@@ -217,7 +217,7 @@ final class VectorMap[K, +V] private (
 
   override def values: Iterable[V] = new Iterable[V] with IterableFactoryDefaults[V, Iterable] with DefaultSerializable {
     override def knownSize: Int = VectorMap.this.knownSize
-    override def iterator: Iterator[V] = keysIterator.map(underlying(_)._2)
+    override def iterator: Iterator[V] = keysIterator.map(underlying(_).value)
   }
 }
 
@@ -231,7 +231,7 @@ object VectorMap extends MapFactory[VectorMap] {
   private[VectorMap] final case class Tombstone(distance: Int)
 
   private[this] final val EmptyMap: VectorMap[Nothing, Nothing] =
-    new VectorMap[Nothing, Nothing](Vector.empty[Nothing], HashMap.empty[Nothing, (Int, Nothing)])
+    new VectorMap[Nothing, Nothing](Vector.empty[Nothing], HashMap.empty[Nothing, SeqMapEntry[Nothing]])
 
   def empty[K, V]: VectorMap[K, V] = EmptyMap.asInstanceOf[VectorMap[K, V]]
 
@@ -246,7 +246,7 @@ object VectorMap extends MapFactory[VectorMap] {
 
 private[immutable] final class VectorMapBuilder[K, V] extends mutable.Builder[(K, V), VectorMap[K, V]] {
   private[this] val vectorBuilder = new VectorBuilder[K]
-  private[this] val mapBuilder = new MapBuilderImpl[K, (Int, V)]
+  private[this] val mapBuilder = new MapBuilderImpl[K, SeqMapEntry[V]]
   private[this] var aliased: VectorMap[K, V] = _
 
   override def clear(): Unit = {
@@ -266,12 +266,12 @@ private[immutable] final class VectorMapBuilder[K, V] extends mutable.Builder[(K
       aliased = aliased.updated(key, value)
     } else {
       mapBuilder.getOrElse(key, null) match {
-        case (slot, _) =>
-          mapBuilder.addOne(key, (slot, value))
         case null =>
           val vectorSize = vectorBuilder.size
           vectorBuilder.addOne(key)
-          mapBuilder.addOne(key, (vectorSize, value))
+          mapBuilder.addOne(key, new SeqMapEntry(vectorSize, value))
+        case e =>
+          mapBuilder.addOne(key, new SeqMapEntry(e.ordinal, value))
       }
     }
     this
@@ -279,3 +279,8 @@ private[immutable] final class VectorMapBuilder[K, V] extends mutable.Builder[(K
 
   override def addOne(elem: (K, V)): this.type = addOne(elem._1, elem._2)
 }
+
+/** The value of an entry of a [[VectorMap]] or [[TreeSeqMap]] with its position (slot or ordinal).
+ *  A dedicated class rather than `(Int, V)`, which would box the `Int`.
+ */
+private[immutable] final class SeqMapEntry[+V](val ordinal: Int, val value: V)

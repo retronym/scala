@@ -179,4 +179,22 @@ class VectorMapTest {
     assertEquals(List("a", "c"), roundTrip(m.values).toList)
     assertEquals(sm.values.toList, roundTrip(sm.values).toList)
   }
+
+  // The position of an entry is an unboxed Int in a SeqMapEntry, not a boxed Integer in a Tuple2.
+  @Test
+  def entryLayout(): Unit = {
+    val fields = classOf[SeqMapEntry[_]].getDeclaredFields.toList.map(f => s"${f.getName}: ${f.getType.getName}").sorted
+    assertEquals(List("ordinal: int", "value: java.lang.Object"), fields)
+    val vm = VectorMap((1 to 1000).map(i => i -> i.toString): _*)
+    assertTrue(vm.underlying.values.forall(_.getClass == classOf[SeqMapEntry[_]]))
+    val mappingField = classOf[TreeSeqMap[_, _]].getDeclaredFields.find(_.getName.endsWith("mapping")).get
+    mappingField.setAccessible(true)
+    for (ts <- List(TreeSeqMap((1 to 1000).map(i => i -> i.toString): _*), TreeSeqMap.empty[Int, String](TreeSeqMap.OrderBy.Modification) ++ (1 to 1000).map(i => i -> i.toString))) {
+      val mapping = mappingField.get(ts).asInstanceOf[Map[Int, AnyRef]]
+      assertEquals(1000, mapping.size)
+      assertTrue(mapping.values.forall(_.getClass == classOf[SeqMapEntry[_]]))
+    }
+    val sm4 = SeqMap(1 -> "a", 2 -> "b", 3 -> "c", 4 -> "d").updated(5, "e")
+    assertTrue(sm4.asInstanceOf[VectorMap[Int, String]].underlying.values.forall(_.getClass == classOf[SeqMapEntry[_]]))
+  }
 }
