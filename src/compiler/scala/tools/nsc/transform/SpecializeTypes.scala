@@ -896,7 +896,12 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
       }
     }
 
-    val subclasses = specializations(clazz.info.typeParams).filter(satisfiable(_))
+    // A class that is local to a block is not specialized, scala/bug#8287. A variant is entered into the scope of
+    // the owner of the class, and its tree is added to the enclosing template or package (`implSpecClasses`).
+    // A term has no scope to enter it into, and a block is not given the tree.
+    val subclasses =
+      if (clazz.owner.isTerm) Nil
+      else specializations(clazz.info.typeParams).filter(satisfiable(_))
     subclasses foreach {
       env =>
       val spc      = toSpecializedClass(env, decls1)
