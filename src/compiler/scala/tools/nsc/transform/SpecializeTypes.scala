@@ -1077,7 +1077,15 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
           }
         }
       }
-      if (!overriding.isParamAccessor) {
+      // Only a member of a base class whose type mentions specialized type variables can be
+      // the `overridden` we are after. Looking for one by name in the base classes is much
+      // cheaper than `allOverriddenSymbols`, which matches the member types in every base
+      // class, and rules out nearly all members.
+      def mayOverrideSpecialized = !overriding.isConstructor && !overriding.isClass && overriding.owner.ancestors.exists { bc =>
+        val decl = bc.info.nonPrivateDecl(overriding.name)
+        decl != NoSymbol && decl.alternatives.exists(alt => specializedTypeVars(alt.info).nonEmpty)
+      }
+      if (!overriding.isParamAccessor && mayOverrideSpecialized) {
         for (overridden <- overriding.allOverriddenSymbols) {
           val stvars = specializedTypeVars(overridden.info)
           if (stvars.nonEmpty) {
