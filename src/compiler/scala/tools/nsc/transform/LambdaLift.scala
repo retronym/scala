@@ -304,14 +304,15 @@ abstract class LambdaLift extends InfoTransform {
                   // TODO do we need to preserve pre-erasure info for the accessors (and a NullaryMethodType for the getter)?
                   // can't have a field in the trait, so add a setter
                   val setter = owner.newMethod(nme.expandedSetterName(proxyName.setterName, owner), fv.pos, accessorFlags)
-                  setter setInfoAndEnter MethodType(setter.newSyntheticValueParams(List(fv.info)), UnitTpe)
+                  setter setInfo MethodType(setter.newSyntheticValueParams(List(fv.info)), UnitTpe)
+                  enterMember(owner, setter)
 
                   // the getter serves as the proxy -- entered below
                   owner.newMethod(proxyName.getterName, fv.pos, accessorFlags | STABLE) setInfo MethodType(Nil, fv.info)
                 } else
                   owner.newValue(proxyName.toTermName, fv.pos, newFlags | PrivateLocal) setInfo fv.info
 
-              if (owner.isClass) owner.info.decls enter proxy
+              if (owner.isClass) enterMember(owner, proxy)
               proxy
             }
         }
@@ -481,8 +482,18 @@ abstract class LambdaLift extends InfoTransform {
       // TODO: this modifies the ClassInfotype of the enclosing class, which is associated with another phase (explicitouter).
       // This breaks type history: in a phase travel to before lambda lift, the ClassInfoType will contain lifted classes.
       sym.owner.info.decls enterUnique sym
+      // flatten's info transform keeps only the terms of a class's members; it moves classes to the package
+      if (sym.isTerm) sym.owner.laterDecls.foreach(_ enter sym)
       debuglog("lifted: " + sym + " from " + oldOwner + " to " + sym.owner)
       EmptyTree
+    }
+
+    /** Enter `sym` in `owner`'s members, including those of infos already computed for later
+     *  phases (see `Symbol.laterDecls`).
+     */
+    private def enterMember(owner: Symbol, sym: Symbol): Unit = {
+      owner.info.decls enter sym
+      owner.laterDecls.foreach(_ enter sym)
     }
 
     private def postTransform(tree: Tree, isBoxedRef: Boolean = false): Tree = {
