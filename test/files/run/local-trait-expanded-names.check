@@ -1,0 +1,19 @@
+outer outer
+inner inner
+outer
+inner
+member 1
+local 2
+outer outer outer outer
+inner inner inner inner
+inner outer base
+first
+second
+outer outer
+inner inner
+captured private
+captured private
+other
+this
+other
+this

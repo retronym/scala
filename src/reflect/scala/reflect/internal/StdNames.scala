@@ -451,7 +451,31 @@ trait StdNames {
     def isLeftAssoc(operator: Name) = operator.nonEmpty && (operator.endChar != ':')
 
     private def expandedNameInternal(name: TermName, base: Symbol, separator: String): TermName =
-      newTermNameCached(base.fullName('$') + separator + name)
+      newTermNameCached(expandedNamePrefix(base) + separator + name)
+
+    /** The prefix of a name expanded relative to `base`: its full name, except that a class that is local to a
+     *  block needs a unique name to go by.
+     *
+     *  Such a class is only renamed to something unique by lambdalift, whereas earlier phases already expand names
+     *  relative to it, which would clash in a class that inherits from two local classes of the same name. So a name
+     *  is drawn from a counter of its own (`T$local1`), which leaves the names of the classes unchanged. The prefix
+     *  is recorded, as phases after lambdalift must find the members under the same names.
+     */
+    private def expandedNamePrefix(base: Symbol): String =
+      base.attachments.get[ExpandedNamePrefix] match {
+        case Some(cached) => cached.prefix
+        case _ =>
+          freshNameCreatorForLocalClasses match {
+            case Some(fresh) if base.isClass && !base.hasPackageFlag && base.ownersIterator.exists(_.isTerm) =>
+              val simpleName =
+                if (base.isLocalToBlock) fresh.newName(base.name.toString + NAME_JOIN_STRING + "local")
+                else base.name.toString
+              val prefix = expandedNamePrefix(base.effectiveOwner.enclClass) + "$" + simpleName
+              base.updateAttachment(ExpandedNamePrefix(prefix))
+              prefix
+            case _ => base.fullName('$')
+          }
+      }
 
     /** The expanded name of `name` relative to this class `base`
      */

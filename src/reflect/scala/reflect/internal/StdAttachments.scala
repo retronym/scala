@@ -195,4 +195,9 @@ trait StdAttachments {
 
   /** Force desugaring Match trees, don't emit switches. Attach to DefDef trees or their symbol. */
   case object ForceMatchDesugar extends PlainAttachment
+
+  /** The prefix of the names expanded relative to a class that is, or is nested in, a class local to a block.
+   *  See `nme.expandedName`.
+   */
+  case class ExpandedNamePrefix(prefix: String) extends PlainAttachment
 }
