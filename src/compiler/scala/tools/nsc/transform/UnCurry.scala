@@ -195,6 +195,7 @@ abstract class UnCurry extends InfoTransform
         import treeInfo.{catchesThrowable, isSyntheticCase}
         for {
           Try(_, catches, _) <- body
+          if !catches.headOption.exists(c => nonLocalReturnRethrows(c.pat.symbol))
           cdef <- catches
           if catchesThrowable(cdef) && !isSyntheticCase(cdef)
         } {
@@ -203,6 +204,37 @@ abstract class UnCurry extends InfoTransform
 
         Block(List(keyDef), tryCatch)
       }
+    }
+
+// ------ Returns from a lifted try -------------------------------------------------
+
+    /** The methods that `liftTree` has created. */
+    private val liftedTrees = mutable.HashSet[Symbol]()
+
+    /** The targets of the returns transformed so far in the current `try` block that are non-local only because
+     *  they are in a lifted `try`. See `isLiftedReturn`.
+     */
+    private var liftedReturnTargets: List[Symbol] = Nil
+
+    /** The variables bound by the handlers that `rethrowNonLocalReturn` adds. */
+    private val nonLocalReturnRethrows = mutable.HashSet[Symbol]()
+
+    /** Is `ret`, a non-local return, non-local only because it is in a lifted `try`, not in a closure or lazy val? */
+    private def isLiftedReturn(ret: Return) =
+      currentOwner.ownerChain.takeWhile(_ != ret.symbol).forall(o =>
+        liftedTrees(o) || o.isTerm && !o.isMethod && !o.isModule && !o.isLazy && !o.isAnonymousFunction)
+
+    /** Prepend a handler that rethrows NonLocalReturnControl to the handlers of `tree`, a `try` whose block
+     *  contains a `return` that is non-local only because it is in a lifted `try`. Written in place, the `return`
+     *  would not be seen by these handlers (scala/bug#10820).
+     */
+    private def rethrowNonLocalReturn(tree: Try): Try = {
+      val ex = currentOwner.newValue(unit.freshTermName("ex"), tree.pos.focus, SYNTHETIC) setInfo nonLocalReturnExceptionType(AnyTpe)
+      nonLocalReturnRethrows += ex
+      val argType = AnyTpe withAnnotation (AnnotationInfo marker UncheckedClass.tpe)
+      val Try(_, rethrow :: Nil, _) = (localTyper.typedPos(tree.pos.focus)(
+        Try(Literal(Constant(())), gen.mkBindForCase(ex, NonLocalReturnControlClass, List(argType)) -> Throw(Ident(ex)))): @unchecked)
+      treeCopy.Try(tree, tree.block, rethrow :: tree.catches, tree.finalizer)
     }
 
 // ------ Transforming anonymous functions and by-name-arguments ----------------
@@ -428,6 +460,7 @@ abstract class UnCurry extends InfoTransform
         debuglog("lifting tree at: " + (tree.pos))
         val sym = currentOwner.newMethod(unit.freshTermName(nme.LIFTED_TREE), tree.pos, Flag.ARTIFACT)
         sym.setInfo(MethodType(List(), tree.tpe))
+        liftedTrees += sym
         tree.changeOwner(currentOwner, sym)
         localTyper.typedPos(tree.pos)(Block(
           List(DefDef(sym, ListOfNil, tree)),
@@ -531,9 +564,17 @@ abstract class UnCurry extends InfoTransform
             // that values on the stack are 'lost' does not matter
             super.transform(tree)
 
-          case Try(block, catches, finalizer) =>
+          case tree @ Try(block, catches, finalizer) =>
             if (needTryLift) transform(liftTree(tree))
-            else super.transform(tree)
+            else {
+              val saved = liftedReturnTargets
+              liftedReturnTargets = Nil
+              val block1 = transform(block)
+              val rethrow = liftedReturnTargets.exists(currentOwner.ownerChain.contains)
+              liftedReturnTargets :::= saved
+              val tree1 = treeCopy.Try(tree, block1, transformCaseDefs(catches), transform(finalizer))
+              if (rethrow) rethrowNonLocalReturn(tree1) else tree1
+            }
 
           case CaseDef(pat, guard, body) =>
             val pat1 = transform(pat)
@@ -656,6 +697,7 @@ abstract class UnCurry extends InfoTransform
           log(s"non-local return from ${currentOwner.enclMethod} to ${ret.symbol}")
           if (settings.warnNonlocalReturn)
             runReporting.warning(ret.pos, s"return statement uses an exception to pass control to the caller of the enclosing named ${ret.symbol}", WarningCategory.LintNonlocalReturn, ret.symbol)
+          if (isLiftedReturn(ret)) liftedReturnTargets ::= ret.symbol
           atPos(ret.pos)(nonLocalReturnThrow(expr, ret.symbol))
         case TypeTree() =>
           tree

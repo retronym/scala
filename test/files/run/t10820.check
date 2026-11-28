@@ -1,0 +1,81 @@
+operand: 3, 5
+notLifted: 3, 5
+argument: body, returned
+byNameArg: body, handler
+strictByName: body, handler
+assignField: body, returned
+inWhile: 012, returned0
+inDoWhile: 012, returned0
+inGuard: body, returned
+interpolated: <body>, returned
+inSynchronized: body, returned
+inSynchronizedOperand: <body, returned
+constructorArg: body, returned
+inHandler: handler, returned
+inFinally: body, returned
+inFinallyCaughtOutside: body, returned
+  finally
+  finally
+withFinally: body, returned
+inClosure: body, handler
+inClosureAndDirect: direct, returned
+inNestedTry: body, returned
+caseWildcard: body, returned
+caseThrowable: body, returned
+caseBoundThrowable: body, returned
+caseNonFatal: body, returned
+partialFunction: body, returned
+noMatch: body, returned
+rethrows: body, returned
+controlThrowable: body, returned
+otherThrowable: body, handler
+nested(false, false, false): body 3
+nested(false, false, true): returned 3
+nested(false, true, false): returned 2
+nested(false, true, true): returned 2
+nested(true, false, false): returned 1
+nested(true, false, true): returned 1
+nested(true, true, false): returned 1
+nested(true, true, true): returned 1
+enclosing: 3, 5
+  finally
+  finally
+enclosingFinally: 3, 5
+  body
+  handler
+tryInClosure: end, end
+lazyVal: body, handler
+localMethod: <body>, <returned>
+  finally
+twoDepthsFinally(false, false): 3
+twoDepthsSynchronized(false, false): 3
+  finally
+twoDepthsLifted(false, false): 3
+  finally
+twoDepthsFinally(false, true): 5
+twoDepthsSynchronized(false, true): 5
+  finally
+twoDepthsLifted(false, true): 5
+  finally
+twoDepthsFinally(true, false): 9
+twoDepthsSynchronized(true, false): 9
+  finally
+twoDepthsLifted(true, false): 9
+  finally
+twoDepthsFinally(true, true): 9
+twoDepthsSynchronized(true, true): 9
+  finally
+twoDepthsLifted(true, true): 9
+  finally
+  finally
+inMatch: body, returned
+  not returned
+unit: (), ()
+nothing: not thrown, thrown
+nothingTry: handler, returned
+primitive: 3, 5
+valueClass: 2, 5
+byNameFunction: body, returned
+generic: body, returned
+specialized: 2 body, 5 returned
+valueClassMethod: body, returned
