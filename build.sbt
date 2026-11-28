@@ -38,6 +38,7 @@ import scala.build._, VersionUtil._
 val junitDep             = "junit"                          % "junit"                            % "4.13.2"
 val junitInterfaceDep    = "com.github.sbt"                 % "junit-interface"                  % "0.13.3"                          % Test
 val scalacheckDep        = "org.scalacheck"                %% "scalacheck"                       % "1.20.0"                          % Test
+val lincheckDep          = "org.jetbrains.kotlinx"          % "lincheck-jvm"                     % "2.39"                            % Test // `lincheck` is an empty Gradle-metadata-only facade
 val jolDep               = "org.openjdk.jol"                % "jol-core"                         % "0.16"
 val asmDep               = "org.scala-lang.modules"         % "scala-asm"                        % versionProps("scala-asm.version")
 val jlineVersion         = versionProps("jline.version")
