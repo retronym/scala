@@ -48,4 +48,20 @@ class SeqViewTest {
     assertEquals(10, sut.sum)
     assertThrows[IllegalStateException](sut.sum)
   }
+
+  @Test
+  def `sorting a sorted view keeps the order of elements the new ordering ties`(): Unit = {
+    val data      = List((1, "a"), (0, "x"), (1, "b"), (1, "c"))
+    val byKey     = Ordering.by[(Int, String), Int](_._1)
+    val allEqual  = Ordering.by[(Int, String), Int](_ => 0)
+    val byLetter  = Ordering.by[(Int, String), String](_._2)
+    for (first <- List(byKey, byKey.reverse, byLetter); second <- List(byKey, byKey.reverse, allEqual, first, first.reverse)) {
+      assertEquals(data.sorted(first).sorted(second), data.view.sorted(first).sorted(second).toList)
+      assertEquals(data.sorted(first).reverse.sorted(second), data.view.sorted(first).reverse.sorted(second).toList)
+      val forced = data.view.sorted(first)
+      forced.head
+      assertEquals(data.sorted(first).sorted(second), forced.sorted(second).toList)
+      assertEquals(data.sorted(first).reverse.sorted(second), forced.reverse.sorted(second).toList)
+    }
+  }
 }
