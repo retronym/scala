@@ -1445,6 +1445,25 @@ trait Implicits extends splain.SplainData {
         case x => throw new MatchError(x)
       }
 
+      /* Add the cached parts of a static class to the implicit info map. A class of the cached map can have an
+       * entry in `infoMap` already: an inner class that was reached through another prefix. The companions for
+       * those prefixes stay in the implicit scope, with the members that `getClassParts` keeps when a class is
+       * reached through a second prefix.
+       */
+      def addCachedParts(cached: InfoMap)(implicit infoMap: InfoMap): Unit =
+        if (infoMap.isEmpty) infoMap ++= cached
+        else cached.foreachEntry { (sym, infos) =>
+          val symInfos = infoMap.getOrElse(sym, Nil)
+          infoMap(sym) =
+            if (symInfos.isEmpty || (symInfos eq infos)) infos
+            else {
+              val kept = symInfos.filter { info =>
+                !info.isSearchedPrefix && info.dependsOnPrefix && !infos.exists(_.pre.prefix =:= info.pre.prefix)
+              }
+              if (kept.isEmpty) infos else infos ::: kept
+            }
+        }
+
       /* Populate implicit info map by traversing all parts of type `tp`.
        * This method is performance critical.
        * @param tp   The type for which we want to traverse parts
@@ -1458,11 +1477,11 @@ trait Implicits extends splain.SplainData {
           case TypeRef(pre, sym, args) =>
             if (sym.isClass && !sym.isRoot) {
               if (sym.isStatic && !pending.contains(sym))
-                infoMap ++= infoMapCache.getOrElseUpdate(sym, {
+                addCachedParts(infoMapCache.getOrElseUpdate(sym, {
                   val result = new InfoMap
                   getClassParts(sym.tpeHK)(result, new mutable.HashSet, pending + sym)
                   result
-                })
+                }))
               else
                 getClassParts(tp)
               args.foreach(getParts)
