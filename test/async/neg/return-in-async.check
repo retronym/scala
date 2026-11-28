@@ -1,0 +1,22 @@
+return-in-async.scala:12: error: return is illegal within an async block
+    if (await(f(cached))) return f("from cache")
+                          ^
+return-in-async.scala:15: error: return is illegal within an async block
+  def noAwait(): Future[Boolean] = async { return f(false) }
+                                           ^
+return-in-async.scala:16: error: return is illegal within an async block
+  def primitive(): Int = { async { if (await(f(true))) return 42; 1 }; 0 }
+                                                       ^
+return-in-async.scala:19: error: return is illegal within an async block
+    xs.foreach(x => if (x > 1) return f("function"))
+                               ^
+return-in-async.scala:24: error: return is illegal within an async block
+    this.synchronized { if (c) return f("synchronized") }
+                               ^
+return-in-async.scala:29: error: return is illegal within an async block
+    val h = () => return f(0)
+                  ^
+return-in-async.scala:35: error: return is illegal within an async block
+    if (c) return Some("early")
+           ^
+7 errors
