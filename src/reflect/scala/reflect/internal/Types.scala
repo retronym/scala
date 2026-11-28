@@ -1779,6 +1779,7 @@ trait Types
     if (period != currentPeriod) {
       tpe.baseTypeSeqPeriod = currentPeriod
       if (!isValidForBaseClasses(period)) {
+        if (narrowedTypeBounds > 0) cachedUnderNarrowedTypeBounds(tpe)
         // If the BTS contains TypeVars, replace those with typerefs to the original type params before taking BTS,
         // after BTS, map them back.
         // TODO: rework BTS to deal with TypeVars in the same way on the fly
@@ -1840,6 +1841,7 @@ trait Types
     if (period != currentPeriod) {
       tpe.baseClassesPeriod = currentPeriod
       if (!isValidForBaseClasses(period)) {
+        if (narrowedTypeBounds > 0) cachedUnderNarrowedTypeBounds(tpe)
         val start = if (settings.areStatisticsEnabled) statistics.pushTimer(typeOpsStack, baseClassesNanos) else null
         try {
           tpe.baseClassesCache = null
@@ -2832,6 +2834,7 @@ trait Types
     if (period != currentPeriod) {
       tpe.parentsPeriod = currentPeriod
       if (!isValidForBaseClasses(period)) {
+        if (narrowedTypeBounds > 0) cachedUnderNarrowedTypeBounds(tpe)
         tpe.parentsCache = tpe.parentsImpl
       } else if (tpe.parentsCache == null) { // seems this can happen if things are corrupted enough, see #2641
         tpe.parentsCache = List(AnyTpe)
@@ -2844,6 +2847,7 @@ trait Types
     if (period != currentPeriod) {
       tpe.baseTypeSeqPeriod = currentPeriod
       if (!isValidForBaseClasses(period)) {
+        if (narrowedTypeBounds > 0) cachedUnderNarrowedTypeBounds(tpe)
         if (settings.areStatisticsEnabled) statistics.incCounter(typerefBaseTypeSeqCount)
         val start = if (settings.areStatisticsEnabled) statistics.pushTimer(typeOpsStack, baseTypeSeqNanos) else null
         try {
@@ -5338,6 +5342,57 @@ trait Types
   /** Members which can be imported into other scopes.
    */
   def importableMembers(pre: Type): Scope = pre.members filter isImportable
+
+  /** The number of type parameters whose bounds are currently narrowed to what a pattern implies about them
+   *  (see `Infer#instantiateTypeVar`), and the types that had their parents, base type sequence or base classes
+   *  computed in the meantime. Those may be derived from the narrowed bounds, be it directly or through another
+   *  type (`U <: T`, `T with X`, `type A = T`, `F[T]`), and the narrowed bounds hold in that case only, so these
+   *  caches are dropped whenever bounds are narrowed or restored. A class has no type parameter among its base
+   *  types, so the caches of class types are left alone.
+   *
+   *  A cache filled before the bounds were narrowed is only dropped for the type parameter itself. For other
+   *  types it remains in use in the case, where it is less precise than it could be, but not wrong.
+   */
+  private[this] var narrowedTypeBounds = 0
+  private[this] val typesCachedUnderNarrowedBounds = new mutable.ArrayBuffer[Type]
+  perRunCaches.recordCache(new mutable.Clearable {
+    def clear(): Unit = { narrowedTypeBounds = 0; typesCachedUnderNarrowedBounds.clear() }
+  })
+
+  private def cachedUnderNarrowedTypeBounds(tp: Type): Unit = tp match {
+    case tr: TypeRef    => if (!tr.sym.isClass) typesCachedUnderNarrowedBounds += tr
+    case _: RefinedType => typesCachedUnderNarrowedBounds += tp
+    case _              =>
+  }
+
+  private def invalidateTypesCachedUnderNarrowedBounds(): Unit = {
+    typesCachedUnderNarrowedBounds.foreach {
+      case tr: TypeRef      => tr.invalidateTypeRefCaches()
+      case ct: CompoundType => ct.invalidatedCompoundTypeCaches()
+      case _                =>
+    }
+    typesCachedUnderNarrowedBounds.clear()
+  }
+
+  /** To be called after the info of `tparam` is replaced by the bounds that a pattern implies. */
+  def typeBoundsNarrowed(tparam: Symbol): Unit = {
+    narrowedTypeBounds += 1
+    typeBoundsChanged(tparam)
+  }
+
+  /** To be called after the infos of `tparams` are set back to what they were before `typeBoundsNarrowed`. */
+  def typeBoundsRestored(tparams: List[Symbol]): Unit = {
+    narrowedTypeBounds = math.max(0, narrowedTypeBounds - tparams.length)
+    tparams.foreach(typeBoundsChanged)
+  }
+
+  private def typeBoundsChanged(tparam: Symbol): Unit = {
+    tparam.typeConstructor match {
+      case tr: TypeRef => tr.invalidateTypeRefCaches()
+      case _           =>
+    }
+    invalidateTypesCachedUnderNarrowedBounds()
+  }
 
   def invalidateTreeTpeCaches(tree: Tree, updatedSyms: collection.Set[Symbol]) = if (!updatedSyms.isEmpty) {
     val invldtr = new InvalidateTypeCaches(updatedSyms)
