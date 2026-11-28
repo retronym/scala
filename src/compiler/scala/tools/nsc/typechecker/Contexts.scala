@@ -1253,7 +1253,10 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
     def isNameInScope(name: Name) = lookupSymbol(name, _ => true).isSuccess
 
     def lookupSymbol(name: Name, qualifies: Symbol => Boolean): NameLookup =
-      symbolLookupCache.using(_(this, name)(qualifies))
+      symbolLookupCache.using { lookup =>
+        try lookup(this, name)(qualifies)
+        finally lookup.clear()
+      }
 
     final def lookupCompanionInIncompleteOwner(original: Symbol): Symbol = {
       // Must have both a class and module symbol, so that `{ class C; def C }` or `{ type T; object T }` are not companions.
@@ -1350,6 +1353,16 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
     private[this] var symbolDepth: Int         = _ // the depth of the directly found symbol
     private[this] var foundInPrefix: Boolean   = _ // the symbol was found in pre
     private[this] var foundInSuper: Boolean    = _ // the symbol was found super of context class (inherited)
+
+    /** Drop references held from the last lookup, so that the pooled instance doesn't retain its
+     *  context chain (and the trees of the enclosing definitions) after the lookup is done. */
+    def clear(): Unit = {
+      lookupError  = null
+      inaccessible = null
+      defSym       = null
+      pre          = null
+      cx           = null
+    }
 
     def ambiguousImports(imp1: ImportInfo, imp2: ImportInfo) =
       LookupAmbiguous(s"it is imported twice in the same scope by\n$imp1\nand $imp2")
