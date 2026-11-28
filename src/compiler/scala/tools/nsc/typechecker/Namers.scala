@@ -858,8 +858,21 @@ trait Namers extends MethodSynthesis {
       NoSymbol
     }
 
+    /** A completer for a symbol entered by this namer.
+     *
+     *  It runs whenever the symbol's info is first needed, which may be in the middle of typing an unrelated tree
+     *  that has temporarily changed the scoped modes of this namer's context. For a block-local definition that is
+     *  the context of the enclosing block; `typedTypeSelectionQualifier`, for one, disables implicit views on it.
+     *  Run the completer with the scoped modes in effect when the symbol was entered, so that the type it computes
+     *  does not depend on where the symbol is first referenced.
+     */
+    abstract class NamerTypeCompleter[T <: Tree](tree: T) extends TypeCompleterBase[T](tree) {
+      private[this] val enteredMode = context.contextMode
+      override def complete(sym: Symbol): Unit = context.withScopedModesOf(enteredMode)(super.complete(sym))
+    }
+
     def monoTypeCompleter(tree: MemberDef) = new MonoTypeCompleter(tree)
-    class MonoTypeCompleter(tree: MemberDef) extends TypeCompleterBase(tree) {
+    class MonoTypeCompleter(tree: MemberDef) extends NamerTypeCompleter(tree) {
       override def completeImpl(sym: Symbol): Unit = {
         def needsCycleCheck = sym.isNonClassType && !sym.isParameter && !sym.isExistential
 
@@ -884,7 +897,7 @@ trait Namers extends MethodSynthesis {
     }
 
     def moduleClassTypeCompleter(tree: ModuleDef) = new ModuleClassTypeCompleter(tree)
-    class ModuleClassTypeCompleter(tree: ModuleDef) extends TypeCompleterBase(tree) {
+    class ModuleClassTypeCompleter(tree: ModuleDef) extends NamerTypeCompleter(tree) {
       override def completeImpl(sym: Symbol): Unit = {
         val moduleSymbol = tree.symbol
         assert(moduleSymbol.moduleClass == sym, moduleSymbol.moduleClass)
@@ -893,7 +906,7 @@ trait Namers extends MethodSynthesis {
     }
 
     def importTypeCompleter(tree: Import) = new ImportTypeCompleter(tree)
-    class ImportTypeCompleter(imp: Import) extends TypeCompleterBase(imp) {
+    class ImportTypeCompleter(imp: Import) extends NamerTypeCompleter(imp) {
       override def completeImpl(sym: Symbol): Unit = {
         sym setInfo importSig(imp)
       }
@@ -914,7 +927,7 @@ trait Namers extends MethodSynthesis {
     // complete the type of a value definition (may have a method symbol, for those valdefs that never receive a field,
     // as specified by Field.noFieldFor)
     def valTypeCompleter(tree: ValDef) = new ValTypeCompleter(tree)
-    class ValTypeCompleter(tree: ValDef) extends TypeCompleterBase(tree) {
+    class ValTypeCompleter(tree: ValDef) extends NamerTypeCompleter(tree) {
       override def completeImpl(fieldOrGetterSym: Symbol): Unit = {
         val mods = tree.mods
         val isGetter = fieldOrGetterSym.isMethod
@@ -941,7 +954,7 @@ trait Namers extends MethodSynthesis {
 
     // knowing `isBean`, we could derive `isSetter` from `valDef.name`
     def accessorTypeCompleter(valDef: ValDef, missingTpt: Boolean, isBean: Boolean, isSetter: Boolean) = new AccessorTypeCompleter(valDef, missingTpt, isBean, isSetter)
-    class AccessorTypeCompleter(valDef: ValDef, missingTpt: Boolean, isBean: Boolean, isSetter: Boolean) extends TypeCompleterBase(valDef) {
+    class AccessorTypeCompleter(valDef: ValDef, missingTpt: Boolean, isBean: Boolean, isSetter: Boolean) extends NamerTypeCompleter(valDef) {
       override def completeImpl(accessorSym: Symbol): Unit = {
         context.unit.synthetics get accessorSym match {
           case Some(ddef: DefDef) =>
@@ -1042,7 +1055,7 @@ trait Namers extends MethodSynthesis {
     }
 
     def selfTypeCompleter(tree: Tree) = new SelfTypeCompleter(tree)
-    class SelfTypeCompleter(tree: Tree) extends TypeCompleterBase(tree) {
+    class SelfTypeCompleter(tree: Tree) extends NamerTypeCompleter(tree) {
       override def completeImpl(sym: Symbol): Unit = {
         val selftpe = typer.typedType(tree).tpe
         sym setInfo {
