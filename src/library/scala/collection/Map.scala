@@ -65,7 +65,7 @@ trait Map[K, +V]
       case map: Map[K @unchecked, _] if map.canEqual(this) =>
         (this.size == map.size) && {
           try this.forall(kv => map.getOrElse(kv._1, Map.DefaultSentinelFn()) == kv._2)
-          catch { case _: ClassCastException => false } // PR #9565 / scala/bug#12228
+          catch { case _: ClassCastException | _: NullPointerException => false } // PR #9565 / scala/bug#12228, as java.util.AbstractSet/AbstractMap
         }
       case _ =>
         false

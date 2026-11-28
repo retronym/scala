@@ -64,7 +64,7 @@ trait Set[A]
       case set: Set[A @unchecked] if set.canEqual(this) =>
         (this.size == set.size) && {
           try this.subsetOf(set)
-          catch { case _: ClassCastException => false } // PR #9565 / scala/bug#12228
+          catch { case _: ClassCastException | _: NullPointerException => false } // PR #9565 / scala/bug#12228, as java.util.AbstractSet/AbstractMap
         }
       case _ =>
         false
