@@ -6324,10 +6324,14 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       }
 
       // begin typed1
+      // Test for the class AbstractTypTree rather than the trait TypTree: most trees are not type trees,
+      // and a failed class test is cheaper than a failed interface test. SelectFromTypeTree is the only
+      // TypTree that is not an AbstractTypTree.
       tree match {
-        case tree: TypTree   => typedTypTree(tree)
-        case tree: MemberDef => typedMemberDef(tree)
-        case _               => typedInAnyMode(tree)
+        case tree: AbstractTypTree    => typedTypTree(tree)
+        case tree: MemberDef          => typedMemberDef(tree)
+        case tree: SelectFromTypeTree => typedTypTree(tree)
+        case _                        => typedInAnyMode(tree)
       }
     }
 
