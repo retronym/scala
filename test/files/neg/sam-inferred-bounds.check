@@ -1,0 +1,11 @@
+sam-inferred-bounds.scala:9: error: type mismatch;
+ found   : Int => Int
+ required: F[_]
+  val f1: F[_] = (x: Int) => 42               // error: F[Int] is not within the bound of T
+                          ^
+sam-inferred-bounds.scala:10: error: type mismatch;
+ found   : Int => List[Int]
+ required: F[_ <: AnyRef]
+  val f2: F[_ <: AnyRef] = (x: Int) => List(x) // error
+                                    ^
+2 errors

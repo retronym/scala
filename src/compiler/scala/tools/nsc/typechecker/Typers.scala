@@ -3015,7 +3015,12 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
               else if (fullyDefinedMeetsExpectedFunTp(pt)) pt
               else try {
                 val ptFullyDefined = instantiateSamFromFunction(fun.tpe, pt, sam)
-                if (ptFullyDefined <:< pt && fullyDefinedMeetsExpectedFunTp(ptFullyDefined)) {
+                // the solution of the type variables is not checked against the bounds of the SAM class's type parameters
+                def withinBounds = {
+                  val samClass = ptFullyDefined.typeSymbol
+                  isWithinBounds(ptFullyDefined.prefix, samClass.owner, samClass.typeParams, ptFullyDefined.typeArgs)
+                }
+                if (ptFullyDefined <:< pt && withinBounds && fullyDefinedMeetsExpectedFunTp(ptFullyDefined)) {
                   debuglog(s"sam fully defined expected type: $ptFullyDefined from $pt for ${fun.tpe}")
                   ptFullyDefined
                 } else {
