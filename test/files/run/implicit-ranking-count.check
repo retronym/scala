@@ -1,0 +1,2 @@
+instance for the subclass declared first: compiles = true, candidates typed per search = 1, at most 40 specificity tests per search = true
+instance for the base class declared first: compiles = true, candidates typed per search = 1, at most 40 specificity tests per search = true
