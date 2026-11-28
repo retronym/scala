@@ -21,7 +21,7 @@ trait ExprBuilder extends TransformUtils with AsyncAnalysis {
   private def stateAssigner  = currentTransformState.stateAssigner
   private def labelDefStates = currentTransformState.labelDefStates
 
-  private object replaceResidualJumpsWithStateTransitions extends AstTransformer {
+  private class ReplaceResidualJumpsWithStateTransitions(nextStates: StateSet) extends AstTransformer {
     override def transform(tree: Tree): Tree = {
       // TODO: This is only needed for Scala.js compatibility.
       //       See https://github.com/scala/scala/pull/8816#issuecomment-640725321
@@ -32,7 +32,7 @@ trait ExprBuilder extends TransformUtils with AsyncAnalysis {
         case ap @ Apply(i @ Ident(_), Nil) if isCaseLabel(i.symbol) || isMatchEndLabel(i.symbol) =>
           currentTransformState.labelDefStates.get(i.symbol) match {
             case Some(state) =>
-              Block(StateTransitionStyle.UpdateAndContinue.trees(state, new StateSet), typedCurrentPos(literalUnit)).setType(definitions.UnitTpe)
+              Block(StateTransitionStyle.UpdateAndContinue.trees(state, nextStates), typedCurrentPos(literalUnit)).setType(definitions.UnitTpe)
             case None => ap
           }
         case transformed => transformed
@@ -50,7 +50,15 @@ trait ExprBuilder extends TransformUtils with AsyncAnalysis {
       false
     }
     def mkHandlerCaseForState: CaseDef = {
-      replaceResidualJumpsWithStateTransitions.transform(CaseDef(Literal(Constant(state)), EmptyTree, adaptToUnit(stats))).asInstanceOf[CaseDef]
+      CaseDef(Literal(Constant(state)), EmptyTree, adaptToUnit(stats))
+    }
+    /** Replace the jumps to a label that was found to start a state after the jump was added to this state.
+     *  The target becomes a successor of this state, which the live variables analysis needs to know.
+     */
+    def replaceResidualJumpsWithStateTransitions(): Unit = {
+      val jumpTargets = new StateSet
+      stats = new ReplaceResidualJumpsWithStateTransitions(jumpTargets).transformTrees(stats)
+      nextStates = (nextStates ++ jumpTargets.toArray).distinct
     }
 
     private def mkToString = s"AsyncState #$state, next = ${nextStates.toList}"
@@ -58,26 +66,39 @@ trait ExprBuilder extends TransformUtils with AsyncAnalysis {
     // private val initToString = mkToString
     def insertNullAssignments(preNulls: Iterator[Symbol], postNulls: Iterator[Symbol]): Unit = {
       val stats1 = mutable.ListBuffer[Tree]()
-      def addNullAssigments(syms: Iterator[Symbol]): Unit = {
-        for (fieldSym <- syms) {
-          stats1 += typedCurrentPos(Assign(currentTransformState.memberRef(fieldSym), gen.mkZero(fieldSym.info)))
+      def nullAssignments(syms: List[Symbol]): List[Tree] =
+        syms.map(fieldSym => typedCurrentPos(Assign(currentTransformState.memberRef(fieldSym), gen.mkZero(fieldSym.info))))
+      val postNullSyms = postNulls.toList
+      def isStateTransition(tree: Tree) = tree.attachments.containsElement(StateTransitionTree)
+      // A branch of an `If`, `Match` or `LabelDef` that contains an async boundary, or that jumps to a label that
+      // starts a state, leaves this state through its own state transition and does not reach the statements that
+      // follow the enclosing top-level statement. The post-state null assignments are needed on those paths, too.
+      object nestedStateTransitions extends AstTransformer {
+        override def transform(tree: Tree): Tree = tree match {
+          case Block(stats, expr) =>
+            val stats1 = stats.flatMap(stat => if (isStateTransition(stat)) stat :: nullAssignments(postNullSyms) else transform(stat) :: Nil)
+            treeCopy.Block(tree, stats1, transform(expr))
+          case _: If | _: Match | _: CaseDef | _: LabelDef =>
+            super.transform(tree)
+          case _ => tree
         }
       }
       // Add pre-state null assigments at the beginning.
-      addNullAssigments(preNulls)
+      stats1 ++= nullAssignments(preNulls.toList)
       var foundStateTransition = false
       stats.foreach {
         stat =>
-          stats1 += stat
-          if (stat.attachments.containsElement(StateTransitionTree)) {
+          if (isStateTransition(stat)) {
+            stats1 += stat
             assert(!foundStateTransition, "cannot find more than one state transition")
             foundStateTransition = true
             // Insert post-state null assignments immediately after the state transition
-            addNullAssigments(postNulls)
-          }
+            stats1 ++= nullAssignments(postNullSyms)
+          } else if (postNullSyms.isEmpty) stats1 += stat
+          else stats1 += nestedStateTransitions.transform(stat)
       }
       if (!foundStateTransition) {
-        addNullAssigments(postNulls)
+        stats1 ++= nullAssignments(postNullSyms)
       }
       stats = stats1.toList
     }
@@ -450,7 +471,11 @@ trait ExprBuilder extends TransformUtils with AsyncAnalysis {
         dotBuilder.toString
       }
 
-      lazy val asyncStates: List[AsyncState] = filterStates(blockBuilder.build) // drop the terminal state which contains no code
+      lazy val asyncStates: List[AsyncState] = {
+        val all = blockBuilder.build
+        all.foreach(_.replaceResidualJumpsWithStateTransitions())
+        filterStates(all) // drop the terminal state which contains no code
+      }
 
       /**
        * Builds the definition of the `apply(tr: Try)` method.
@@ -612,10 +637,12 @@ trait ExprBuilder extends TransformUtils with AsyncAnalysis {
         def callOnComplete(fut: Tree): Tree =
           Apply(currentTransformState.memberRef(transformState.stateOnComplete), fut :: Nil)
 
+        // The awaitable is evaluated before the state transition, which is where the null assignments for the
+        // fields that are dead on exit of this state are inserted.
+        val tempAwaitableSym = transformState.applyTrParam.owner.newTermSymbol(nme.awaitable).setInfo(awaitable.tpe)
+        val initAwaitableTemp = ValDef(tempAwaitableSym, awaitable)
         val runCompletedOnSameThread = transformState.stateGetCompleted != NoSymbol
         if (runCompletedOnSameThread) {
-          val tempAwaitableSym = transformState.applyTrParam.owner.newTermSymbol(nme.awaitable).setInfo(awaitable.tpe)
-          val initAwaitableTemp = ValDef(tempAwaitableSym, awaitable)
           val initTempCompleted = Assign(
             gen.mkAttributedIdent(transformState.applyTrParam),
             gen.mkMethodCall(transformState.memberRef(transformState.stateGetCompleted), gen.mkAttributedIdent(tempAwaitableSym) :: Nil)
@@ -627,7 +654,7 @@ trait ExprBuilder extends TransformUtils with AsyncAnalysis {
               Block(toStats(callOnComplete(gen.mkAttributedIdent(tempAwaitableSym))), Return(literalUnit).setSymbol(transformState.applySym)))
           typedCurrentPos(initAwaitableTemp) :: typedCurrentPos(initTempCompleted) :: mkStateTree(nextState) :: typedCurrentPos(ifTree) :: Nil
         } else {
-          mkStateTree(nextState) :: toStats(typedCurrentPos(callOnComplete(awaitable))) ::: typedCurrentPos(Return(literalUnit)) :: Nil
+          typedCurrentPos(initAwaitableTemp) :: mkStateTree(nextState) :: toStats(typedCurrentPos(callOnComplete(gen.mkAttributedIdent(tempAwaitableSym)))) ::: typedCurrentPos(Return(literalUnit)) :: Nil
         }
       }
     }
