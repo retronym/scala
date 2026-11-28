@@ -304,4 +304,16 @@ class FutureTest {
     assertThrows[IllegalArgumentException](Await.result(Future.successful(1), Undefined))
     assertThrows[IllegalArgumentException](Await.ready(Future.successful(1), Undefined))
   }
+
+  @Test def andThenInterruptedPreservesOutcome(): Unit = {
+    val reported = ListBuffer.empty[Throwable]
+    implicit val ec: ExecutionContext = ExecutionContext.fromExecutor(_.run(), reported += _)
+    try {
+      val f = Future.successful(5).andThen { case _ => throw new InterruptedException("in andThen") }
+      assertEquals("andThen must pass the original outcome through", Some(Success(5)), f.value)
+      assertEquals(1, reported.size)
+      assertTrue(reported.head.isInstanceOf[InterruptedException])
+      assertTrue("interrupt status must be restored", Thread.interrupted())
+    } finally Thread.interrupted()
+  }
 }
