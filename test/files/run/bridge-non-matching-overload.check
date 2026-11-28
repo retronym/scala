@@ -1,0 +1,31 @@
+A.f(Seq[String])
+A.f(Seq[String])
+B.f(String*)
+A.g(() => String)
+1
+A.h(String)(Int)
+B.h(String, Int)
+A.i(String*)
+B.i(Seq[String])
+A.j(=> String)
+B.j(() => String)
+A.k(Seq[String])
+B.k(String*)
+K.f(Seq[T])
+KS.f(String*)
+KS.g(() => String)
+G.f(T)
+G1.f
+G.f(T)
+G3.f
+H.I.f(T)
+H1.I1.f
+A.f(Seq[String])
+A.f(Seq[String])
+B.f(String*)
+C.f
+1
+1
+P.f(String*)
+P.g(=> String)
+P.h(String)(Int)

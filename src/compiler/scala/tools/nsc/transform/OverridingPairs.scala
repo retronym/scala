@@ -75,7 +75,7 @@ abstract class OverridingPairs extends SymbolPairs {
       (low.isField || high.isField)
   }
 
-  final class BridgesCursor(base: Symbol) extends PairsCursor(base) {
+  class BridgesCursor(base: Symbol) extends PairsCursor(base) {
     // Varargs bridges may need generic bridges due to the non-repeated part of the signature of the involved methods.
     // The vararg bridge is generated during refchecks (probably to simplify override checking),
     // but then the resulting varargs "bridge" method may itself need an actual erasure bridge.

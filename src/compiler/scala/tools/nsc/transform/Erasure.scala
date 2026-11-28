@@ -493,7 +493,78 @@ abstract class Erasure extends InfoTransform
     val bridgesScope = newScope
     val bridgeTarget = mutable.HashMap[Symbol, Symbol]()
 
-    val opc = enteringExplicitOuter { new overridingPairs.BridgesCursor(root) }
+    // The cursor is created after uncurry, where `T*` is `Seq[T]`, `=> T` is `() => T` and parameter lists are flat.
+    // Two members that only match there are overloads to the type checker, and a bridge must not route a call of
+    // one to the other. Members created after refchecks (varargs forwarders, specialized members) can't be compared
+    // in this way.
+    val opc = enteringExplicitOuter {
+      new overridingPairs.BridgesCursor(root) {
+        // called from the superclass constructor
+        override protected def matches(high: Symbol) = super.matches(high) && {
+          val refchecksId = currentRun.refchecksPhase.id
+          !(root.hasTypeAt(refchecksId) && low.hasTypeAt(refchecksId) && high.hasTypeAt(refchecksId)) ||
+            matchedAfterRefchecks(low, high)
+        }
+      }
+    }
+
+    /* Did `low` and `high`, which match in the current phase, match after refchecks?
+     *
+     * Most pairs are answered without computing their types as members of `root` in the earlier phase. Two
+     * parameterless methods always match. Otherwise the member types are the same in both phases, and so is
+     * the answer, if all that goes into them is: the infos have not been changed by an info transformer, they
+     * refer to nothing but classes, their own type parameters and those of the owner, and the type arguments
+     * that `root` passes to its base classes are unchanged. The last condition is needed because uncurry
+     * rewrites the parents of a class as well: in
+     *
+     *   class A[T] { def f(x: T): CharSequence }
+     *   class B extends A[(=> Int) => Int] { def f(x: (() => Int) => Int): Object }
+     *
+     * neither info changes, and the two match only once `B` extends `A[(() => Int) => Int]`.
+     */
+    private def matchedAfterRefchecks(low: Symbol, high: Symbol): Boolean = {
+      val lowInfo  = low.info
+      val highInfo = high.info
+      def sameAsSeenFromRoot =
+        isPhaseIndependent(lowInfo, sym => sym == low || sym == low.owner) &&
+          isPhaseIndependent(highInfo, sym => sym == high || sym == high.owner) &&
+          baseTypeArgsUnchanged
+      exitingRefchecks {
+        val lowBefore  = low.info
+        val highBefore = high.info
+        (lowBefore.isInstanceOf[NullaryMethodType] && highBefore.isInstanceOf[NullaryMethodType]) ||
+          ((lowBefore eq lowInfo) && (highBefore eq highInfo) && sameAsSeenFromRoot) ||
+          (site.memberType(low) matches site.memberType(high))
+      }
+    }
+
+    /* `tp` refers only to classes, by a path of this-types and modules, and to type parameters. A this-type or
+     * the owner of a type parameter must be a package or be admitted by `admit`. Such a type has no part whose
+     * meaning depends on the phase: no type alias, no abstract type member that a subclass may define as an
+     * alias, no term whose type would have to be looked at.
+     */
+    private def isPhaseIndependent(tp: Type, admit: Symbol => Boolean): Boolean = {
+      def loop(tp: Type): Boolean = tp match {
+        case TypeRef(pre, sym, args) => (sym.isClass || sym.isTypeParameter && admit(sym.owner)) && loop(pre) && args.forall(loop)
+        case ThisType(sym)           => sym.isPackageClass || admit(sym)
+        case SingleType(pre, sym)    => sym.isModule && loop(pre)
+        case MethodType(params, res) => params.forall(param => loop(param.info)) && loop(res)
+        case PolyType(_, res)        => loop(res) // `matches` does not compare bounds
+        case NullaryMethodType(res)  => loop(res)
+        case NoPrefix                => true
+        case _                       => false
+      }
+      loop(tp)
+    }
+
+    // The type arguments of the base types of `root` are the same types after refchecks as they are now, and
+    // are phase independent. They are already seen from `root`, so every this-type and type parameter is admitted.
+    private lazy val baseTypeArgsUnchanged: Boolean = {
+      val generic = enteringExplicitOuter(root.info.baseClasses.filter(_.typeParams.nonEmpty))
+      def baseTypeArgs = generic.map(site.baseType(_).typeArgs)
+      enteringExplicitOuter(baseTypeArgs).corresponds(exitingRefchecks(baseTypeArgs))((now, before) =>
+        now.corresponds(before)((arg, argBefore) => (arg eq argBefore) && isPhaseIndependent(arg, _ => true)))
+    }
 
     def computeAndEnter(): Unit = {
       while (opc.hasNext) {
