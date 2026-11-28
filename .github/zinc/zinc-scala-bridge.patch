@@ -1,0 +1,26 @@
+diff --git a/project/Dependencies.scala b/project/Dependencies.scala
+index 7b2f72a4d..66f8f072d 100644
+--- a/project/Dependencies.scala
++++ b/project/Dependencies.scala
+@@ -10,7 +10,7 @@ object Dependencies:
+   val scala213 = "2.13.16"
+   val scala3 = "3.9.0"
+   val scala3ForBridge = "3.9.0"
+-  val scala213ForBridge = "2.13.18"
++  val scala213ForBridge = sys.props.getOrElse("zinc.scala213ForBridge", "2.13.18")
+   val defaultScalaVersion = scala3
+   val compilerBridgeVersions = Seq(scala212, scala210, scala211, scala213)
+   val scala3_only = Seq(scala3)
+diff --git a/zinc/src/test/scala/sbt/internal/inc/BridgeProviderSpecification.scala b/zinc/src/test/scala/sbt/internal/inc/BridgeProviderSpecification.scala
+index 6f7b66488..8e0bcab0c 100644
+--- a/zinc/src/test/scala/sbt/internal/inc/BridgeProviderSpecification.scala
++++ b/zinc/src/test/scala/sbt/internal/inc/BridgeProviderSpecification.scala
+@@ -80,7 +80,7 @@ trait BridgeProviderTestkit extends AbstractBridgeProviderTestkit:
+         bridgeLabels
+           .find(bridgesByLabel(_).version == version)
+           .getOrElse(sys.error(s"No bridge for Scala $version in ${bridges.map(_.version)}"))
+-      case None => Label212
++      case None => sys.env.getOrElse("ZINC_SCRIPTED_DEFAULT_LABEL", Label212)
+ 
+   // Create a provider that uses the bridges from the classes directory of the projects
+   def getZincProvider(targetDir: Path, log: Logger): CompilerBridgeProvider =
