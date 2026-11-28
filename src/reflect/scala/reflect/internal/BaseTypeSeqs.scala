@@ -186,79 +186,105 @@ trait BaseTypeSeqs {
   lazy val undetBaseTypeSeq: BaseTypeSeq = newBaseTypeSeq(List(), Array())
 
   /** Create a base type sequence consisting of a single type */
-  def baseTypeSingletonSeq(tp: Type): BaseTypeSeq = newBaseTypeSeq(List(), Array(tp))
+  def baseTypeSingletonSeq(tp: Type): BaseTypeSeq = newBaseTypeSeq(List(), singletonArray(tp))
 
   /** Create the base type sequence of a compound type with given tp.parents */
   def compoundBaseTypeSeq(tp: Type): BaseTypeSeq = {
-    val tsym = tp.typeSymbol
     val parents = tp.parents
-//    Console.println("computing baseTypeSeq of " + tsym.tpe + " " + parents)//DEBUG
-    val buf = new mutable.ListBuffer[Type]
-    buf += tsym.tpe_*
+    val head = tp.typeSymbol.tpe_*
+    val elems =
+      if (parents.isEmpty) singletonArray(head)
+      else mergeBaseTypeSeqs(head, parents)
+    newBaseTypeSeq(parents, elems)
+  }
+
+  /** A one-element array. Not `Array(tp)`: that wraps `tp` in a varargs `ArraySeq` and allocates through the
+   *  `TypeTagg` `ClassTag`.
+   */
+  private def singletonArray(tp: Type): Array[Type] = {
+    val a = new Array[Type](1)
+    a(0) = tp
+    a
+  }
+
+  /** The base type sequence of a compound type with first element `head`: the parents' base type sequences merged in
+   *  order of `isLess`, the types of each base class combined with `intersectionTypeForLazyBaseType`.
+   *
+   *  OPT: no closures, builders, iterators, extractors or boxed vars, so that its cost does not depend on C2 inlining
+   *  enough of it to scalar-replace them. Kept apart from `compoundBaseTypeSeq` so that `tpe_*`'s cache refresh, when
+   *  hot, cannot use up the inlining budget of this loop.
+   */
+  private def mergeBaseTypeSeqs(head: Type, parents: List[Type]): Array[Type] = {
+    val nparents = parents.length
+    val pbtss = new Array[BaseTypeSeq](nparents)
+    val index = new Array[Int](nparents)
+    // Each round but the last advances at least one parent past one of its elements; the last appends the `Any` element.
+    var capacity = 2
+    var i = 0
+    var ps = parents
+    while (i < nparents) {
+      val parentBts = ps.head.dealias.baseTypeSeq // dealias need for scala/bug#8046.
+      pbtss(i) =
+        if (parentBts eq undetBaseTypeSeq) AnyClass.info.baseTypeSeq
+        else parentBts
+      index(i) = 0
+      capacity += pbtss(i).length
+      ps = ps.tail
+      i += 1
+    }
+    def nextTypeSymbol(i: Int): Symbol = {
+      val j = index(i)
+      val pbts = pbtss(i)
+      if (j < pbts.length) pbts.typeSymbol(j) else AnyClass
+    }
+    def nextRawElem(i: Int): Type = {
+      val j = index(i)
+      val pbts = pbtss(i)
+      if (j < pbts.length) pbts.rawElem(j) else AnyTpe
+    }
+    val elems = new Array[Type](capacity)
+    elems(0) = head
     var btsSize = 1
-    if (parents.nonEmpty) {
-      val nparents = parents.length
-      val pbtss = new Array[BaseTypeSeq](nparents)
-      val index = new Array[Int](nparents)
-      var i = 0
-      for (p <- parents) {
-        val parentBts = p.dealias.baseTypeSeq // dealias need for scala/bug#8046.
-        pbtss(i) =
-          if (parentBts eq undetBaseTypeSeq) AnyClass.info.baseTypeSeq
-          else parentBts
-        index(i) = 0
+    var minSym: Symbol = NoSymbol
+    while (minSym != AnyClass) {
+      minSym = nextTypeSymbol(0)
+      i = 1
+      while (i < nparents) {
+        val nextSym = nextTypeSymbol(i)
+        if (nextSym isLess minSym)
+          minSym = nextSym
         i += 1
       }
-      def nextTypeSymbol(i: Int): Symbol = {
-        val j = index(i)
-        val pbts = pbtss(i)
-        if (j < pbts.length) pbts.typeSymbol(j) else AnyClass
-      }
-      def nextRawElem(i: Int): Type = {
-        val j = index(i)
-        val pbts = pbtss(i)
-        if (j < pbts.length) pbts.rawElem(j) else AnyTpe
-      }
-      var minSym: Symbol = NoSymbol
-      while (minSym != AnyClass) {
-        minSym = nextTypeSymbol(0)
-        i = 1
-        while (i < nparents) {
-          val nextSym = nextTypeSymbol(i)
-          if (nextSym isLess minSym)
-            minSym = nextSym
-          i += 1
+      var minTypes: List[Type] = List()
+      def updateInMinTypes(minTypes: List[Type], tp: Type): List[Type] = {
+        def loop(tps: List[Type]): Boolean = tps match {
+          case x :: tps => (tp =:= x) || loop(tps)
+          case _        => false
         }
-        var minTypes: List[Type] = List()
-        def updateInMinTypes(tp: Type): Unit = {
-          def loop(tps: List[Type]): Boolean = tps match {
-            case x :: tps => (tp =:= x) || loop(tps)
-            case _        => false
-          }
-          if (!loop(minTypes))
-            minTypes ::= tp
-        }
+        if (loop(minTypes)) minTypes
+        else tp :: minTypes
+      }
 
-        i = 0
-        while (i < nparents) {
-          if (nextTypeSymbol(i) == minSym) {
-            nextRawElem(i) match {
-              case RefinedType(variants, _) => variants.foreach(updateInMinTypes)
-              case ntp => updateInMinTypes(ntp)
-            }
-            index(i) = index(i) + 1
+      i = 0
+      while (i < nparents) {
+        if (nextTypeSymbol(i) == minSym) {
+          nextRawElem(i) match {
+            case rt: RefinedType =>
+              var variants = rt.parents
+              while (!variants.isEmpty) {
+                minTypes = updateInMinTypes(minTypes, variants.head)
+                variants = variants.tail
+              }
+            case ntp => minTypes = updateInMinTypes(minTypes, ntp)
           }
-          i += 1
+          index(i) = index(i) + 1
         }
-        buf += intersectionTypeForLazyBaseType(minTypes) // TODO this reverses the order. Does this matter? Or should this be minTypes.reverse?
-        btsSize += 1
+        i += 1
       }
+      elems(btsSize) = intersectionTypeForLazyBaseType(minTypes) // TODO this reverses the order. Does this matter? Or should this be minTypes.reverse?
+      btsSize += 1
     }
-    val elems = new Array[Type](btsSize)
-    @annotation.unused val copied = buf.copyToArray(elems, 0)
-    //assert(copied == btsSize, "array copied")
-//    Console.println("computed baseTypeSeq of " + tsym.tpe + " " + parents + ": "+elems.toString)//DEBUG
-    newBaseTypeSeq(parents, elems)
+    if (btsSize == capacity) elems else java.util.Arrays.copyOf(elems, btsSize)
   }
 
   class MappedBaseTypeSeq(orig: BaseTypeSeq, f: Type => Type) extends BaseTypeSeq(orig.parents map f, orig.elems) {
