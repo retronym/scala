@@ -142,11 +142,19 @@ private[concurrent] object Promise {
         val buffer = new AtomicReference[Success[Any]]()
         val zipped = new DefaultPromise[R]()
 
+        // Fatal errors propagate to the enclosing Transformation (which rethrows them), like for all other combinators.
+        def completeZipped(left: T, right: U): Unit =
+          zipped.tryComplete(try Success(f(left, right)) catch {
+            case e if NonFatal(e) => Failure(e)
+            case ie: InterruptedException => // boxed by `resolve`, like an InterruptedException thrown from `map`
+              Thread.currentThread.interrupt()
+              Failure(ie)
+          })
+
         val thisF: Try[T] => Unit = {
           case left: Success[_] =>
             val right = buffer.getAndSet(left).asInstanceOf[Success[U]]
-            if (right ne null)
-              zipped.tryComplete(try Success(f(left.get, right.get)) catch { case e if NonFatal(e) => Failure(e) })
+            if (right ne null) completeZipped(left.get, right.get)
           case f => // Can only be Failure
             zipped.tryComplete(f.asInstanceOf[Failure[R]])
         }
@@ -154,8 +162,7 @@ private[concurrent] object Promise {
         val thatF: Try[U] => Unit = {
           case right: Success[_] =>
             val left = buffer.getAndSet(right).asInstanceOf[Success[T]]
-            if (left ne null)
-              zipped.tryComplete(try Success(f(left.get, right.get)) catch { case e if NonFatal(e) => Failure(e) })
+            if (left ne null) completeZipped(left.get, right.get)
           case f => // Can only be Failure
             zipped.tryComplete(f.asInstanceOf[Failure[R]])
         }
@@ -306,9 +313,18 @@ private[concurrent] object Promise {
       if (other ne this) {
         val state = get()
         if (!state.isInstanceOf[Try[_]]) {
-          val resolved = if (other.isInstanceOf[DefaultPromise[_]]) other.asInstanceOf[DefaultPromise[T]].value0 else other.value.orNull
-          if (resolved ne null) tryComplete0(state, resolved)
-          else other.onComplete(this)(ExecutionContext.parasitic)
+          if (other.isInstanceOf[DefaultPromise[_]]) {
+            // A DefaultPromise only ever holds resolve():d values, so `this` can be used as the callback directly.
+            val resolved = other.asInstanceOf[DefaultPromise[T]].value0
+            if (resolved ne null) tryComplete0(state, resolved)
+            else other.onComplete(this)(ExecutionContext.parasitic)
+          } else {
+            // Other Future implementations may complete with values which have not been resolve():d
+            // (e.g. a bare `Failure(InterruptedException)`), so they must go through `tryComplete`.
+            val v = other.value
+            if (v.isDefined) tryComplete0(state, resolve(v.get))
+            else other.onComplete(tryComplete(_))(ExecutionContext.parasitic)
+          }
         }
       }
 
@@ -481,7 +497,9 @@ private[concurrent] object Promise {
       val wasInterrupted = t.isInstanceOf[InterruptedException]
       if (wasInterrupted || NonFatal(t)) {
         val completed = tryComplete0(get(), resolve(Failure(t)))
-        if (completed && wasInterrupted) Thread.currentThread.interrupt()
+        // Catching the InterruptedException cleared the interrupt status, so restore it for the
+        // benefit of the owner of the current thread (regardless of who completed the promise).
+        if (wasInterrupted) Thread.currentThread.interrupt()
 
         // Report or rethrow failures which are unlikely to otherwise be noticed
         if (_xform == Xform_foreach || _xform == Xform_onComplete || !completed)

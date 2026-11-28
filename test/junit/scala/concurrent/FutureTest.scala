@@ -5,7 +5,7 @@ import org.junit.Assert.{assertEquals, assertTrue}
 import org.junit.Test
 
 import scala.tools.testkit.AssertUtil._
-import scala.util.{Success, Try}
+import scala.util.{Failure, Success, Try}
 import duration.Duration.{Inf, Undefined}
 import duration.DurationInt
 import scala.collection.mutable.ListBuffer
@@ -303,5 +303,55 @@ class FutureTest {
   @Test def completedWaitUndefined(): Unit = {
     assertThrows[IllegalArgumentException](Await.result(Future.successful(1), Undefined))
     assertThrows[IllegalArgumentException](Await.ready(Future.successful(1), Undefined))
+  }
+
+  /** A minimal foreign (non-DefaultPromise) Future that hands its callbacks whatever `Try` it was given, unresolved. */
+  private class ForeignFuture[T](result: Try[T]) extends Future[T] {
+    def onComplete[U](f: Try[T] => U)(implicit executor: ExecutionContext): Unit = executor.execute(() => f(result))
+    def isCompleted: Boolean = true
+    def value: Option[Try[T]] = Some(result)
+    def transform[S](f: Try[T] => Try[S])(implicit executor: ExecutionContext): Future[S] = ???
+    def transformWith[S](f: Try[T] => Future[S])(implicit executor: ExecutionContext): Future[S] = ???
+    def ready(atMost: duration.Duration)(implicit permit: CanAwait): this.type = this
+    def result(atMost: duration.Duration)(implicit permit: CanAwait): T = result.get
+  }
+
+  private def assertBoxedInterrupt(f: Future[_]): Unit = f.value match {
+    case Some(Failure(ee: ExecutionException)) => assertTrue(ee.getCause.isInstanceOf[InterruptedException])
+    case other => throw new AssertionError(s"expected boxed InterruptedException, got $other")
+  }
+
+  @Test def completeWithForeignFutureResolvesValue(): Unit = {
+    // A completed foreign future is read via `value` ...
+    val p1 = Promise[Int]()
+    p1.completeWith(new ForeignFuture(Failure(new InterruptedException)))
+    assertBoxedInterrupt(p1.future)
+
+    // ... and an incomplete-looking one goes through `onComplete`; both must `resolve` the value.
+    val p2 = Promise[Int]()
+    p2.completeWith(new ForeignFuture[Int](Failure(new InterruptedException)) {
+      override def value: Option[Try[Int]] = None
+    })
+    assertBoxedInterrupt(p2.future)
+
+    // flatMap/transformWith/recoverWith to a foreign future take the same path via Transformation.run
+    implicit val ec: ExecutionContext = ExecutionContext.fromExecutor(_.run())
+    assertBoxedInterrupt(Future.unit.flatMap(_ => new ForeignFuture[Int](Failure(new InterruptedException))))
+    assertBoxedInterrupt(Future.unit.transformWith(_ => new ForeignFuture[Int](Failure(new InterruptedException))))
+    assertBoxedInterrupt(Future.failed[Int](new Exception).recoverWith { case _ => new ForeignFuture[Int](Failure(new InterruptedException)) })
+    // NonLocalReturnControl is resolved to its value
+    assertEquals(Some(Success(42)), Promise[Int]().completeWith(new ForeignFuture[Int](Failure(new scala.runtime.NonLocalReturnControl("k", 42)))).future.value)
+  }
+
+  @Test def andThenInterruptedPreservesOutcome(): Unit = {
+    val reported = ListBuffer.empty[Throwable]
+    implicit val ec: ExecutionContext = ExecutionContext.fromExecutor(_.run(), reported += _)
+    try {
+      val f = Future.successful(5).andThen { case _ => throw new InterruptedException("in andThen") }
+      assertEquals("andThen must pass the original outcome through", Some(Success(5)), f.value)
+      assertEquals(1, reported.size)
+      assertTrue(reported.head.isInstanceOf[InterruptedException])
+      assertTrue("interrupt status must be restored", Thread.interrupted())
+    } finally Thread.interrupted()
   }
 }
