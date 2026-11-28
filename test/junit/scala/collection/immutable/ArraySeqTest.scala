@@ -9,7 +9,7 @@ import scala.annotation.nowarn
 import scala.reflect.ClassTag
 
 @RunWith(classOf[JUnit4])
-class ArraySeqTest {
+class ArraySeqTest extends scala.tools.testkit.AllocationTest {
   @Test
   def slice(): Unit = {
 
@@ -229,5 +229,34 @@ class ArraySeqTest {
     checkEquals(ArraySeq(-0.0), ArraySeq(0.0))
     checkNotEquals(ArraySeq(Double.NaN), ArraySeq(Double.NaN))
     checkNotEquals(ArraySeq(Float.NaN), ArraySeq(Float.NaN))
+  }
+
+  @Test def `newBuilder builds a primitive array without boxing`(): Unit = {
+    val n = 1000
+    val as = ArraySeq.tabulate(n)(i => i * 1000)
+    // the int[1000] (4,016 bytes), the ArraySeq and the builder
+    onlyAllocates(4 * n + 200)(ArraySeq.newBuilder[Int].addAll(as).result())
+    val evens = as.filter(_ % 2000 == 0)
+    assertEquals(as.toList.filter(_ % 2000 == 0), evens.toList)
+    assertTrue(evens.unsafeArray.isInstanceOf[Array[Int]])
+    val (l, r) = as.partition(_ < 500000)
+    assertEquals((as.toList.take(500), as.toList.drop(500)), (l.toList, r.toList))
+    assertTrue(r.unsafeArray.isInstanceOf[Array[Int]])
+    val strings = ArraySeq("a", "b", null, "c").filter(_ != "b")
+    assertEquals(List("a", null, "c"), strings.toList)
+    assertTrue(strings.unsafeArray.isInstanceOf[Array[String]])
+    // a builder used after result, with and without clear
+    val c = ArraySeq.newBuilder[Int]
+    c ++= List(1, 2)
+    val first = c.result()
+    c += 3
+    assertEquals(List(1, 2, 3), c.result().toList)
+    assertEquals(List(1, 2), first.toList)
+    val b = ArraySeq.newBuilder[Double]
+    b += 1.0 += 2.0
+    assertEquals(List(1.0, 2.0), b.result().toList)
+    b.clear()
+    b += 3.0
+    assertEquals(List(3.0), b.result().toList)
   }
 }

@@ -17,7 +17,7 @@ import java.util.Arrays
 
 import scala.annotation.unchecked.uncheckedVariance
 import scala.collection.Stepper.EfficientSplit
-import scala.collection.mutable.{ArrayBuffer, ArrayBuilder, Builder, ArraySeq => MutableArraySeq}
+import scala.collection.mutable.{ArrayBuilder, Builder, ArraySeq => MutableArraySeq}
 import scala.collection.convert.impl._
 import scala.reflect.ClassTag
 import scala.runtime.ScalaRunTime
@@ -282,8 +282,27 @@ object ArraySeq extends StrictOptimizedClassTagSeqFactory[ArraySeq] { self =>
     case _ => unsafeWrapArray(Array.from[A](it))
   }
 
-  def newBuilder[A : ClassTag]: Builder[A, ArraySeq[A]] =
-    ArrayBuffer.newBuilder[A].mapResult(b => unsafeWrapArray[A](b.toArray))
+  def newBuilder[A : ClassTag]: Builder[A, ArraySeq[A]] = new Builder[A, ArraySeq[A]] {
+    // An `ArrayBuilder` stores primitives unboxed, but it may hand its own array to `result()`, after which it
+    // can only be cleared. Keep the last result and add it back if the builder is used after `result()`.
+    private[this] val elems = ArrayBuilder.make[A]
+    private[this] var last: Array[A] = null
+    private[this] def resume(): Unit = if (last ne null) {
+      elems.clear()
+      elems.addAll(last)
+      last = null
+    }
+    def addOne(elem: A): this.type = { resume(); elems.addOne(elem); this }
+    override def addAll(xs: IterableOnce[A]): this.type = { resume(); elems.addAll(xs); this }
+    override def sizeHint(size: Int): Unit = { resume(); elems.sizeHint(size) }
+    override def knownSize: Int = if (last ne null) last.length else elems.knownSize
+    def clear(): Unit = { last = null; elems.clear() }
+    def result(): ArraySeq[A] = {
+      resume()
+      last = elems.result()
+      unsafeWrapArray(last)
+    }
+  }
 
   override def fill[A : ClassTag](n: Int)(elem: => A): ArraySeq[A] = tabulate(n)(_ => elem)
 
