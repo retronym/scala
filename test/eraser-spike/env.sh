@@ -1,0 +1,3 @@
+C=~/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org
+export DEPS=$C/scala-lang/modules/scala-asm/9.11.1-scala-1/scala-asm-9.11.1-scala-1.jar:$C/jline/jline-reader/3.30.17/jline-reader-3.30.17.jar:$C/jline/jline-terminal/3.30.17/jline-terminal-3.30.17.jar:$C/jline/jline-terminal-jni/3.30.17/jline-terminal-jni-3.30.17.jar:$C/jline/jline-builtins/3.30.17/jline-builtins-3.30.17.jar:$C/jline/jline-native/3.30.17/jline-native-3.30.17.jar:$C/jline/jline-style/3.30.17/jline-style-3.30.17.jar
+export JAVA_HOME=~/.sdkman/candidates/java/21.0.12+1.1-tem JAVA_OPTS="-Xss16m -Xmx4g -Dscalac.newErasure.stats=1"
