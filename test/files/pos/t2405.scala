@@ -21,3 +21,21 @@ object Test3 {
 		implicitly[Int]
 	}
 }
+
+// One implicit imported under two names is one candidate.
+object Test4 {
+  import A.x
+  import A.{x => y}
+  implicitly[Int]
+}
+
+object Test5 {
+  import A.{x, x => y}
+  implicitly[Int]
+}
+
+object Test6 {
+  object P { val a: A.type = A }
+  import A.x
+  def f = { import P.a.{x => z}; implicitly[Int] }
+}
