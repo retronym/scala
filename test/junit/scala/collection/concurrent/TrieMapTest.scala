@@ -1,7 +1,7 @@
 package scala.collection.concurrent
 
 import org.junit.Test
-import org.junit.Assert.assertEquals
+import org.junit.Assert.{assertEquals, assertNotSame, assertTrue}
 
 import scala.util.hashing.Hashing
 import scala.tools.testkit.AssertUtil.assertThrows
@@ -704,5 +704,46 @@ class TrieMapTest {
     assert(!TrieMap.from((1 to 5).map(x => x -> x)).isEmpty)
     assert(!TrieMap.from((1 to 10).map(x => x -> x)).isEmpty)
     assert(!TrieMap.from((1 to 100).map(x => x -> x)).isEmpty)
+  }
+
+  // `clone` and `TrieMap.from(aTrieMap)` are snapshots: they share the trie and do not hash or insert any key.
+  @Test
+  def cloneAndFromAreSnapshots(): Unit = {
+    var hashCodes = 0
+    class Key(val i: Int) {
+      override def hashCode = { hashCodes += 1; i }
+      override def equals(o: Any) = o match { case k: Key => k.i == i; case _ => false }
+    }
+    val keys = Vector.tabulate(1000)(new Key(_))
+    def check(copy: TrieMap[Key, Int] => TrieMap[Key, Int], expectedHashCodes: Int): Unit = {
+      val t = new TrieMap[Key, Int]
+      keys.foreach(k => t.put(k, k.i))
+      hashCodes = 0
+      val c = copy(t)
+      assertEquals(expectedHashCodes, hashCodes)
+      assertNotSame(t, c)
+      // the two maps are independent
+      c.remove(keys(0)); c.put(new Key(-1), -1); c.put(keys(1), 100)
+      t.remove(keys(2)); t.put(new Key(-2), -2); t.put(keys(3), 300)
+      assertEquals(keys.map(k => k.i -> k.i).toMap - 0 + (-1 -> -1) + (1 -> 100), c.iterator.map { case (k, v) => k.i -> v }.toMap)
+      assertEquals(keys.map(k => k.i -> k.i).toMap - 2 + (-2 -> -2) + (3 -> 300), t.iterator.map { case (k, v) => k.i -> v }.toMap)
+    }
+    check(_.clone(), 0)
+    check(TrieMap.from(_), 0)
+    check(_.to(TrieMap), 0)
+    // a map with its own hashing is not the map that `TrieMap.from` builds
+    val custom = new TrieMap[Key, Int](k => k.i % 7, Equiv.universal)
+    keys.foreach(k => custom.put(k, k.i))
+    val copied = TrieMap.from(custom)
+    assertEquals(classOf[TrieMap.MangledHashing[_]], copied.hashing.getClass)
+    assertEquals(custom.toMap, copied.toMap)
+    // a read-only snapshot has no snapshot of its own; its clone is a new writable map
+    val ro = custom.readOnlySnapshot().asInstanceOf[TrieMap[Key, Int]]
+    val roClone = ro.clone()
+    assertTrue(roClone.nonReadOnly)
+    roClone.put(new Key(-1), -1)
+    assertEquals(1000, ro.size)
+    assertEquals(1001, roClone.size)
+    assertEquals(1000, TrieMap.from(ro).size)
   }
 }

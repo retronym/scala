@@ -160,7 +160,12 @@ trait MapOps[K, V, +CC[X, Y] <: MapOps[X, Y, CC, _], +C <: MapOps[K, V, CC, C]]
 
   def clear(): Unit = { keysIterator foreach -= }
 
-  override def clone(): C = empty ++= this
+  override def clone(): C = this match {
+    // A TrieMap is copied in constant time by a snapshot, which shares the trie and copies paths as either map is
+    // used. Implemented here since overriding `clone` in TrieMap is not forwards binary compatible.
+    case tm: concurrent.TrieMap[K, V] @unchecked if tm.nonReadOnly => tm.snapshot().asInstanceOf[C]
+    case _ => empty ++= this
+  }
 
   @deprecated("Use filterInPlace instead", "2.13.0")
   @inline final def retain(p: (K, V) => Boolean): this.type = filterInPlace(p)
